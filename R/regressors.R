@@ -1,21 +1,15 @@
 # A simple linear regression model. Features with linear dependency to others, will be removed to avoid singularity.
 # feature importances are based on p-values of coefficients.
-STATS.LM = setRefClass('STATS.LM', contains = "REGRESSOR",
+STATS.LM = setRefClass('STATS.LM', contains = "MODEL",
    methods = list(
      initialize = function(settings = list(), ...){
        callSuper(settings = settings, ...)
        config$sig_level <<- settings$sig_level %>% verify('numeric', domain = c(0,1), default = '0.1')
        type               <<- 'Linear Regression'
-       objects$performance_meter <<- function(y1, y2){
-         err = (y1 - y2)^2 %>% sum
-         # den = (y_test - mean(y_test))^2 %>% sum
-         den = 2^2 %>% sum
-         return(1.0 - min(err/den, 1.0))
-       }
      },
 
      fit = function(X, y){
-       X     = transform(X)
+       X     = transform(X, y)
        forml = as.formula('y ~ ' %>% paste(paste(names(X), collapse = ' + ')))
        objects$model <<- lm(forml, data = cbind(X, y))
        singulars = is.na(objects$model$coefficients) %>% which %>% names

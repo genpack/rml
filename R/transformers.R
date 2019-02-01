@@ -15,28 +15,30 @@ SMBINNING = setRefClass('SMBINNING', contains = "MODEL",
       },
 
       fit = function(X, y){
-        X = transform(X)
-        # This model currently only works for categorical y
-        if(inherits(y, 'character')){y %<>% as.factor %>% as.integer}
-        if(inherits(y, c('logical', 'numeric'))){y %<>% as.integer}
+        if(!fitted){
+          X = transform(X, y)
+          # This model currently only works for categorical y
+          if(inherits(y, 'character')){y %<>% as.factor %>% as.integer}
+          if(inherits(y, c('logical', 'numeric'))){y %<>% as.integer}
 
-        columns = numerics(X)
-        if(length(columns) > 0){
-          ds = cbind(X[, columns], Y = y)
-          for(col in columns){
-            res = smbinning::smbinning(ds, y = 'Y', x = col)
-            if(!inherits(res, 'character')){
-              ns = names(objects$binners)
-              res$col_id = length(objects$binners) + 1
-              objects$binners <<- c(objects$binners, list(res))
-              names(objects$binners) <<- c(ns, col)
-              cat('Column ', col, ': Successfully binned to 5 buckets!', '\n')
-            } else {
-              cat('Column ', col, ': ', res, '\n')
+          columns = numerics(X)
+          if(length(columns) > 0){
+            ds = cbind(X[, columns], Y = y)
+            for(col in columns){
+              res = smbinning::smbinning(ds, y = 'Y', x = col)
+              if(!inherits(res, 'character')){
+                ns = names(objects$binners)
+                res$col_id = length(objects$binners) + 1
+                objects$binners <<- c(objects$binners, list(res))
+                names(objects$binners) <<- c(ns, col)
+                cat('Column ', col, ': Successfully binned to 5 buckets!', '\n')
+              } else {
+                cat('Column ', col, ': ', res, '\n')
+              }
             }
           }
+          fitted <<- TRUE
         }
-        fitted <<- TRUE
       },
 
       get.features.name = function(){
@@ -70,8 +72,10 @@ CATREMOVER = setRefClass('CATREMOVER', contains = "MODEL",
       },
 
       fit = function(X, y){
-        objects$model <<- numerics(X)
-        fitted <<- TRUE
+        if(!fitted){
+          objects$model <<- numerics(X)
+          fitted <<- TRUE
+        }
       },
 
       predict = function(X){
@@ -89,8 +93,8 @@ DUMMIFIER = setRefClass('DUMMIFIER', contains = "MODEL",
                              type     <<- 'Categorical Feature Dummifier'
                            },
 
-                           fit = function(X, y){
-                             X = transform(X)
+                           fit = function(X, y = NULL){
+                             X = transform(X, y)
                              objects$categoricals <<- nominals(X)
                              fitted <<- TRUE
                            },
