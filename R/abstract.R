@@ -8,6 +8,7 @@ MODEL = setRefClass('MODEL',
       if(is.null(settings$cross_validation)){
         settings$cross_validation = list()
       }
+      if(is.null(settings$transformer$keep_original)){settings$transformer$keep_original = T}
       if(is.null(settings$cross_validation$ntest)){settings$cross_validation$ntest <- 10}
       if(is.null(settings$cross_validation$split_ratio)){settings$cross_validation$split_ratio <- 0.3}
       if(is.null(settings$cross_validation$split_method)){settings$cross_validation$split_method <- 'shuffle'}
@@ -40,6 +41,9 @@ MODEL = setRefClass('MODEL',
           # if(is.null(y)) stop(paste(objects$transformer$name, ', a transformer of type', objects$transformer$name, 'belonging to model', )
           objects$transformer$fit(X, y)
         }
+        if(config$transformer$keep_original){
+          X = cbind(X, objects$transformer$predict(X))
+        } else
         X = objects$transformer$predict(X)
       }
       return(X)

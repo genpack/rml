@@ -16,6 +16,7 @@ SMBINNING = setRefClass('SMBINNING', contains = "MODEL",
 
       fit = function(X, y){
         if(!fitted){
+          objects$binners <<- list()
           X = transform(X, y)
           # This model currently only works for categorical y
           if(inherits(y, 'character')){y %<>% as.factor %>% as.integer}

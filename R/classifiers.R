@@ -22,7 +22,7 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
       callSuper()
       X = transform(X)
       objects$model$predict(X)
-    },
+    }
 
   )
 )
@@ -70,7 +70,6 @@ SCIKIT.LR = setRefClass('SCIKIT.LR', contains = "CLASSIFIER",
       },
 
       predict = function(X){
-        callSuper()
         X = transform(X)
         X = X[gener::numerics(X)]
         objects$model$predict(X)
