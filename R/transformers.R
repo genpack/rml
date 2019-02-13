@@ -68,7 +68,7 @@ SMBINNING = setRefClass('SMBINNING', contains = "MODEL",
 CATREMOVER = setRefClass('CATREMOVER', contains = "MODEL",
     methods = list(
       initialize = function(settings = list(), ...){
-        callSuper(...)
+        callSuper(settings = settings, ...)
         type     <<- 'Categorical Feature Remover'
       },
 
@@ -107,3 +107,52 @@ DUMMIFIER = setRefClass('DUMMIFIER', contains = "MODEL",
                            }
                          )
 )
+
+GENETIC.GEOMETRIC.BOOSTER = setRefClass('GENETIC.GEOMETRIC.BOOSTER', contains = 'MODEL',
+    methods = list(
+      initialize = function(settings = list(), ...){
+        callsuper(settings = settings, ...)
+        if(is.null(config$correlation_meter)){config$correlation_meter <<- cor}
+      },
+
+      getFeatureValue = function(flist, name, dataset){
+        if(name %in% colnames(dataset)){return(dataset[, name])}
+        if(name %in% rownames(flist)){
+          if(flist[name, 'father'] %in% names(dataset)) {father = dataset[, flist[name, 'father']]} else {father = getFeatureValue.multiplicative(flist, flist[name, 'father'], dataset)}
+          if(flist[name, 'mother'] %in% names(dataset)) {mother = dataset[, flist[name, 'mother']]} else {mother = getFeatureValue.multiplicative(flist, flist[name, 'mother'], dataset)}
+          return(father*mother)
+        } else {stop('Feature name is not in the list!')}
+      },
+
+      # nf features are born by random parents:
+      createFeatures = function(flist, nf, prefix = 'Feat'){
+        features = rownames(flist)
+        flist %>% rbind(
+          data.frame(
+            name = prefix %>% paste(nrow(flist) + sequence(nf)),
+            father = features %>% sample(nf, replace = T),
+            mother = features %>% sample(nf, replace = T),
+            correlation = NA,
+            safety = 0, stringsAsFactors = F) %>% column2Rownames('name'))
+      },
+
+      fit = function(X, y){
+        if(!fitted){
+          objects$columns <<- numerics(X)
+          X = X[objects$columns]
+          objects$flist <<- data.frame(name = columns, father = NA, mother = NA, correlation = cor(X, y) %>% as.numeric %>% abs, safety = 0) %>% column2Rownames('fname')
+          objects$fdata <<- X[columns]
+
+          i = 0
+          while(i < 10){
+            i = i + 1
+            flist = createFeatures(flist, 1000)
+            flist %<>% evaluateFeatures.multiplicative(X = dataset[,columns], y = dataset[,'Y'], top = 100)
+
+            cat('Iteration:', i, ': Best Correlation = ', 100*max(flist$correlation), ' nrow(flist) = ', nrow(flist), '\n')
+          }
+
+        }
+      },
+    )
+                                        )

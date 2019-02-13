@@ -2,8 +2,8 @@ MODEL = setRefClass('MODEL',
   fields = list(name = "character", type = "character", config = "list", fitted = 'logical', objects = "list"),
 
   methods = list(
-    initialize           = function(transformer = NULL, settings = list(), ...){
-      callSuper(...);
+    initialize           = function(name = NULL, transformer = NULL, settings = list(), ...){
+      callSuper(...)
 
       if(is.null(settings$cross_validation)){
         settings$cross_validation = list()
