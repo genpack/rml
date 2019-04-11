@@ -13,8 +13,7 @@ createFeatures.multiplicative = function(flist, nf, prefix = 'Feat'){
 }
 
 
-createFeatures.logical = function(flist, nf, prefix = 'Feat'){
-  actions  = c('AND', 'OR', 'XOR')
+createFeatures.logical = function(flist, nf, prefix = 'Feat', actions = c('AND', 'OR', 'XOR')){
   features = rownames(flist)
   flist %>% rbind(
     data.frame(
@@ -57,7 +56,7 @@ getFeatureValue.multiplicative = function(flist, name, dataset){
   } else {stop('Feature name is not in the list!')}
 }
 
-evaluateFeatures.multiplicative = function(flist, X, y, top = 400, cor_fun = cor){
+evaluateFeatures.multiplicative = function(flist, X, y, top = 100, cor_fun = cor){
   ns   = rownames(flist)
   
   keep = is.na(flist$correlation) & (flist$father %in% columns) & (flist$mother %in% columns)
@@ -83,10 +82,11 @@ evaluateFeatures.multiplicative = function(flist, X, y, top = 400, cor_fun = cor
   return(flist[keep, ])
 }
 
-evaluateFeatures.logical = function(flist, X, y, top = 400, cor_fun = correl){
-  ns   = rownames(flist)
-  top  = min(top, length(ns) - 1)
-  keep = is.na(flist$correlation) & (flist$father %in% columns) & (flist$mother %in% columns)
+evaluateFeatures.logical = function(flist, X, y, top = 100, cor_fun = cross_enthropy){
+  columns = colnames(X)
+  ns      = rownames(flist)
+  top     = min(top, length(ns) - 1)
+  keep    = is.na(flist$correlation) & (flist$father %in% columns) & (flist$mother %in% columns)
   if(sum(keep) > 0){
     flist$correlation[keep] <- cor_fun(X[, flist$father[keep]]*X[, flist$mother[keep]], y) %>% as.numeric %>% abs
   }
@@ -105,18 +105,19 @@ evaluateFeatures.logical = function(flist, X, y, top = 400, cor_fun = correl){
 }
 
 # Optimal Genetic Binary Feature Combiner
-optGenBinFeatComb.fit = function(X, y, target = 0.9, epochs = 10, cycle_births = 2000, metric = function(x,y) x %>% xor(y) %>% sum){
+genBinFeatBoost.fit = function(X, y, target = 0.9, epochs = 10, cycle_survivors = 500, cycle_births = 2000, final_survivors = 5, metric = cross_enthropy){
   columns = colnames(X)
-  flist  = data.frame(name = columns, father = NA, mother = NA, action = NA, correlation = correl(X[, columns], y) %>% as.numeric %>% abs, safety = 0) %>% column2Rownames('name')
-  
+  flist   = data.frame(name = columns, father = NA, mother = NA, action = NA, correlation = metric(X[, columns], y) %>% as.numeric %>% abs, safety = 0) %>% column2Rownames('name')
+  flist   = flist[!is.na(flist$correlation),]
   # nf features are born by random parents:
   i = 0
   while((i < epochs) & (max(flist$correlation) < target)){
     i = i + 1
     flist = createFeatures.logical(flist, cycle_births)
-    flist %<>% evaluateFeatures.logical(X, y, cor_fun = correl)
+    flist %<>% evaluateFeatures.logical(X, y, cor_fun = metric, top = chif(i == epochs, final_survivors, cycle_survivors))
     
     cat('Iteration: ', i, ': Best Correlation = ', max(flist$correlation), ' nrow(flist) = ', nrow(flist), '\n')
   }
+  
   return(flist)
 }
