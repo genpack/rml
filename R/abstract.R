@@ -8,13 +8,13 @@ MODEL = setRefClass('MODEL',
       if(is.null(settings$cross_validation)){
         settings$cross_validation = list()
       }
-      if(is.null(settings$transformer$keep_original)){settings$transformer$keep_original = T}
+      if(is.null(settings$transformer$keep_original)){settings$transformer$keep_original = F}
       if(is.null(settings$cross_validation$ntest)){settings$cross_validation$ntest <- 10}
-      if(is.null(settings$cross_validation$split_ratio)){settings$cross_validation$split_ratio <- 0.3}
+      if(is.null(settings$cross_validation$split_ratio)){settings$cross_validation$split_ratio <- 0.7}
       if(is.null(settings$cross_validation$split_method)){settings$cross_validation$split_method <- 'shuffle'}
       if(is.null(settings$cross_validation$reset_transformer)){settings$cross_validation$reset_transformer = T}
-      if(is.null(settings$cross_validation$performance_meter)){
-        settings$cross_validation$performance_meter <- function(y1, y2){
+      if(is.null(settings$metric)){
+        settings$metric <- function(y1, y2){
           err = (y1 - y2)^2 %>% sum
           # den = (y_test - mean(y_test))^2 %>% sum
           den = (y2 - mean(y2))^2 %>% sum
@@ -26,15 +26,19 @@ MODEL = setRefClass('MODEL',
       fitted      <<- FALSE
       objects$transformer <<- transformer
     },
-    fit                  = function(X, y){},
     reset                = function(reset_transformer = T){
       fitted <<- FALSE
+      objects$features <<- NULL
       if (reset_transformer & !is.null(objects$transformer)){
         objects$transformer$reset(reset_transformer = T)
       }},
     get.feature.names    = function(){character()},
-    get.featur.weights  = function(){},
-    predict              = function(){if(!fitted) stop(paste('from', name, 'of type', type, ':', 'Model not fitted!', '\n'))},
+    get.feature.weights  = function(){},
+    predict              = function(X){
+      if(!fitted) stop(paste('from', name, 'of type', type, ':', 'Model not fitted!', '\n'))
+      X = transform(X)
+      X[objects$features %>% pull(name)]
+    },
     transform            = function(X, y = NULL){
       if(!is.null(objects$transformer)){
         if(!objects$transformer$fitted) {
@@ -57,24 +61,33 @@ MODEL = setRefClass('MODEL',
 
       # X  = transform(X, y)
 
-      N      = nrow(X)
+      # Split by shuffling: todo: support other splitting methods(i.e.: chronological)
+      N       = nrow(X)
+      trindex = N %>% sequence %>% sample(size = floor(config$cross_validation$split_ratio*N), replace = F)
+      
+      X_train = X[trindex, ]
+      y_train = y[trindex]
+      X_test  = X[- trindex,]
+      y_test  = y[- trindex]
+      
       scores = c()
 
       for (i in sequence(ntest)){
-        trindex = N %>% sequence %>% sample(size = floor((1 - config$cross_validation$split_ratio)*N))
-
-        X_train = X[trindex, ]
-        y_train = y[trindex]
-        X_test  = X[- trindex,]
-        y_test  = y[- trindex]
-
-        reset(config$cross_validation$reset_transformer)
-        fit(X_train, y_train)
-        yhat   = predict(X_test)
-        scores = c(scores, config$cross_validation$performance_meter(yhat, y_test))
+        perf   = get.performance(X_train, y_train, X_test, y_test)
+        scores = c(scores, config$metric(perf$y_pred, perf$y_true))
       }
       objects$model <<- keep
       return(scores)
+    },
+    
+    get.performance = function(X_train, y_train, X_test, y_test){
+      keep   = objects$model
+
+      reset(config$cross_validation$reset_transformer)
+      .self$fit(X_train, y_train)
+      yhat   = predict(X_test) # this has error! Fix it!
+      objects$model <<- keep
+      return(list(y_pred = yhat, y_true = y_test))
     },
 
     get.parameters       = function(){},
@@ -97,7 +110,7 @@ MODEL = setRefClass('MODEL',
 #           y_test  = y[  test]
 #           fit(X_train, y_train)
 #           yht = predict(X_test)
-#           acc = c(acc, config$cross_validation$performance_meter(yht, y_test))
+#           acc = c(acc, config$metric(yht, y_test))
 #         }
 #         objects$model <<- keep
 #         return(acc)
