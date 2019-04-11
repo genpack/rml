@@ -1,5 +1,57 @@
 # mltools.R
 
+cross_enthropy = function(v1, v2){
+  N = length(v2)
+  if(is.null(dim(v1)) & inherits(v1, c('logical', 'integer', 'numeric'))){
+    a = (v1 %>% xor(v2) %>% sum)/N
+  } else if (nrow(v1) == N){
+    a = (v1 %>% xor(v2) %>% colSums)/N
+  } else {
+    stop('Something is wrong!')
+  }
+  return(a %>% sapply(function(x) max(x, 1-x)))
+}
+
+cross_f1 = function(v1, v2){
+  v2 %<>% verify(c('logical', 'integer', 'numeric'), null_allowed = F) %>% as.logical
+  N = length(v2)
+  
+  if(is.null(dim(v1)) & inherits(v1, c('logical', 'integer', 'numeric'))){
+    v1  %<>% as.logical
+    tp = sum(v1 & v2)
+    fp = sum(v1 & (!v2))
+    tn = sum((!v1) & (!v2))
+    fn = sum((!v1) & v2)
+    pr = tp/(tp + fp)
+    rc = tp/(tp + fn)
+    return(2*pr*rc/(pr+rc)) 
+    
+  } else if (nrow(v1) == N){
+    return(v1 %>% apply(2, function(x) cross_f1(x, v2)))
+  } else {
+    stop('Something is wrong!')
+  }
+  return(a %>% sapply(function(x) max(x, 1-x)))
+}
+
+# Groups features based on count of their unique values  
+group_features = function(X, nominals_only = F){
+  if(nominals_only) X = X[nominals(X)]
+  colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist -> lst 
+  ns = names(lst)
+  list(
+    unique = ns[which(lst == 1)],
+    binary = ns[which(lst == 2)],
+    triple = ns[which(lst == 3)],
+    lest10 = ns[which((lst < 10) & (lst > 3))],
+    lest20 = ns[which((lst < 20) & (lst > 10))],
+    lest50 = ns[which((lst < 50) & (lst > 20))],
+    numers = ns[which(lst >= 50)]
+  )
+}  
+
+
+
 # Returns binary Chi-Squared statistics for two binary columns
 spark.binchisq = function(tbl, col1, col2){
   tbl %>% rename(x = col1, y = col2) %>% select(x, y) %>%
@@ -53,7 +105,11 @@ optSplit.chi = function(tbl, num_col, cat_col){
     mutate(den = a*b*(1-a)*(1-b)) %>%
     mutate(chi = (c- a*b)^2/den) %>% arrange(chi)
 
-  tbl %>% tail(1) %>% select(split = x, chisq = chi) %>% as.list
+  out <- tbl %>% tail(1) %>% select(split = x, correlation = chi) %>% as.list
+
+  #out$chisq  <- N*out$chisq
+  #out$pvalue <- pchisq(out$chisq, df = 1, lower.tail = F)
+  return(out)  
 }
 
 spark.optSplit.chi = function(tbl, num_col, cat_col, breaks = 1000){
@@ -81,7 +137,10 @@ spark.optSplit.chi = function(tbl, num_col, cat_col, breaks = 1000){
   #   mutate(chi = (c- a*b)^2/den) %>% arrange(desc(chi))
 
   tbl %>% head(1) %>% collect %>% mutate(split = mn + xx*hh/breaks) %>%
-    select(split, chisq = chi) %>% as.list
+    select(split, correlation = chi) %>% as.list -> out
+  #out$chisq  <- N*out$chisq
+  #out$pvalue <- pchisq(out$chisq, df = 1, lower.tail = F)
+  return(out)  
 }
 
 # prob_col : column name containing probabilities of class 1 or positive
@@ -107,6 +166,85 @@ spark.dte = function(tbl, prob_col, label_col, breaks = 1000){
     mutate(f1 = 2*precision*recall/(precision + recall)) %>%
     mutate(split = mn + xx*hh/breaks) %>%
     select(split, tp, fp, tn, fn, precision, recall, f1)
+}
+
+optSplitColumns.f1 = function(df, columns = numerics(df), label_col = 'label'){
+  for(i in sequence(length(columns))){
+    col = columns[i]
+    res1 <- df %>% optSplit.f1(prob_col = col, label_col = label_col)
+    res2 <- df %>% spark.mutate('-' %>% paste(col) %>% {names(.)<-col;.}) %>% optSplit.f1(prob_col = col, label_col = label_col)
+    res2$split = - res2$split
+    res  <- chif(res1$f1 > res2$f1, res1, res2)
+    res  <- c(Column = col, res) %>% as.data.frame
+    if(i == 1){sp = res} else {sp %<>% rbind(res)}
+    print(res)
+  }
+  return(sp)
+}
+
+optSplitColumns.chi = function(df, columns = numerics(df), label_col = 'label'){
+  for(i in sequence(length(columns))){
+    col = columns[i]
+    res <- df %>% optSplit.chi(num_col = col, cat_col = label_col)
+    res <- c(Column = col, res) %>% as.data.frame
+    if(i == 1){sp = res} else {sp %<>% rbind(res)}
+    print(res)
+  }
+  return(sp)
+}
+
+
+spark.optSplitColumns.chi = function(tbl, columns, label_col = 'label'){
+  for(i in sequence(length(columns))){
+    col = columns[i]
+    res <- tbl %>% spark.optSplit.chi(num_col = col, cat_col = label_col)
+    res <- c(Column = col, res) %>% as.data.frame
+    if(i == 1){sp = res} else {sp %<>% rbind(res)}
+    print(res)
+  }
+  return(sp)
+}
+
+spark.optSplitColumns.f1 = function(tbl, columns, label_col = 'label'){
+  for(i in sequence(length(columns))){
+    col = columns[i]
+    res1 <- tbl %>% spark.optSplit.f1(prob_col = col, label_col = label_col)
+    res2 <- tbl %>% spark.mutate('-' %>% paste(col) %>% {names(.)<-col;.}) %>% spark.optSplit.f1(prob_col = col, label_col = label_col)
+    res2$split = - res2$split
+    res  <- chif(res1$f1 > res2$f1, res1, res2)
+    res  <- c(Column = col, res) %>% as.data.frame
+    if(i == 1){sp = res} else {sp %<>% rbind(res)}
+    print(res)
+  }
+  return(sp)
+}
+
+# prob_col : column name containing probabilities of class 1 or positive
+# label_col: column name containing actual class labels
+# dte stands for decision threshold evaluator:
+# Returns a table containing performance metrics for each decision threshoild
+dte = function(df, prob_col, label_col, breaks = 1000){
+  df %<>% rename(xxx = prob_col, yy = label_col) %>% select(xxx, yy)
+
+  mn = df %>% pull(xxx) %>% min(na.rm = T)
+  mx = df %>% pull(xxx) %>% max(na.rm = T)
+  hh = mx - mn
+  
+  df %>% mutate(xx = as.integer(breaks*(xxx - mn)/hh)) %>% group_by(xx) %>%
+    summarise(X = length(xx), Y = sum(yy, na.rm = T)) %>%
+    arrange(xx) %>%
+    mutate(a = cumsum(X), fn = cumsum(Y)) %>%
+    mutate(e = cumsum(X %>% rev) %>% rev, tp = cumsum(Y %>% rev) %>% rev) %>%
+    mutate(tn = a - fn, fp = e - tp) %>%
+    mutate(precision = tp/(tp + fp), recall = tp/(tp + fn)) %>%
+    mutate(f1 = 2*precision*recall/(precision + recall)) %>%
+    mutate(split = mn + xx*hh/breaks) %>%
+    select(split, tp, fp, tn, fn, precision, recall, f1)
+}
+
+optSplit.f1 = function(df, prob_col, label_col, breaks = 1000){
+  df %>% dte(prob_col, label_col, breaks) %>% arrange(desc(f1)) %>%
+    head(1) %>% collect %>% as.list
 }
 
 # finds the optimal decision threshold to maximize f1 score
@@ -148,4 +286,9 @@ scorer = function(tbl, prediction_col, actual_col){
     accuracy  = (TP+TN)/(TP+FN+FP+TN),
     f1        = 2*prc*rcl/(prc+rcl)
   )
+}
+
+remove_invariant_features = function(X){
+  fsds = X %>% apply(2, function(x) length(unique(x)))
+  X[, which(fsds > 1)]
 }
