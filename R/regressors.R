@@ -2,10 +2,19 @@
 # feature importances are based on p-values of coefficients.
 STATS.LM = setRefClass('STATS.LM', contains = "MODEL",
    methods = list(
-     initialize = function(settings = list(), ...){
-       callSuper(settings = settings, ...)
-       config$sig_level <<- settings$sig_level %>% verify('numeric', domain = c(0,1), default = '0.1')
-       type               <<- 'Linear Regression'
+     initialize = function(...){
+       callSuper(...)
+       config$sig_level <<- config$sig_level %>% verify('numeric', domain = c(0,1), default = '0.1')
+       type             <<- 'Linear Regression'
+       if(is.null(config$metric)){
+         settings$metric <- function(y1, y2){
+           err = (y1 - y2)^2 %>% sum
+           # den = (y_test - mean(y_test))^2 %>% sum
+           den = (y2 - mean(y2))^2 %>% sum
+           return(1.0 - min(err/den, 1.0))
+         }
+       }
+       
      },
 
      fit = function(X, y){
