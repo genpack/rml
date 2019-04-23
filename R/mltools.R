@@ -1,6 +1,6 @@
 # mltools.R
 
-cross_enthropy = function(v1, v2){
+cross_accuracy = function(v1, v2){
   N = length(v2)
   if(is.null(dim(v1)) & inherits(v1, c('logical', 'integer', 'numeric'))){
     a = (v1 %>% xor(v2) %>% sum)/N
@@ -95,8 +95,9 @@ optimSearch1d = function(fun, domain, ...){
   return(x)
 }
 
-optSplit.chi = function(tbl, num_col, cat_col){
+optSplit.chi = function(tbl, num_col, cat_col, fun = NULL){
   tbl %<>% rename(x = num_col, y = cat_col) %>% select(x, y)
+  if(!is.null(fun)){tbl %<>% mutate(x = fun(x))}
   N = nrow(tbl)
   b = tbl %>% pull('y') %>% mean
   tbl %<>%
@@ -112,8 +113,9 @@ optSplit.chi = function(tbl, num_col, cat_col){
   return(out)  
 }
 
-spark.optSplit.chi = function(tbl, num_col, cat_col, breaks = 1000){
+spark.optSplit.chi = function(tbl, num_col, cat_col, breaks = 1000, fun = NULL){
   tbl %<>% rename(xxx = num_col, yy = cat_col) %>% select(xxx, yy)
+  if(!is.null(fun)){tbl %<>% mutate(xxx = fun(xxx))}
   tbl %>% sdf_describe %>% collect -> dsc
 
   mn = dsc[4, 'xxx'] %>% as.numeric
@@ -147,8 +149,9 @@ spark.optSplit.chi = function(tbl, num_col, cat_col, breaks = 1000){
 # label_col: column name containing actual class labels
 # dte stands for decision threshold evaluator:
 # Returns a table containing performance metrics for each decision threshoild
-spark.dte = function(tbl, prob_col, label_col, breaks = 1000){
+spark.dte = function(tbl, prob_col, label_col, breaks = 1000, fun = NULL){
   tbl %<>% rename(xxx = prob_col, yy = label_col) %>% select(xxx, yy)
+  if(!is.null(fun)){tbl %<>% mutate(xxx = fun(xxx))}
   tbl %>% sdf_describe %>% collect -> dsc
 
   mn = dsc[4, 'xxx'] %>% as.numeric
@@ -168,11 +171,13 @@ spark.dte = function(tbl, prob_col, label_col, breaks = 1000){
     select(split, tp, fp, tn, fn, precision, recall, f1)
 }
 
-optSplitColumns.f1 = function(df, columns = numerics(df), label_col = 'label'){
+optSplitColumns.f1 = function(df, columns = NULL, label_col = 'label', fun = NULL){
+  defcols = numerics(df) %-% label_col
+  columns %<>% verify('character', domain = defcols, default = defcols)
   for(i in sequence(length(columns))){
     col = columns[i]
-    res1 <- df %>% optSplit.f1(prob_col = col, label_col = label_col)
-    res2 <- df %>% spark.mutate('-' %>% paste(col) %>% {names(.)<-col;.}) %>% optSplit.f1(prob_col = col, label_col = label_col)
+    res1 <- df %>% optSplit.f1(prob_col = col, label_col = label_col, fun = fun)
+    res2 <- df %>% spark.mutate('-' %>% paste(col) %>% {names(.)<-col;.}) %>% optSplit.f1(prob_col = col, label_col = label_col, fun = fun)
     res2$split = - res2$split
     res  <- chif(res1$f1 > res2$f1, res1, res2)
     res  <- c(Column = col, res) %>% as.data.frame
@@ -182,10 +187,10 @@ optSplitColumns.f1 = function(df, columns = numerics(df), label_col = 'label'){
   return(sp)
 }
 
-optSplitColumns.chi = function(df, columns = numerics(df), label_col = 'label'){
+optSplitColumns.chi = function(df, columns = numerics(df), label_col = 'label', fun = NULL){
   for(i in sequence(length(columns))){
     col = columns[i]
-    res <- df %>% optSplit.chi(num_col = col, cat_col = label_col)
+    res <- df %>% optSplit.chi(num_col = col, cat_col = label_col, fun = fun)
     res <- c(Column = col, res) %>% as.data.frame
     if(i == 1){sp = res} else {sp %<>% rbind(res)}
     print(res)
@@ -194,10 +199,10 @@ optSplitColumns.chi = function(df, columns = numerics(df), label_col = 'label'){
 }
 
 
-spark.optSplitColumns.chi = function(tbl, columns, label_col = 'label'){
+spark.optSplitColumns.chi = function(tbl, columns, label_col = 'label', fun = NULL){
   for(i in sequence(length(columns))){
     col = columns[i]
-    res <- tbl %>% spark.optSplit.chi(num_col = col, cat_col = label_col)
+    res <- tbl %>% spark.optSplit.chi(num_col = col, cat_col = label_col, fun = fun)
     res <- c(Column = col, res) %>% as.data.frame
     if(i == 1){sp = res} else {sp %<>% rbind(res)}
     print(res)
@@ -208,8 +213,8 @@ spark.optSplitColumns.chi = function(tbl, columns, label_col = 'label'){
 spark.optSplitColumns.f1 = function(tbl, columns, label_col = 'label'){
   for(i in sequence(length(columns))){
     col = columns[i]
-    res1 <- tbl %>% spark.optSplit.f1(prob_col = col, label_col = label_col)
-    res2 <- tbl %>% spark.mutate('-' %>% paste(col) %>% {names(.)<-col;.}) %>% spark.optSplit.f1(prob_col = col, label_col = label_col)
+    res1 <- tbl %>% spark.optSplit.f1(prob_col = col, label_col = label_col, fun = fun)
+    res2 <- tbl %>% spark.mutate('-' %>% paste(col) %>% {names(.)<-col;.}) %>% spark.optSplit.f1(prob_col = col, label_col = label_col, fun = fun)
     res2$split = - res2$split
     res  <- chif(res1$f1 > res2$f1, res1, res2)
     res  <- c(Column = col, res) %>% as.data.frame
@@ -223,8 +228,10 @@ spark.optSplitColumns.f1 = function(tbl, columns, label_col = 'label'){
 # label_col: column name containing actual class labels
 # dte stands for decision threshold evaluator:
 # Returns a table containing performance metrics for each decision threshoild
-dte = function(df, prob_col, label_col, breaks = 1000){
+dte = function(df, prob_col, label_col, breaks = 1000, fun = NULL){
   df %<>% rename(xxx = prob_col, yy = label_col) %>% select(xxx, yy)
+  
+  if(!is.null(fun)){df %<>% mutate(xxx = fun(xxx))}
 
   mn = df %>% pull(xxx) %>% min(na.rm = T)
   mx = df %>% pull(xxx) %>% max(na.rm = T)
@@ -242,14 +249,14 @@ dte = function(df, prob_col, label_col, breaks = 1000){
     select(split, tp, fp, tn, fn, precision, recall, f1)
 }
 
-optSplit.f1 = function(df, prob_col, label_col, breaks = 1000){
-  df %>% dte(prob_col, label_col, breaks) %>% arrange(desc(f1)) %>%
+optSplit.f1 = function(df, prob_col, label_col, breaks = 1000, fun = NULL){
+  df %>% dte(prob_col, label_col, breaks, fun = fun) %>% arrange(desc(f1)) %>%
     head(1) %>% collect %>% as.list
 }
 
 # finds the optimal decision threshold to maximize f1 score
-spark.optSplit.f1 = function(tbl, prob_col, label_col, breaks = 1000){
-  tbl %>% spark.dte(prob_col, label_col, breaks) %>% arrange(desc(f1)) %>%
+spark.optSplit.f1 = function(tbl, prob_col, label_col, breaks = 1000, fun = NULL){
+  tbl %>% spark.dte(prob_col, label_col, breaks, fun = fun) %>% arrange(desc(f1)) %>%
     head(1) %>% collect %>% as.list
 }
 
