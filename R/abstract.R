@@ -2,29 +2,30 @@ MODEL = setRefClass('MODEL',
   fields = list(name = "character", type = "character", config = "list", fitted = 'logical', objects = "list"),
 
   methods = list(
-    initialize           = function(name = NULL, transformer = NULL, settings = list(), ...){
-      callSuper(...)
-
-      if(is.null(settings$cross_validation)){
-        settings$cross_validation = list()
-      }
-      if(is.null(settings$transformer$keep_original)){settings$transformer$keep_original = F}
-      if(is.null(settings$cross_validation$ntest)){settings$cross_validation$ntest <- 10}
-      if(is.null(settings$cross_validation$split_ratio)){settings$cross_validation$split_ratio <- 0.7}
-      if(is.null(settings$cross_validation$split_method)){settings$cross_validation$split_method <- 'shuffle'}
-      if(is.null(settings$cross_validation$reset_transformer)){settings$cross_validation$reset_transformer = T}
-      if(is.null(settings$metric)){
-        settings$metric <- function(y1, y2){
-          err = (y1 - y2)^2 %>% sum
-          # den = (y_test - mean(y_test))^2 %>% sum
-          den = (y2 - mean(y2))^2 %>% sum
-          return(1.0 - min(err/den, 1.0))
+    initialize           = function(..., name = character(), transformer = NULL, mother = NULL, features = NULL, pupils = NULL){
+      callSuper(name = name)
+      settings = list(...)
+      for (sn in sequence(length(settings))){
+        set = settings[[sn]]
+        if(inherits(set, 'list')) {
+          settings = settings %<==>% set
+          settings[[sn]] <- NULL
         }
       }
+      
+      if(is.null(settings$keep_columns)){settings$keep_columns = F}
+      if(is.null(settings$keep_features)){settings$keep_features = F}
+      if(is.null(settings$cv.ntest)){settings$cv.ntest <- 10}
+      if(is.null(settings$cv.split_ratio)){settings$cv.split_ratio <- 0.7}
+      if(is.null(settings$cv.split_method)){settings$cv.split_method <- 'shuffle'}
+      if(is.null(settings$cv.reset_transformer)){settings$cv.reset_transformer = T}
 
       config      <<- settings
       fitted      <<- FALSE
       objects$transformer <<- transformer
+      objects$mother      <<- mother
+      objects$features    <<- features
+      objects$pupils      <<- pupils
     },
     reset                = function(reset_transformer = T){
       fitted <<- FALSE
@@ -37,17 +38,29 @@ MODEL = setRefClass('MODEL',
     predict              = function(X){
       if(!fitted) stop(paste('from', name, 'of type', type, ':', 'Model not fitted!', '\n'))
       X = transform(X)
-      X[objects$features %>% pull(name)]
     },
+    treat                = function(out, fet, org){
+      if(config$keep_columns)
+        if(config$keep_features) return(cbind(org, out)) 
+        else return(cbind(org %>% spark.unselect(colnames(fet)), out))
+      else if (config$keep_features) return(cbind(fet, out)) 
+           else return(out)
+    },
+    
+    fit = function(X, y){
+      X = transform(X, y)
+      if(!is.null(config$features.include)){X = X[config$features.include %^% colnames(X)]}
+      if(!is.null(config$features.exclude)){X = X[colnames(X) %-% config$features.exclude]}
+      X %<>% remove_invariant_features
+      objects$features <<- colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
+      return(X)
+    },
+    
     transform            = function(X, y = NULL){
       if(!is.null(objects$transformer)){
         if(!objects$transformer$fitted) {
-          # if(is.null(y)) stop(paste(objects$transformer$name, ', a transformer of type', objects$transformer$name, 'belonging to model', )
           objects$transformer$fit(X, y)
         }
-        if(config$transformer$keep_original){
-          X = cbind(X, objects$transformer$predict(X))
-        } else
         X = objects$transformer$predict(X)
       }
       return(X)
@@ -63,16 +76,17 @@ MODEL = setRefClass('MODEL',
 
       # Split by shuffling: todo: support other splitting methods(i.e.: chronological)
       N       = nrow(X)
-      trindex = N %>% sequence %>% sample(size = floor(config$cross_validation$split_ratio*N), replace = F)
-      
-      X_train = X[trindex, ]
-      y_train = y[trindex]
-      X_test  = X[- trindex,]
-      y_test  = y[- trindex]
       
       scores = c()
 
       for (i in sequence(ntest)){
+        trindex = N %>% sequence %>% sample(size = floor(config$cv.split_ratio*N), replace = F)
+        
+        X_train = X[trindex, ]
+        y_train = y[trindex]
+        X_test  = X[- trindex,]
+        y_test  = y[- trindex]
+        
         perf   = get.performance(X_train, y_train, X_test, y_test)
         scores = c(scores, config$metric(perf$y_pred, perf$y_true))
       }
@@ -83,7 +97,7 @@ MODEL = setRefClass('MODEL',
     get.performance = function(X_train, y_train, X_test, y_test){
       keep   = objects$model
 
-      reset(config$cross_validation$reset_transformer)
+      reset(config$cv.reset_transformer)
       .self$fit(X_train, y_train)
       yhat   = predict(X_test) # this has error! Fix it!
       objects$model <<- keep
@@ -103,7 +117,7 @@ MODEL = setRefClass('MODEL',
 #         N       = X %>% nrow
 #         acc     = c()
 #         for(i in sequence(ntest)){
-#           test    = N %>% sequence %>% sample(config$cross_validation$split_ratio*N, replace = F)
+#           test    = N %>% sequence %>% sample(config$cv.split_ratio*N, replace = F)
 #           X_train = X[- test, ]
 #           X_test  = X[  test, ]
 #           y_train = y[- test]
