@@ -67,6 +67,65 @@ SMBINNING = setRefClass('SMBINNING', contains = "MODEL",
     )
 )
 
+NORMALIZER = setRefClass('NORMALIZER', contains = 'MODEL', 
+  methods = list(
+    initialize = function(...){
+      callSuper(...)
+      config$suffix <<- config$suffix %>% verify('character', default = 'NRM')
+      type          <<- 'Normalizer'
+      
+    },
+    fit = function(X, y = NULL){
+      if(!fitted){
+        X = callSuper(X, y)
+        objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+        X = X[objects$features$fname] %>% as.matrix
+        X %>% apply(2, function(v) min(v, na.rm = T)) ->> objects$features$min
+        X %>% apply(2, function(v) max(v, na.rm = T)) ->> objects$features$max
+        fitted <<- TRUE
+      }
+    },
+      
+      predict = function(X){
+        XORG  = callSuper(X)
+        XFET  = XORG[objects$features$fname] %>% as.data.frame
+        feat  = objects$features %>% column2Rownames('fname')
+        
+        XOUT  = objects$features$fname %>% sapply(function(i) (XFET[,i] -  feat[i,'min'])/(feat[i,'max'] - feat[i,'min'])) %>% na2zero %>% as.data.frame
+        colnames(XOUT) <- objects$features$fname %>% paste(config$suffix, sep = '_')
+        treat(XOUT, XFET, XORG)
+      }  
+      
+  ))
+
+SCALER = setRefClass('SCALER', contains = "MODEL", methods = list(
+  initialize = function(...){
+    callSuper(...)
+    config$suffix              <<- config$suffix %>% verify('character', default = 'SCALED')
+    type                       <<- 'ZFactor Scaler'
+  },
+  
+  fit = function(X, y = NULL){
+    if(!fitted){
+      X = callSuper(X, y)
+      objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+      X = X[objects$features$fname] %>% as.matrix
+      X %>% apply(2, function(v) mean(v, na.rm = T)) ->> objects$features$mean
+      X %>% apply(2, function(v)   sd(v, na.rm = T)) ->> objects$features$stdv
+      fitted <<- TRUE
+    }
+  },
+  
+  predict = function(X){
+    XORG  = callSuper(X)
+    XFET  = XORG[objects$features$fname] %>% as.data.frame
+    feat  = objects$features %>% column2Rownames('fname')
+    
+    XOUT  = objects$features$fname %>% sapply(function(i) (XFET[,i] -  feat[i,'mean'])/feat[i,'stdv']) %>% na2zero %>% as.data.frame
+    colnames(XOUT) <- objects$features$fname %>% paste(config$suffix, sep = '_')
+    treat(XOUT, XFET, XORG)
+  }  
+))
 
 OPTBINNER = setRefClass('OPTBINNER', contains = "MODEL",
                         methods = list(
@@ -103,6 +162,15 @@ OPTBINNER = setRefClass('OPTBINNER', contains = "MODEL",
                         )
 )
 
+
+KMEANS = setRefClass('KMEANS', contains = "MODEL", methods = list(
+  initialize = function(...){
+    callSuper(...)
+    type <<- "Kmeans Clustering"
+    config$number_of_clusters <<- config$number_of_clusters %>% verify(c('numeric', 'integer'), lengths = 1, default = 5)
+  }
+))
+
 # Replaces categorical features with class ratios associated with each category
 SEGMENTER.RATIO = setRefClass('SEGMENTER.RATIO', contains = 'MODEL',
    methods = list(
@@ -137,6 +205,7 @@ SEGMENTER.RATIO = setRefClass('SEGMENTER.RATIO', contains = 'MODEL',
    )
 )
 
+
 SEGMENTER.MODEL = setRefClass('SEGMENTER.MLR', contains = 'MODEL',
   methods = list(
     initialize = function(...){
@@ -148,10 +217,9 @@ SEGMENTER.MODEL = setRefClass('SEGMENTER.MLR', contains = 'MODEL',
       if(is.empty(name)){name <<- 'SEGMOD' %>% paste0(sample(1000:9999, 1))}
     },
     
-    fit = function(X, y, do_transform = T){
+    fit = function(X, y){
       if(!fitted){
-        if(do_transform){X = transform(X, y)}
-        objects$features     <<- data.frame(fname = colnames(X), stringsAsFactors = F)
+        X = callSuper(X, y)
         objects$categoricals <<- nominals(X)
         #X = X[objects$categoricals]
         objects$model <<- list()
@@ -206,6 +274,7 @@ CATCONCATER = setRefClass('CATCONCATER', contains = "MODEL",
      
      fit = function(X, y){
        if(!fitted){
+         X = callSuper(X, y)
          objects$features <<- data.frame(fname = nominals(X), stringsAsFactors = F)
          fitted <<- TRUE
        }
@@ -230,8 +299,8 @@ DUMMIFIER = setRefClass('DUMMIFIER', contains = "MODEL",
                            },
 
                            fit = function(X, y = NULL){
-                             X = transform(X, y)
-                             objects$features     <<- data.frame(fname = nominals(X), stringsAsFactors = F)
+                             X = callSuper(X)
+                             objects$features     <<- objects$features %>% filter(class %in% nominals(X))
                              warnif(is.empty(objects$features), 'No categorical columns found for dummification!')
                              dummies = character()
                              for(cat in objects$features %>% pull(fname)){
@@ -387,3 +456,32 @@ SUPERVISOR = setRefClass('SUPERVISOR', contains = "MODEL",
     }
   )
 )
+
+KMEANS = setRefClass('KMEANS', contains = 'MODEL', methods = list(
+  initialize = function(...){
+    callSuper(...)
+    type     <<- 'KMeans Clustering Transformer'
+    if(is.empty(name)){name <<- 'KMNs' %>% paste0(sample(1000:9999, 1))}
+    config$num_cluster <<- config$num_cluster %>% verify(c('numeric', 'integer'), default = 5)
+    
+  },
+  fit = function(X, y = NULL){
+    if(!fitted){
+      X = callSuper(X, y)
+      objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+      X = X[objects$features$fname]
+      objects$model <<- kmeans(X, centers = config$num_clusters)
+    }
+  },
+  
+  predict = function(X){
+    XORG = callSuper(X)
+    XFET = XORG[objects$features$fname]
+    bibi = function(u){
+      objects$model$centers %>% apply(1, function(v) gener::difference(u, v)) %>% order %>% first
+    }
+    XOUT = XFET %>% as.matrix %>% apply(2, bibi)
+    colnames(XOUT) <- name %>% paste('out', sep = '_')
+    treat(XOUT, XFET, XORG)
+  }
+))
