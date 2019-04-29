@@ -5,7 +5,7 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
       callSuper(...)
       type             <<- 'Abstract Classifier'
       config$sig_level <<- config$sig_level %>% verify('numeric', domain = c(0,1), default = 0.1)
-      config$predict_probabilities <<- config$predict_probabilities %>% verify('logical', domain = c(T,F), default = F)
+      config$predict_probabilities <<- config$predict_probabilities %>% verify('logical', domain = c(T,F), default = T)
       if(is.null(config$metric)){
         config$metric <<- chif(config$predict_probabilities, function(y_pred, y_test) {data.frame(prob = y_pred, actual = y_test) %>% optSplit.f1('prob', 'actual')->aa;aa$f1}, function(y1, y2) mean(xor(y1, y2), na.rm = T))
       }
@@ -85,13 +85,14 @@ SCIKIT.LR = setRefClass('SCIKIT.LR', contains = "CLASSIFIER.SCIKIT",
         config$sig_level <<- config$sig_level %>% verify('numeric', domain = c(0,1), default = 0.1)
         type             <<- 'Logistic Regression'
         if(is.empty(name)){name <<- 'SKLR' %>% paste0(sample(1000:9999, 1))}
+        module_lm = reticulate::import('sklearn.linear_model')
+        objects$model <<- module_lm$LogisticRegression(penalty = 'l1',solver = 'liblinear')
+        # todo: define hyper parameters in config
+        
       },
 
       reset = function(...){
         callSuper(...)
-        module_lm = reticulate::import('sklearn.linear_model')
-        objects$model <<- module_lm$LogisticRegression(penalty = 'l1',solver = 'liblinear')
-        # todo: define hyper parameters in config
       },
 
       fit = function(X, y){
@@ -167,6 +168,9 @@ SCIKIT.DT = setRefClass('SCIKIT.DT', contains = "CLASSIFIER.SCIKIT",
       callSuper(...)
       type               <<- 'Decision Tree'
       if(is.empty(name)){name <<- 'SKDT' %>% paste0(sample(1000:9999, 1))}
+      module_dt = reticulate::import('sklearn.tree')
+      objects$model <<- module_dt$DecisionTreeClassifier()
+      
     },
 
     fit = function(X, y){
@@ -183,8 +187,6 @@ SCIKIT.DT = setRefClass('SCIKIT.DT', contains = "CLASSIFIER.SCIKIT",
     
     reset = function(...){
       callSuper(...)
-      module_dt = reticulate::import('sklearn.tree')
-      objects$model <<- module_dt$DecisionTreeClassifier()
     },
 
     get.feature.weights = function(){
@@ -201,6 +203,8 @@ SCIKIT.XGB = setRefClass('SCIKIT.XGB', contains = "CLASSIFIER.SCIKIT",
         callSuper(...)
         type               <<- 'Extreme Gradient Boosting'
         if(is.empty(name)){name <<- 'SKXGB' %>% paste0(sample(1000:9999, 1))}
+        module_xgb = reticulate::import('xgboost')
+        objects$model <<- module_xgb$XGBClassifier(max_depth = as.integer(4), min_child_weight = 40, subsample = 0.4, lambda = 20000, alpha = 2000, gamma = 13, partial = TRUE, recall_max = 0.3)
       },
       
       fit = function(X, y){
@@ -217,8 +221,6 @@ SCIKIT.XGB = setRefClass('SCIKIT.XGB', contains = "CLASSIFIER.SCIKIT",
       
       reset = function(...){
         callSuper(...)
-        module_xgb = reticulate::import('xgboost')
-        objects$model <<- module_xgb$XGBClassifier(max_depth = as.integer(4), min_child_weight = 40, subsample = 0.4, lambda = 20000, alpha = 2000, gamma = 13, partial = TRUE, recall_max = 0.3)
       }    
     )
 ) 
@@ -229,6 +231,8 @@ SCIKIT.SVM = setRefClass('SCIKIT.SVM', contains = "CLASSIFIER.SCIKIT",
                              callSuper(...)
                              type               <<- 'Support Vector Machine'
                              if(is.empty(name)){name <<- 'SKSVM' %>% paste0(sample(1000:9999, 1))}
+                             module_svm = reticulate::import('sklearn.svm')
+                             objects$model <<- module_svm$SVC(gamma = 'scale', probability = config$predict_probabilities)
                            },
                            
                            fit = function(X, y){
@@ -245,15 +249,120 @@ SCIKIT.SVM = setRefClass('SCIKIT.SVM', contains = "CLASSIFIER.SCIKIT",
                            
                            reset = function(...){
                              callSuper(...)
-                             module_svm = reticulate::import('sklearn.svm')
-                             objects$model <<- module_svm$SVC(gamma = 'scale', probability = config$predict_probabilities)
+                             
                            }    
                          )
 )
-KERAS = setRefClass('KERAS', contains = 'MODEL',
-                    methods = c(
-                      initialize = function(...){
-                        callSuper(...)
-                      }
-                      ## ... Under Construction ...
-                    ))
+
+KERAS = setRefClass('KERAS', contains = 'CLASSIFIER',
+  methods = c(
+    initialize = function(...){
+      callSuper(...)
+      type <<- 'Neural Network'
+      library(tensorflow)
+      library(keras)
+      if(is.empty(name)){name <<- 'KERASNN' %>% paste0(sample(1000:9999, 1))}
+      ki = initializer_random_uniform(minval = -0.05, maxval = 0.05, seed = 42)
+      kr = regularizer_l2(l = 0.001)
+      config$layers <<- config$layers %>% 
+        verify('list', default = list(
+          list(name = 'dense1', units = 128, activation = 'relu', dropout = 0.25, 
+               kernel_initializer = ki), 
+          list(name = 'dense2', units = 32 , activation = 'relu', dropout = 0.25, 
+               kernel_initializer = ki,
+                kernel_regularizer = kr),
+          list(name = 'dense3', units = 8, activation = 'relu',
+               kernel_initializer = ki,
+               kernel_regularizer = kr
+               )))
+      config$outputs <<- config$outputs %>% verify(c('numeric', 'integer'), lengths = 1, default = 2)
+      config$output_activation <<- config$output_activation %>% verify(c('character', 'function'), lengths = 1, default = 'softmax') 
+      config$epochs  <<- config$epochs %>% verify(c('numeric', 'integer'), lengths = 1, default = 5)
+      config$callback <<- config$callback %>% verify('function', default = function(epoch, logs){
+        cat('Epoch:', epoch, ' Loss:', logs$loss, 'Validation Loss:', logs$val_loss, '\n')
+      })
+    },
+    
+    fit = function(X, y){
+    if(!fitted){
+      X = callSuper(X, y)
+      y = to_categorical(y, config$outputs)
+      objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+      X = X[objects$features$fname]
+      # Build the NN:
+      objects$model <<- keras_model_sequential()
+      for(i in config$layers %>% length %>% sequence){
+        lyr = config$layers[[i]]
+        if(i == 1){
+          objects$model <<- objects$model %>% 
+            layer_dense(units = as.integer(lyr$units), activation = lyr$activation, input_shape = ncol(X))
+        } else {
+          objects$model <<- objects$model %>% 
+            layer_dense(units = as.integer(lyr$units), activation = lyr$activation)
+        }
+        if(!is.null(lyr$dropout)){
+          objects$model <<- objects$model %>% 
+            layer_dropout(rate = lyr$dropout)
+        }
+      }
+      objects$model <<- objects$model %>% 
+        layer_dense(name = 'output', units = as.integer(config$outputs), activation = config$output_activation, kernel_initializer = initializer_random_uniform(seed = 42))
+      
+      # Compile the NN:
+      objects$model <<- objects$model %>% 
+        # compile(loss = 'mse', optimizer = optimizer_rmsprop(), metrics = list('mean_absolute_error'))
+        compile(loss = 'categorical_crossentropy', optimizer = optimizer_adam(lr = 0.001), metrics = list('categorical_accuracy'))
+      
+      
+      objects$model$fit(X %>% data.matrix, y, 
+                        epochs = as.integer(config$epochs), 
+                        batch_size = as.integer(10),
+                        validation_split = 0.2,
+                        callbacks = list(callback_lambda(on_epoch_end = config$callback))) ->> objects$history
+      fitted <<- T
+    }
+  },
+  
+    predict = function(X){
+    XORG = callSuper(X)
+    XFET = XORG[objects$features$fname]
+    if(config$predict_probabilities){XOUT = objects$model$predict_proba(XFET %>% data.matrix) %>% as.data.frame %>% {.[,2, drop = F]}}
+    else                            {XOUT = objects$model$predict_classes(XFET %>% data.matrix) %>% as.data.frame}
+    colnames(XOUT) <- name %>% paste('out', sep = '_')
+    treat(XOUT, XFET, XORG)
+  }
+))
+
+SPARKLYR.GBT = setRefClass('SPARKLYR.GBT', contains = 'CLASSIFIER', methods = list(
+  initialize = function(...){
+    callSuper(...)
+    type               <<- 'Gradient Boost Tree on Spark'
+    if(is.empty(name)){name <<- 'SPRGBT' %>% paste0(sample(1000:9999, 1))}
+    library(sparklyr)
+  },
+
+  fit = function(X, y){
+    if(!fitted){
+      X = callSuper(X, y)
+      X_TBL = sdf_copy_to(sc = config$connection, x = cbind(X, label = y), name = 'X_TBL', memory = T, repartition = 10)
+      features = colnames(X)
+      formula  = paste0('label ~ ', paste(features, collapse = ' + ')) %>% as.formula
+      objects$model <<- ml_gbt_classifier(X_TBL, formula)
+      imp = try(objects$model$model$feature_importances() %>% as.numeric, silent = T)
+      if(inherits(imp, 'numeric')) objects$features$importance <<- imp
+      fitted <<- T
+    }  
+  },
+  
+  predict = function(X){
+    XORG = callSuper(X)
+    XFET = XORG[objects$features$fname]
+    X_TBL = sdf_copy_to(sc = config$connection, x = XFET, name = 'X_TBL', memory = T, repartition = 10)
+    if(config$predict_probabilities){XOUT = ml_predict(objects$model, X_TBL) %>% pull(probability_1) %>% as.data.frame}
+    else                            {XOUT = ml_predict(objects$model, X_TBL) %>% pull(prediction) %>% as.data.frame}
+    colnames(XOUT) <- name %>% paste('out', sep = '_')
+    treat(XOUT, XFET, XORG)
+  }
+  
+)
+                           )
