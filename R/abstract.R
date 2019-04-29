@@ -49,8 +49,8 @@ MODEL = setRefClass('MODEL',
     
     fit = function(X, y){
       X = transform(X, y)
-      if(!is.null(config$features.include)){X = X[config$features.include %^% colnames(X)]}
-      if(!is.null(config$features.exclude)){X = X[colnames(X) %-% config$features.exclude]}
+      if(!is.null(config$features.include)){X = X %>% spark.select(config$features.include %^% colnames(X))}
+      if(!is.null(config$features.exclude)){X = X %>% spark.select(colnames(X) %-% config$features.exclude)}
       X %<>% remove_invariant_features
       objects$features <<- colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
       return(X)
