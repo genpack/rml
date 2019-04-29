@@ -1,7 +1,7 @@
 Package: maler
 Type: Package
 Title: A set of Machine Learning and transformer models.
-Version: 0.1.0
+Version: 0.1.1
 Author: Nicholas Berta
 Maintainer: Nichola Berta <nicholas.berta@gmail.com>
 Description: A set of Machine Learning and transformer models.
@@ -9,3 +9,4 @@ Description: A set of Machine Learning and transformer models.
 License: MIT
 Encoding: UTF-8
 LazyData: true
+RoxygenNote: 6.1.1

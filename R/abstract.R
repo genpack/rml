@@ -1,3 +1,4 @@
+#' @export MODEL
 MODEL = setRefClass('MODEL',
   fields = list(name = "character", type = "character", config = "list", fitted = 'logical', objects = "list"),
 
@@ -12,7 +13,7 @@ MODEL = setRefClass('MODEL',
           settings[[sn]] <- NULL
         }
       }
-      
+
       if(is.null(settings$keep_columns)){settings$keep_columns = F}
       if(is.null(settings$keep_features)){settings$keep_features = F}
       if(is.null(settings$cv.ntest)){settings$cv.ntest <- 10}
@@ -37,17 +38,19 @@ MODEL = setRefClass('MODEL',
     get.feature.weights  = function(){},
     predict              = function(X){
       if(!fitted) stop(paste('from', name, 'of type', type, ':', 'Model not fitted!', '\n'))
+      if(inherits(X, 'matrix')){X %<>% as.data.frame}
       X = transform(X)
     },
     treat                = function(out, fet, org){
       if(config$keep_columns)
-        if(config$keep_features) return(cbind(org, out)) 
+        if(config$keep_features) return(cbind(org, out))
         else return(cbind(org %>% spark.unselect(colnames(fet)), out))
-      else if (config$keep_features) return(cbind(fet, out)) 
+      else if (config$keep_features) return(cbind(fet, out))
            else return(out)
     },
-    
+
     fit = function(X, y){
+      if(inherits(X, 'matrix')){X %<>% as.data.frame}
       X = transform(X, y)
       if(!is.null(config$features.include)){X = X %>% spark.select(config$features.include %^% colnames(X))}
       if(!is.null(config$features.exclude)){X = X %>% spark.select(colnames(X) %-% config$features.exclude)}
@@ -55,7 +58,7 @@ MODEL = setRefClass('MODEL',
       objects$features <<- colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
       return(X)
     },
-    
+
     transform            = function(X, y = NULL){
       if(!is.null(objects$transformer)){
         if(!objects$transformer$fitted) {
@@ -76,24 +79,24 @@ MODEL = setRefClass('MODEL',
 
       # Split by shuffling: todo: support other splitting methods(i.e.: chronological)
       N       = nrow(X)
-      
+
       scores = c()
 
       for (i in sequence(ntest)){
         trindex = N %>% sequence %>% sample(size = floor(config$cv.split_ratio*N), replace = F)
-        
+
         X_train = X[trindex, ]
         y_train = y[trindex]
         X_test  = X[- trindex,]
         y_test  = y[- trindex]
-        
+
         perf   = get.performance(X_train, y_train, X_test, y_test)
         scores = c(scores, config$metric(perf$y_pred, perf$y_true))
       }
       objects$model <<- keep
       return(scores)
     },
-    
+
     get.performance = function(X_train, y_train, X_test, y_test){
       keep   = objects$model
 

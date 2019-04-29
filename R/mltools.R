@@ -1,5 +1,5 @@
 # mltools.R
-
+#' @export
 cross_accuracy = function(v1, v2){
   N = length(v2)
   if(is.null(dim(v1)) & inherits(v1, c('logical', 'integer', 'numeric'))){
@@ -12,10 +12,11 @@ cross_accuracy = function(v1, v2){
   return(a %>% sapply(function(x) max(x, 1-x)))
 }
 
+#' @export
 cross_f1 = function(v1, v2){
   v2 %<>% verify(c('logical', 'integer', 'numeric'), null_allowed = F) %>% as.logical
   N = length(v2)
-  
+
   if(is.null(dim(v1)) & inherits(v1, c('logical', 'integer', 'numeric'))){
     v1  %<>% as.logical
     tp = sum(v1 & v2)
@@ -24,8 +25,8 @@ cross_f1 = function(v1, v2){
     fn = sum((!v1) & v2)
     pr = tp/(tp + fp)
     rc = tp/(tp + fn)
-    return(2*pr*rc/(pr+rc)) 
-    
+    return(2*pr*rc/(pr+rc))
+
   } else if (nrow(v1) == N){
     return(v1 %>% apply(2, function(x) cross_f1(x, v2)))
   } else {
@@ -34,10 +35,11 @@ cross_f1 = function(v1, v2){
   return(a %>% sapply(function(x) max(x, 1-x)))
 }
 
-# Groups features based on count of their unique values  
+# Groups features based on count of their unique values
+#' @export
 group_features = function(X, nominals_only = F){
   if(nominals_only) X = X[nominals(X)]
-  colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist -> lst 
+  colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist -> lst
   ns = names(lst)
   list(
     unique = ns[which(lst == 1)],
@@ -48,11 +50,12 @@ group_features = function(X, nominals_only = F){
     lest50 = ns[which((lst < 50) & (lst > 20))],
     numers = ns[which(lst >= 50)]
   )
-}  
+}
 
 
 
 # Returns binary Chi-Squared statistics for two binary columns
+#' @export
 spark.binchisq = function(tbl, col1, col2){
   tbl %>% rename(x = col1, y = col2) %>% select(x, y) %>%
     mutate(x = as.numeric(x), y = as.numeric(y), z = as.numeric(as.logical(x) & as.logical(y))) %>%
@@ -66,6 +69,7 @@ spark.binchisq = function(tbl, col1, col2){
 }
 
 # Transfer to package Optimer
+#' @export
 optimSearch1d = function(fun, domain, ...){
   mx = max(domain)
   mn = min(domain)
@@ -95,6 +99,7 @@ optimSearch1d = function(fun, domain, ...){
   return(x)
 }
 
+#' @export
 optSplit.chi = function(tbl, num_col, cat_col, fun = NULL){
   tbl %<>% rename(x = num_col, y = cat_col) %>% select(x, y)
   if(!is.null(fun)){tbl %<>% mutate(x = fun(x))}
@@ -110,9 +115,10 @@ optSplit.chi = function(tbl, num_col, cat_col, fun = NULL){
 
   #out$chisq  <- N*out$chisq
   #out$pvalue <- pchisq(out$chisq, df = 1, lower.tail = F)
-  return(out)  
+  return(out)
 }
 
+#' @export
 spark.optSplit.chi = function(tbl, num_col, cat_col, breaks = 1000, fun = NULL){
   tbl %<>% rename(xxx = num_col, yy = cat_col) %>% select(xxx, yy)
   if(!is.null(fun)){tbl %<>% mutate(xxx = fun(xxx))}
@@ -142,13 +148,14 @@ spark.optSplit.chi = function(tbl, num_col, cat_col, breaks = 1000, fun = NULL){
     select(split, correlation = chi) %>% as.list -> out
   #out$chisq  <- N*out$chisq
   #out$pvalue <- pchisq(out$chisq, df = 1, lower.tail = F)
-  return(out)  
+  return(out)
 }
 
 # prob_col : column name containing probabilities of class 1 or positive
 # label_col: column name containing actual class labels
 # dte stands for decision threshold evaluator:
 # Returns a table containing performance metrics for each decision threshoild
+#' @export
 spark.dte = function(tbl, prob_col, label_col, breaks = 1000, fun = NULL){
   tbl %<>% rename(xxx = prob_col, yy = label_col) %>% select(xxx, yy)
   if(!is.null(fun)){tbl %<>% mutate(xxx = fun(xxx))}
@@ -171,6 +178,7 @@ spark.dte = function(tbl, prob_col, label_col, breaks = 1000, fun = NULL){
     select(split, tp, fp, tn, fn, precision, recall, f1)
 }
 
+#' @export
 optSplitColumns.f1 = function(df, columns = NULL, label_col = 'label', fun = NULL){
   defcols = numerics(df) %-% label_col
   columns %<>% verify('character', domain = defcols, default = defcols)
@@ -187,6 +195,7 @@ optSplitColumns.f1 = function(df, columns = NULL, label_col = 'label', fun = NUL
   return(sp)
 }
 
+#' @export
 optSplitColumns.chi = function(df, columns = numerics(df), label_col = 'label', fun = NULL){
   for(i in sequence(length(columns))){
     col = columns[i]
@@ -199,6 +208,7 @@ optSplitColumns.chi = function(df, columns = numerics(df), label_col = 'label', 
 }
 
 
+#' @export
 spark.optSplitColumns.chi = function(tbl, columns, label_col = 'label', fun = NULL){
   for(i in sequence(length(columns))){
     col = columns[i]
@@ -210,6 +220,7 @@ spark.optSplitColumns.chi = function(tbl, columns, label_col = 'label', fun = NU
   return(sp)
 }
 
+#' @export
 spark.optSplitColumns.f1 = function(tbl, columns, label_col = 'label'){
   for(i in sequence(length(columns))){
     col = columns[i]
@@ -228,15 +239,16 @@ spark.optSplitColumns.f1 = function(tbl, columns, label_col = 'label'){
 # label_col: column name containing actual class labels
 # dte stands for decision threshold evaluator:
 # Returns a table containing performance metrics for each decision threshoild
+#' @export
 dte = function(df, prob_col, label_col, breaks = 1000, fun = NULL){
   df %<>% rename(xxx = prob_col, yy = label_col) %>% select(xxx, yy)
-  
+
   if(!is.null(fun)){df %<>% mutate(xxx = fun(xxx))}
 
   mn = df %>% pull(xxx) %>% min(na.rm = T)
   mx = df %>% pull(xxx) %>% max(na.rm = T)
   hh = mx - mn
-  
+
   df %>% mutate(xx = as.integer(breaks*(xxx - mn)/hh)) %>% group_by(xx) %>%
     summarise(X = length(xx), Y = sum(yy, na.rm = T)) %>%
     arrange(xx) %>%
@@ -249,17 +261,20 @@ dte = function(df, prob_col, label_col, breaks = 1000, fun = NULL){
     select(split, tp, fp, tn, fn, precision, recall, f1)
 }
 
+#' @export
 optSplit.f1 = function(df, prob_col, label_col, breaks = 1000, fun = NULL){
   df %>% dte(prob_col, label_col, breaks, fun = fun) %>% arrange(desc(f1)) %>%
     head(1) %>% collect %>% as.list
 }
 
 # finds the optimal decision threshold to maximize f1 score
+#' @export
 spark.optSplit.f1 = function(tbl, prob_col, label_col, breaks = 1000, fun = NULL){
   tbl %>% spark.dte(prob_col, label_col, breaks, fun = fun) %>% arrange(desc(f1)) %>%
     head(1) %>% collect %>% as.list
 }
 
+#' @export
 spark.scorer = function(tbl, prediction_col, actual_col){
   tbl %>% rename(x = prediction_col, y = actual_col) %>%
     group_by(x,y) %>% summarise(count = COUNT(x)) %>% collect -> scores
@@ -277,6 +292,7 @@ spark.scorer = function(tbl, prediction_col, actual_col){
   )
 }
 
+#' @export
 scorer = function(tbl, prediction_col, actual_col){
   tbl %>% rename(x = prediction_col, y = actual_col) %>%
     group_by(x,y) %>% summarise(count = length(x)) -> scores
@@ -295,6 +311,7 @@ scorer = function(tbl, prediction_col, actual_col){
   )
 }
 
+#' @export
 remove_invariant_features = function(X){
   fsds = X %>% apply(2, function(x) length(unique(x)))
   X[, which(fsds > 1)]

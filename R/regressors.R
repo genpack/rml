@@ -1,5 +1,6 @@
 # A simple linear regression model. Features with linear dependency to others, will be removed to avoid singularity.
 # feature importances are based on p-values of coefficients.
+#' @export STATS.LM
 STATS.LM = setRefClass('STATS.LM', contains = "MODEL",
    methods = list(
      initialize = function(...){
@@ -14,7 +15,7 @@ STATS.LM = setRefClass('STATS.LM', contains = "MODEL",
            return(1.0 - min(err/den, 1.0))
          }
        }
-       
+
      },
 
      fit = function(X, y){

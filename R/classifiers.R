@@ -23,7 +23,7 @@ CLASSIFIER.SCIKIT = setRefClass('CLASSIFIER.SCIKIT', contains = "CLASSIFIER",
          use_python(config$python_address)
        }
      },
-     
+
      predict = function(X){
        XORG = callSuper(X)
        XFET = XORG[objects$features$fname]
@@ -37,6 +37,7 @@ CLASSIFIER.SCIKIT = setRefClass('CLASSIFIER.SCIKIT', contains = "CLASSIFIER",
 
 suppressWarnings({mlr.classification.models = mlr::listLearners('classif')})
 
+#' @export CLASSIFIER.MLR
 CLASSIFIER.MLR = setRefClass('CLASSIFIER.MLR', contains = "CLASSIFIER",
     methods = list(
       initialize = function(...){
@@ -47,18 +48,18 @@ CLASSIFIER.MLR = setRefClass('CLASSIFIER.MLR', contains = "CLASSIFIER",
         config$model_type <<- config$model_type %>% verify('character', domain = mlr.classification.models %>% pull(class), default = 'classif.gbm')
         objects$model     <<- mlr::makeLearner(cl = config$model_type, predict.type = chif(config$predict_probabilities, "prob", "response"))
       },
-      
+
       fit = function(X, y){
         if(!fitted){
           X = callSuper(X, y)
           if(!inherits(y, 'factor')){y %<>% as.factor; assert(length(levels(y)) == 2)}
-          
+
           tsk = mlr::makeClassifTask(data = cbind(X, label = y), target = 'label')
           mlr::train(objects$model, tsk) ->> objects$model
           fitted <<- T
         }
       },
-      
+
       predict = function(X){
         XORG  = callSuper(X)
         XFET  = XORG[objects$features$fname]
@@ -70,14 +71,15 @@ CLASSIFIER.MLR = setRefClass('CLASSIFIER.MLR', contains = "CLASSIFIER",
         }
         XOUT %<>% as.data.frame
         names(XOUT) <- name %>% paste('out', sep = '_')
-        
+
         treat(XOUT, XFET, XORG)
       }
     )
 )
-                                
+
 # A simple logistic regression classifier from scikit python package:
 # It extracts only numeric features, does no dummification for categorical columns.
+#' @export SCIKIT.LR
 SCIKIT.LR = setRefClass('SCIKIT.LR', contains = "CLASSIFIER.SCIKIT",
     methods = list(
       initialize = function(...){
@@ -88,7 +90,7 @@ SCIKIT.LR = setRefClass('SCIKIT.LR', contains = "CLASSIFIER.SCIKIT",
         module_lm = reticulate::import('sklearn.linear_model')
         objects$model <<- module_lm$LogisticRegression(penalty = 'l1',solver = 'liblinear')
         # todo: define hyper parameters in config
-        
+
       },
 
       reset = function(...){
@@ -124,7 +126,7 @@ FE = setRefClass('FE', contains = 'MODEL',
                      names(XOUT) <- name %>% paste(objects$model$name, 'out', sep = '_')
                      treat(XOUT, XFET, XORG)
                    },
-                   
+
                    fit = function(X, y){
                      if(!fitted){
                        X = transform(X, y)
@@ -133,7 +135,7 @@ FE = setRefClass('FE', contains = 'MODEL',
                        objects$features <<- objects$mother$objects$features[w,]
                        objects$model    <<- objects$mother$copy()
                        objects$model$reset(F)
-                       
+
                        X = X[objects$features$fname]
                        objects$model$fit(X, y)
                        objects$features <<- objects$model$objects$features
@@ -142,26 +144,27 @@ FE = setRefClass('FE', contains = 'MODEL',
                  ))
 
 # # Scikit Logistic Regression with feature elimination:
-# SCIKIT.LR.WFE = setRefClass('SCIKIT.LR.WFE', contains = "SCIKIT.LR", 
+# SCIKIT.LR.WFE = setRefClass('SCIKIT.LR.WFE', contains = "SCIKIT.LR",
 #   methods = list(
 #     fit = function(X, y, do_transform = T){
 #       callSuper(X, y, do_transform = do_transform)
-#       
+#
 #       features <- get.features() %>% pull(fname)
 #       reset(T)
 #       if(do_transform) X = transform(X, y) %>% remove_invariant_features
 #       callSuper(X[, features], y, do_transform = F)
 #     },
-#     
+#
 #     get.features = function(){
 #       objects$features <<- callSuper() %>% filter(importance > 0)
 #       return(objects$features)
 #     }
-#     
+#
 #   ))
 
 # A simple logistic regression classifier from scikit python package:
 # It extracts only numeric features, does no dummification for categorical columns.
+#' @export SCIKIT.DT
 SCIKIT.DT = setRefClass('SCIKIT.DT', contains = "CLASSIFIER.SCIKIT",
   methods = list(
     initialize = function(...){
@@ -170,21 +173,21 @@ SCIKIT.DT = setRefClass('SCIKIT.DT', contains = "CLASSIFIER.SCIKIT",
       if(is.empty(name)){name <<- 'SKDT' %>% paste0(sample(1000:9999, 1))}
       module_dt = reticulate::import('sklearn.tree')
       objects$model <<- module_dt$DecisionTreeClassifier()
-      
+
     },
 
     fit = function(X, y){
       if(!fitted){
         X = callSuper(X, y)
-        
+
         objects$model$fit(X %>% data.matrix, y)
         imp = try(objects$model$feature_importances_ %>% as.numeric, silent = T)
         if(inherits(imp, 'numeric')) objects$features$importance <<- imp
         ## todo: feature importances
         fitted <<- T
-      }  
+      }
     },
-    
+
     reset = function(...){
       callSuper(...)
     },
@@ -197,6 +200,7 @@ SCIKIT.DT = setRefClass('SCIKIT.DT', contains = "CLASSIFIER.SCIKIT",
   )
 )
 
+#' @export SCIKIT.XGB
 SCIKIT.XGB = setRefClass('SCIKIT.XGB', contains = "CLASSIFIER.SCIKIT",
     methods = list(
       initialize = function(...){
@@ -206,25 +210,26 @@ SCIKIT.XGB = setRefClass('SCIKIT.XGB', contains = "CLASSIFIER.SCIKIT",
         module_xgb = reticulate::import('xgboost')
         objects$model <<- module_xgb$XGBClassifier(max_depth = as.integer(4), min_child_weight = 40, subsample = 0.4, lambda = 20000, alpha = 2000, gamma = 13, partial = TRUE, recall_max = 0.3)
       },
-      
+
       fit = function(X, y){
         if(!fitted){
           X = callSuper(X, y)
-          
+
           objects$model$fit(X %>% data.matrix, y)
           imp = try(objects$model$feature_importances_ %>% as.numeric, silent = T)
           if(inherits(imp, 'numeric')) objects$features$importance <<- imp
           ## todo: feature importances
           fitted <<- T
-        }  
+        }
       },
-      
+
       reset = function(...){
         callSuper(...)
-      }    
+      }
     )
-) 
+)
 
+#' @export SCIKIT.SVM
 SCIKIT.SVM = setRefClass('SCIKIT.SVM', contains = "CLASSIFIER.SCIKIT",
                          methods = list(
                            initialize = function(...){
@@ -234,26 +239,27 @@ SCIKIT.SVM = setRefClass('SCIKIT.SVM', contains = "CLASSIFIER.SCIKIT",
                              module_svm = reticulate::import('sklearn.svm')
                              objects$model <<- module_svm$SVC(gamma = 'scale', probability = config$predict_probabilities)
                            },
-                           
+
                            fit = function(X, y){
                              if(!fitted){
                                X = callSuper(X, y)
-                               
+
                                objects$model$fit(X %>% data.matrix, y)
                                imp = try(objects$model$feature_importances_ %>% as.numeric, silent = T)
                                if(inherits(imp, 'numeric')) objects$features$importance <<- imp
                                ## todo: feature importances
                                fitted <<- T
-                             }  
+                             }
                            },
-                           
+
                            reset = function(...){
                              callSuper(...)
-                             
-                           }    
+
+                           }
                          )
 )
 
+#' @export KERAS
 KERAS = setRefClass('KERAS', contains = 'CLASSIFIER',
   methods = c(
     initialize = function(...){
@@ -264,11 +270,11 @@ KERAS = setRefClass('KERAS', contains = 'CLASSIFIER',
       if(is.empty(name)){name <<- 'KERASNN' %>% paste0(sample(1000:9999, 1))}
       ki = initializer_random_uniform(minval = -0.05, maxval = 0.05, seed = 42)
       kr = regularizer_l2(l = 0.001)
-      config$layers <<- config$layers %>% 
+      config$layers <<- config$layers %>%
         verify('list', default = list(
-          list(name = 'dense1', units = 128, activation = 'relu', dropout = 0.25, 
-               kernel_initializer = ki), 
-          list(name = 'dense2', units = 32 , activation = 'relu', dropout = 0.25, 
+          list(name = 'dense1', units = 128, activation = 'relu', dropout = 0.25,
+               kernel_initializer = ki),
+          list(name = 'dense2', units = 32 , activation = 'relu', dropout = 0.25,
                kernel_initializer = ki,
                 kernel_regularizer = kr),
           list(name = 'dense3', units = 8, activation = 'relu',
@@ -276,13 +282,13 @@ KERAS = setRefClass('KERAS', contains = 'CLASSIFIER',
                kernel_regularizer = kr
                )))
       config$outputs <<- config$outputs %>% verify(c('numeric', 'integer'), lengths = 1, default = 2)
-      config$output_activation <<- config$output_activation %>% verify(c('character', 'function'), lengths = 1, default = 'softmax') 
+      config$output_activation <<- config$output_activation %>% verify(c('character', 'function'), lengths = 1, default = 'softmax')
       config$epochs  <<- config$epochs %>% verify(c('numeric', 'integer'), lengths = 1, default = 5)
       config$callback <<- config$callback %>% verify('function', default = function(epoch, logs){
         cat('Epoch:', epoch, ' Loss:', logs$loss, 'Validation Loss:', logs$val_loss, '\n')
       })
     },
-    
+
     fit = function(X, y){
     if(!fitted){
       X = callSuper(X, y)
@@ -294,35 +300,35 @@ KERAS = setRefClass('KERAS', contains = 'CLASSIFIER',
       for(i in config$layers %>% length %>% sequence){
         lyr = config$layers[[i]]
         if(i == 1){
-          objects$model <<- objects$model %>% 
+          objects$model <<- objects$model %>%
             layer_dense(units = as.integer(lyr$units), activation = lyr$activation, input_shape = ncol(X))
         } else {
-          objects$model <<- objects$model %>% 
+          objects$model <<- objects$model %>%
             layer_dense(units = as.integer(lyr$units), activation = lyr$activation)
         }
         if(!is.null(lyr$dropout)){
-          objects$model <<- objects$model %>% 
+          objects$model <<- objects$model %>%
             layer_dropout(rate = lyr$dropout)
         }
       }
-      objects$model <<- objects$model %>% 
+      objects$model <<- objects$model %>%
         layer_dense(name = 'output', units = as.integer(config$outputs), activation = config$output_activation, kernel_initializer = initializer_random_uniform(seed = 42))
-      
+
       # Compile the NN:
-      objects$model <<- objects$model %>% 
+      objects$model <<- objects$model %>%
         # compile(loss = 'mse', optimizer = optimizer_rmsprop(), metrics = list('mean_absolute_error'))
         compile(loss = 'categorical_crossentropy', optimizer = optimizer_adam(lr = 0.001), metrics = list('categorical_accuracy'))
-      
-      
-      objects$model$fit(X %>% data.matrix, y, 
-                        epochs = as.integer(config$epochs), 
+
+
+      objects$model$fit(X %>% data.matrix, y,
+                        epochs = as.integer(config$epochs),
                         batch_size = as.integer(10),
                         validation_split = 0.2,
                         callbacks = list(callback_lambda(on_epoch_end = config$callback))) ->> objects$history
       fitted <<- T
     }
   },
-  
+
     predict = function(X){
     XORG = callSuper(X)
     XFET = XORG[objects$features$fname]
@@ -333,6 +339,7 @@ KERAS = setRefClass('KERAS', contains = 'CLASSIFIER',
   }
 ))
 
+#' @export SPARKLYR.GBT
 SPARKLYR.GBT = setRefClass('SPARKLYR.GBT', contains = 'CLASSIFIER', methods = list(
   initialize = function(...){
     callSuper(...)
@@ -351,9 +358,9 @@ SPARKLYR.GBT = setRefClass('SPARKLYR.GBT', contains = 'CLASSIFIER', methods = li
       imp = try(objects$model$model$feature_importances() %>% as.numeric, silent = T)
       if(inherits(imp, 'numeric')) objects$features$importance <<- imp
       fitted <<- T
-    }  
+    }
   },
-  
+
   predict = function(X){
     XORG = callSuper(X)
     XFET = XORG[objects$features$fname]
@@ -363,6 +370,6 @@ SPARKLYR.GBT = setRefClass('SPARKLYR.GBT', contains = 'CLASSIFIER', methods = li
     colnames(XOUT) <- name %>% paste('out', sep = '_')
     treat(XOUT, XFET, XORG)
   }
-  
+
 )
                            )
