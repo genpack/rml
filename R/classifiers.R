@@ -9,7 +9,6 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
       if(is.null(config$metric)){
         config$metric <<- chif(config$predict_probabilities, function(y_pred, y_test) {data.frame(prob = y_pred, actual = y_test) %>% optSplit.f1('prob', 'actual')->aa;aa$f1}, function(y1, y2) mean(xor(y1, y2), na.rm = T))
       }
-      reset()
     }
   )
 )
@@ -88,7 +87,19 @@ SCIKIT.LR = setRefClass('SCIKIT.LR', contains = "CLASSIFIER.SCIKIT",
         type             <<- 'Logistic Regression'
         if(is.empty(name)){name <<- 'SKLR' %>% paste0(sample(1000:9999, 1))}
         module_lm = reticulate::import('sklearn.linear_model')
-        objects$model <<- module_lm$LogisticRegression(penalty = 'l1',solver = 'liblinear')
+        config$penalty <<- config$penalty %>% verify('character', lengths = 1, domain = c('l1', 'l2'), default = 'l2')
+        config$dual    <<- config$dual %>% verify('logical', lengths = 1, domain = c(F,T), default = F)
+        config$tol     <<- config$tol %>% verify('numeric', lengths = 1, domain = c(0,1), default = 0.0001)
+        config$C       <<- config$C %>% verify('numeric', lengths = 1, domain = c(0,1), default = 1)
+        config$fit_intercept <<- config$fit_intercept %>% verify('logical', lengths = 1, domain = c(F,T), default = T)
+        # config$class_weight  <<- config$class_weight %>% verify('list', default = list(0.5, 0.5))
+        config$solver   <<- config$solver %>% verify('character', lengths = 1, domain =c('newton-cg', 'lbfgs', 'liblinear', 'sag', 'saga'), default = 'liblinear')
+        config$max_iter <<- config$max_iter %>% verify(c('integer', 'numeric'), lengths = 1, domain =c(0, Inf), default = 100) %>% as.integer
+        # todo: add multi_class, verbose, warm_start, n_jobs
+        objects$model <<- module_lm$LogisticRegression(penalty = config$penalty, dual = config$dual, tol = config$tol, 
+                                                       C = config$C, fit_intercept = config$fit_intercept, solver = config$solver,
+                                                       random_state = config$random_state,
+                                                       max_iter = config$max_iter)
         # todo: define hyper parameters in config
 
       },
@@ -208,7 +219,14 @@ SCIKIT.XGB = setRefClass('SCIKIT.XGB', contains = "CLASSIFIER.SCIKIT",
         type               <<- 'Extreme Gradient Boosting'
         if(is.empty(name)){name <<- 'SKXGB' %>% paste0(sample(1000:9999, 1))}
         module_xgb = reticulate::import('xgboost')
-        objects$model <<- module_xgb$XGBClassifier(max_depth = as.integer(4), min_child_weight = 40, subsample = 0.4, lambda = 20000, alpha = 2000, gamma = 13, partial = TRUE, recall_max = 0.3)
+        config$max_depth        <<- config$max_depth %>% verify(c('numeric', 'integer'), default = 4) %>% as.integer
+        config$min_child_weight <<- config$min_child_weight %>% verify(c('numeric', 'integer'), default = 40) %>% as.numeric
+        config$subsample  <<- config$subsample %>% verify('numeric', domain = c(0,1), lengths = 1, default = 0.4)
+        config$lambda     <<- config$lambda %>% verify('numeric', lengths = 1, default = 20000)
+        config$alpha      <<- config$alpha %>% verify('numeric', lengths = 1, default = 2000)
+        config$gamma      <<- config$gamma %>% verify('numeric', lengths = 1, default = 1.3)
+        config$partial    <<- config$partial %>% verify('logical', lengths = 1, domain = c(F,T), default = TRUE)
+        objects$model     <<- module_xgb$XGBClassifier(max_depth = config$max_depth, min_child_weight = config$min_child_weight, subsample = config$subsample, lambda = config$lambda, alpha = config$alpha, gamma = config$gamma, partial = config$partial)
       },
 
       fit = function(X, y){
