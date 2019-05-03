@@ -314,5 +314,5 @@ scorer = function(tbl, prediction_col, actual_col){
 #' @export
 remove_invariant_features = function(X){
   fsds = X %>% apply(2, function(x) length(unique(x)))
-  X[, which(fsds > 1)]
+  X[, which(fsds > 1), drop = F]
 }
