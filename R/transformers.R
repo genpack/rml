@@ -16,8 +16,11 @@ SMBINNING = setRefClass('SMBINNING', contains = "MODEL",
 
       fit = function(X, y){
         if(!fitted){
-          objects$binners <<- list()
-          X = transform(X, y)
+          X = callSuper(X, y)
+          objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+          X = X[objects$features$fname]
+          
+          objects$model <<- list()
           # This model currently only works for categorical y
           if(inherits(y, 'character')){y %<>% as.factor %>% as.integer}
           if(inherits(y, c('logical', 'numeric'))){y %<>% as.integer}
@@ -29,10 +32,10 @@ SMBINNING = setRefClass('SMBINNING', contains = "MODEL",
               res = try(smbinning::smbinning(ds, y = 'Y', x = col), silent = T)
 
               if(inherits(res, 'list')){
-                ns = names(objects$binners)
-                res$col_id = length(objects$binners) + 1
-                objects$binners <<- c(objects$binners, list(res))
-                names(objects$binners) <<- c(ns, col)
+                ns = names(objects$model)
+                res$col_id = length(objects$model) + 1
+                objects$model <<- c(objects$model, list(res))
+                names(objects$model) <<- c(ns, col)
                 cat('Column ', col, ': Successfully binned to 5 buckets!', '\n')
               } else {
                 cat('Column ', col, ': ', res, '\n')
@@ -46,7 +49,7 @@ SMBINNING = setRefClass('SMBINNING', contains = "MODEL",
       },
 
       get.features.name = function(){
-        names(objects$binners)
+        names(objects$model)
       },
 
       get.features.weight = function(){
@@ -56,10 +59,10 @@ SMBINNING = setRefClass('SMBINNING', contains = "MODEL",
       predict = function(X){
         XORG  = callSuper(X)
         XFET  = XORG[objects$features$fname]
-        ns    = names(objects$binners)
+        ns    = names(objects$model)
         ds    = XFET[, ns]
         for(ft in ns){
-          ds  %<>% smbinning::smbinning.gen(objects$binners[[ft]], chrname = ft %>% paste(config$suffix, sep = '.'))
+          ds  %<>% smbinning::smbinning.gen(objects$model[[ft]], chrname = ft %>% paste(config$suffix, sep = '.'))
         }
         columns = colnames(ds) %>% setdiff(colnames(XFET))
         XOUT    = ds[, columns, drop = F]
@@ -137,19 +140,22 @@ OPTBINNER = setRefClass('OPTBINNER', contains = "MODEL",
                             callSuper(...)
                             # refer to help page for package smbinning (?smbinning::smbinning)
                             config$suffix              <<- config$suffix %>% verify('character', default = 'BIN')
+                            config$basis               <<- config$basis %>% verify('character', domain = c('f1', 'chi'), default = 'chi')              
                             type                       <<- 'Optimal Binner'
                           },
 
                           fit = function(X, y){
                             if(!fitted){
-
-                              X       = transform(X, y)
-                              columns = numerics(X)
-                              if(length(columns) > 0){
-                                ds = cbind(X[columns], Y = y)
-                                objects$model <<- ds %>% optSplitColumns.f1(columns %-% 'Y', label_col = 'Y') %>% mutate(Column = as.character(Column))
+                              X       = callSuper(X, y)
+                              objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+                              X = X[objects$features$fname]
+                              if(length(objects$features$fname) > 0){
+                                ds = cbind(X, Y = y)
+                                objects$model <<- ds %>% optSplitColumns.chi(objects$features$fname, label_col = 'Y') %>% mutate(Column = as.character(Column))
+                                # objects$model <<- ds %>% optSplitColumns.f1(objects$features$fname, label_col = 'Y') %>% mutate(Column = as.character(Column))
+                                # todo: use 'metric' property of the config (must be class function) and change default functions for f1 and chi in mltools to return same column names
                               }
-                              objects$features <<- objects$model %>% mutate(f1 = f1 %>% vect.map(0,1)) %>% rename(fname = Column, importance = f1) %>% select(fname, importance)
+                              objects$features$importance <<- objects$model$chisq %>% vect.map(0,1)
                               # todo: add importance
                               fitted <<- TRUE
                             }
@@ -184,10 +190,10 @@ SEGMENTER.RATIO = setRefClass('SEGMENTER.RATIO', contains = 'MODEL',
        type     <<- 'Class-Ratio Segmenter'
      },
 
-     fit = function(X, y, do_transform = T){
+     fit = function(X, y){
        if(!fitted){
-         if(do_transform){X = transform(X, y)}
-         objects$features <<- data.frame(fname = nominals(X), stringsAsFactors = F)
+         X = callSuper(X, y)
+         objects$features <<- objects$features %>% filter(fname %in% nominals(X))
          X = X[objects$features$fname]
          objects$model <<- list()
          for(col in colnames(X)){
@@ -305,8 +311,8 @@ DUMMIFIER = setRefClass('DUMMIFIER', contains = "MODEL",
                            },
 
                            fit = function(X, y = NULL){
-                             X = callSuper(X)
-                             objects$features     <<- objects$features %>% filter(class %in% nominals(X))
+                             X = callSuper(X, y)
+                             objects$features     <<- objects$features %>% filter(fname %in% nominals(X))
                              warnif(is.empty(objects$features), 'No categorical columns found for dummification!')
                              dummies = character()
                              for(cat in objects$features %>% pull(fname)){
@@ -327,7 +333,7 @@ DUMMIFIER = setRefClass('DUMMIFIER', contains = "MODEL",
                              # We need to make sure the column names of the output is exactly the same as the table given in fitting
                              comm_cols  = colnames(res) %^% objects$dummy_columns
                              less_cols  = objects$dummy_columns %-% colnames(res)
-                             extra      = data.frame.na(nrow = nrow(res), col_names = less_cols)
+                             extra      = data.frame.na(nrow = nrow(res), ncol = length(less_cols), col_names = less_cols)
 
                              XOUT = res[comm_cols] %>% cbind(extra) %>% na2zero %>% {.[, objects$dummy_columns, drop = F]}
                              treat(XOUT, XFET, XORG)
@@ -404,7 +410,7 @@ GENETIC.BOOSTER.LOGICAL = setRefClass('GENETIC.BOOSTER.LOGICAL', contains = 'MOD
 
                                           fit = function(X, y){
                                             if(!fitted){
-                                              X                <- transform(X, y)
+                                              X                <- callSuper(X, y)
                                               objects$model    <<- genBinFeatBoost.fit(X, y, target = 0.9, epochs = 10, cycle_survivors = config$cycle_survivors, final_survivors = config$final_survivors, cycle_births = config$cycle_births, metric = config$metric)
                                               objects$features <<- data.frame(fname = objects$model$father %U% objects$model$father, stringsAsFactors = F)
                                               fitted           <<- TRUE
