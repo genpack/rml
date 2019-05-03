@@ -49,7 +49,7 @@ MODEL = setRefClass('MODEL',
            else return(out)
     },
 
-    fit = function(X, y){
+    fit = function(X, y = NULL){
       if(inherits(X, 'matrix')){X %<>% as.data.frame}
       X = transform(X, y)
       if(!is.null(config$features.include)){X = X %>% spark.select(config$features.include %^% colnames(X))}
