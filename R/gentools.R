@@ -121,3 +121,55 @@ genBinFeatBoost.fit = function(X, y, target = 0.9, epochs = 10, cycle_survivors 
   
   return(flist)
 }
+
+
+
+
+xgb = SCIKIT.XGB()
+dm  = DUMMIFIER()
+
+
+GENETIC = setRefClass(
+  'GENETIC', 
+  fields = list(featlist  = 'data.frame',
+                modelbag  = 'list',
+                models    = 'list',
+                functions = 'list',
+                config    = 'list'), 
+  
+  methods = list(
+    initialize = function(){
+      config$cycle_births = 10
+      featlist <<- data.frame(
+        name   = character(),
+        mother = character(),
+        correlation = numeric(),
+        safety = numeric(), stringsAsFactors = F)
+      models <<- list(xgb, dm)
+    },
+    
+    createFeatures = function(X,y){
+      features = rownames(featlist)
+      for(i in sequence(config$cycle_births)){
+        
+        # pick a transformer from modelbag
+        # pick a model class and create an abstract model with transformer
+        i     = models %>% length %>% sequence %>% sample(1)
+        model = models[[i]]
+        model$fit(X, y)
+        modelbag[[model$name]] <<- model
+        # train the new built model
+        # add the model to modelbag and model output to featlist
+        featlist <<- rbind(featlist, 
+                           data.frame(
+                              name   = model$name %>% paste('out', sep = '_'),
+                              mother = model$name,
+                              correlation = NA,
+                              safety = 0, stringsAsFactors = F) %>% column2Rownames('name')
+        )
+      }
+    }
+    
+    
+    
+  ))
