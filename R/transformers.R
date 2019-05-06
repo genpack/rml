@@ -500,3 +500,35 @@ KMEANS = setRefClass('KMEANS', contains = 'MODEL', methods = list(
     treat(XOUT, XFET, XORG)
   }
 ))
+
+#' @export PRCOMP
+PRCOMP = setRefClass('PRCOMP', contains = 'MODEL', methods = list(
+  initialize = function(...){
+    callSuper(...)
+    type     <<- 'Principal Component Transformer'
+    if(is.empty(name)){name <<- 'PRC' %>% paste0(sample(1000:9999, 1))}
+    config$num_components <<- config$num_components %>% verify(c('numeric', 'integer'), default = 5)
+    config$scale  <<- config$scale  %>% verify('logical', domain = c(F,T), default = T)
+    config$center <<- config$center %>% verify('logical', domain = c(F,T), default = T)
+  },
+  
+  fit = function(X, y = NULL){
+    if(!fitted){
+      X = callSuper(X, y)
+      objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+      X = X[objects$features$fname]
+      objects$model <<- prcomp(X, center = config$center, scale. = config$scale, rank. = config$rank)
+      fitted <<- T
+    }
+  },
+  
+  predict = function(X){
+    XORG = callSuper(X)
+    XFET = XORG[objects$features$fname]
+    XOUT = stats::predict(objects$model, XFET %>% as.matrix)
+    XOUT = XOUT[,sequence(min(ncol(XOUT), config$num_components))] %>% as.data.frame
+    colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
+    treat(XOUT, XFET, XORG)
+  }
+))
+
