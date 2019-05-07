@@ -12,6 +12,7 @@ SMBINNING = setRefClass('SMBINNING', contains = "MODEL",
         config$percentageOfRecords <<- config$percentageOfRecords %>% verify('numeric', domain = c(0, 0.5), default = '0.05')
         config$suffix              <<- config$suffix %>% verify('character', default = 'BIN')
         type                       <<- 'Optimal Binner'
+        if(is.empty(name)){name <<- 'SMBIN' %>% paste0(sample(1000:9999, 1))}
       },
 
       fit = function(X, y){
@@ -19,7 +20,7 @@ SMBINNING = setRefClass('SMBINNING', contains = "MODEL",
           X = callSuper(X, y)
           objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
           X = X[objects$features$fname]
-          
+
           objects$model <<- list()
           # This model currently only works for categorical y
           if(inherits(y, 'character')){y %<>% as.factor %>% as.integer}
@@ -78,6 +79,8 @@ NORMALIZER = setRefClass('NORMALIZER', contains = 'MODEL',
       callSuper(...)
       config$suffix <<- config$suffix %>% verify('character', default = 'NRM')
       type          <<- 'Normalizer'
+      if(is.empty(name)){name <<- 'NRMR' %>% paste0(sample(1000:9999, 1))}
+
 
     },
     fit = function(X, y = NULL){
@@ -109,6 +112,8 @@ SCALER = setRefClass('SCALER', contains = "MODEL", methods = list(
     callSuper(...)
     config$suffix              <<- config$suffix %>% verify('character', default = 'SCALED')
     type                       <<- 'ZFactor Scaler'
+    if(is.empty(name)){name <<- 'SCLR' %>% paste0(sample(1000:9999, 1))}
+
   },
 
   fit = function(X, y = NULL){
@@ -140,8 +145,10 @@ OPTBINNER = setRefClass('OPTBINNER', contains = "MODEL",
                             callSuper(...)
                             # refer to help page for package smbinning (?smbinning::smbinning)
                             config$suffix              <<- config$suffix %>% verify('character', default = 'BIN')
-                            config$basis               <<- config$basis %>% verify('character', domain = c('f1', 'chi'), default = 'chi')              
+                            config$basis               <<- config$basis %>% verify('character', domain = c('f1', 'chi'), default = 'chi')
                             type                       <<- 'Optimal Binner'
+                            if(is.empty(name)){name <<- 'OBIN' %>% paste0(sample(1000:9999, 1))}
+
                           },
 
                           fit = function(X, y){
@@ -172,15 +179,6 @@ OPTBINNER = setRefClass('OPTBINNER', contains = "MODEL",
                         )
 )
 
-#' @export KMEANS
-KMEANS = setRefClass('KMEANS', contains = "MODEL", methods = list(
-  initialize = function(...){
-    callSuper(...)
-    type <<- "Kmeans Clustering"
-    config$number_of_clusters <<- config$number_of_clusters %>% verify(c('numeric', 'integer'), lengths = 1, default = 5)
-  }
-))
-
 # Replaces categorical features with class ratios associated with each category
 #' @export SEGMENTER.RATIO
 SEGMENTER.RATIO = setRefClass('SEGMENTER.RATIO', contains = 'MODEL',
@@ -188,6 +186,8 @@ SEGMENTER.RATIO = setRefClass('SEGMENTER.RATIO', contains = 'MODEL',
      initialize = function(...){
        callSuper(...)
        type     <<- 'Class-Ratio Segmenter'
+       if(is.empty(name)){name <<- 'SEGRAT' %>% paste0(sample(1000:9999, 1))}
+
      },
 
      fit = function(X, y){
@@ -308,6 +308,7 @@ DUMMIFIER = setRefClass('DUMMIFIER', contains = "MODEL",
                            initialize = function(...){
                              callSuper(...)
                              type     <<- 'Categorical Feature Dummifier'
+                             if(is.empty(name)){name <<- 'DMFR' %>% paste0(sample(1000:9999, 1))}
                            },
 
                            fit = function(X, y = NULL){
@@ -511,7 +512,7 @@ PRCOMP = setRefClass('PRCOMP', contains = 'MODEL', methods = list(
     config$scale  <<- config$scale  %>% verify('logical', domain = c(F,T), default = T)
     config$center <<- config$center %>% verify('logical', domain = c(F,T), default = T)
   },
-  
+
   fit = function(X, y = NULL){
     if(!fitted){
       X = callSuper(X, y)
@@ -521,7 +522,7 @@ PRCOMP = setRefClass('PRCOMP', contains = 'MODEL', methods = list(
       fitted <<- T
     }
   },
-  
+
   predict = function(X){
     XORG = callSuper(X)
     XFET = XORG[objects$features$fname]

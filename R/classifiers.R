@@ -6,8 +6,22 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
       type             <<- 'Abstract Classifier'
       config$sig_level <<- config$sig_level %>% verify('numeric', domain = c(0,1), default = 0.1)
       config$predict_probabilities <<- config$predict_probabilities %>% verify('logical', domain = c(T,F), default = T)
+      config$decision_threshold <<- config$decision_threshold %>% verify('numeric', lengths = 1, domain = c(0,1), default = 0.5)
+      config$decision_threshold_determination <<- config$decision_threshold_determination %>%
+        verify('character', lengths = 1, domain = c('set_as_threshold', 'maximum_f1', 'target_precision', 'target_recall'), default = 'set_as_threshold')
       if(is.null(config$metric)){
         config$metric <<- chif(config$predict_probabilities, function(y_pred, y_test) {data.frame(prob = y_pred, actual = y_test) %>% optSplit.f1('prob', 'actual')->aa;aa$f1}, function(y1, y2) mean(xor(y1, y2), na.rm = T))
+      }
+    },
+
+    set_decision_threshold = function(X, y){
+      y_prob = predict(X) %>% pull(name %>% paste('out', sep = '_'))
+      if(fitted){
+        if(config$decision_threshold_determination == 'maximum_f1'){
+          res = data.frame(y_pred = y_prob, y_true = y) %>% optSplit.f1('y_pred', 'y_true')
+          config$decision_threshold <<- res$split
+        }
+        #todo: do for other options
       }
     }
   )
@@ -23,11 +37,13 @@ CLASSIFIER.SCIKIT = setRefClass('CLASSIFIER.SCIKIT', contains = "CLASSIFIER",
        }
      },
 
-     predict = function(X){
+     predict = function(X, prob = T){
        XORG = callSuper(X)
        XFET = XORG[objects$features$fname]
-       if(config$predict_probabilities){XOUT = objects$model$predict_proba(XFET %>% data.matrix)[,2, drop = F] %>% as.data.frame}
-       else                            {XOUT = objects$model$predict(XFET %>% data.matrix) %>% as.data.frame}
+       XOUT = objects$model$predict_proba(XFET %>% data.matrix)[,2, drop = F] %>% as.data.frame
+
+       if(!prob){XOUT[,1] = as.numeric(XOUT[,1] > config$decision_threshold)}
+       # else                            {XOUT = objects$model$predict(XFET %>% data.matrix) %>% as.data.frame}
        colnames(XOUT) <- name %>% paste('out', sep = '_')
        treat(XOUT, XFET, XORG)
      }
@@ -59,11 +75,11 @@ CLASSIFIER.MLR = setRefClass('CLASSIFIER.MLR', contains = "CLASSIFIER",
         }
       },
 
-      predict = function(X){
+      predict = function(X, prob = F){
         XORG  = callSuper(X)
         XFET  = XORG[objects$features$fname]
         stats::predict(objects$model, newdata = XFET) -> pred
-        if(config$predict_probabilities){
+        if(prob){
           XOUT = getPredictionProbabilities(pred)
         } else {
           XOUT = getPredictionResponse(pred) %>% as.numeric() - 1
@@ -96,7 +112,7 @@ SCIKIT.LR = setRefClass('SCIKIT.LR', contains = "CLASSIFIER.SCIKIT",
         config$solver   <<- config$solver %>% verify('character', lengths = 1, domain =c('newton-cg', 'lbfgs', 'liblinear', 'sag', 'saga'), default = 'liblinear')
         config$max_iter <<- config$max_iter %>% verify(c('integer', 'numeric'), lengths = 1, domain =c(0, Inf), default = 100) %>% as.integer
         # todo: add multi_class, verbose, warm_start, n_jobs
-        objects$model <<- module_lm$LogisticRegression(penalty = config$penalty, dual = config$dual, tol = config$tol, 
+        objects$model <<- module_lm$LogisticRegression(penalty = config$penalty, dual = config$dual, tol = config$tol,
                                                        C = config$C, fit_intercept = config$fit_intercept, solver = config$solver,
                                                        random_state = config$random_state,
                                                        max_iter = config$max_iter)
@@ -117,6 +133,7 @@ SCIKIT.LR = setRefClass('SCIKIT.LR', contains = "CLASSIFIER.SCIKIT",
           objects$model$coef_ %>% abs %>% as.numeric -> weights
           objects$features$importance <<- (weights/(X %>% apply(2, sd))) %>% na2zero %>% {./geomean(.[.>0])} %>% as.numeric
           fitted <<- T
+          set_decision_threshold(X, y)
         }
       }
    )
@@ -196,6 +213,8 @@ SCIKIT.DT = setRefClass('SCIKIT.DT', contains = "CLASSIFIER.SCIKIT",
         if(inherits(imp, 'numeric')) objects$features$importance <<- imp
         ## todo: feature importances
         fitted <<- T
+        set_decision_threshold(X, y)
+
       }
     },
 
@@ -238,6 +257,7 @@ SCIKIT.XGB = setRefClass('SCIKIT.XGB', contains = "CLASSIFIER.SCIKIT",
           if(inherits(imp, 'numeric')) objects$features$importance <<- imp
           ## todo: feature importances
           fitted <<- T
+          set_decision_threshold(X, y)
         }
       },
 

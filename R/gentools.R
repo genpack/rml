@@ -38,7 +38,7 @@ immune = function(flist, features, level, columns){
 
 getFeatureValue.logical = function(flist, name, dataset){
   if(name %in% colnames(dataset)){return(dataset[, name])}
-  
+
   if(name %in% rownames(flist)){
     if(flist[name, 'father'] %in% names(dataset)) {father = dataset[, flist[name, 'father']]} else {father = getFeatureValue.logical(flist, flist[name, 'father'], dataset)}
     if(flist[name, 'mother'] %in% names(dataset)) {mother = dataset[, flist[name, 'mother']]} else {mother = getFeatureValue.logical(flist, flist[name, 'mother'], dataset)}
@@ -58,25 +58,25 @@ getFeatureValue.multiplicative = function(flist, name, dataset){
 
 evaluateFeatures.multiplicative = function(flist, X, y, top = 100, cor_fun = cor){
   ns   = rownames(flist)
-  
+
   keep = is.na(flist$correlation) & (flist$father %in% columns) & (flist$mother %in% columns)
   if(sum(keep) > 0){
     flist$correlation[keep] <- cor_fun(X[, flist$father[keep]]*X[, flist$mother[keep]], y) %>% as.numeric %>% abs
   }
   keep = is.na(flist$correlation) %>% which
-  
+
   for(i in keep){
     flist$correlation[i] <- cor_fun(getFeatureValue.multiplicative(flist, ns[i], X), y)
-  }  
-  
+  }
+
   high_level = max(flist$safety) + 1
   # ord = flist$correlation %>% order(decreasing = T) %>% intersect(which(!duplicated(flist$correlation)))
   ord = flist$correlation %>% order(decreasing = T)
-  
+
   top  = min(top, length(ord) - 1)
-  
-  flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = colnames(X)) 
-  
+
+  flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = colnames(X))
+
   # keep = which(flist$safety == high_level | (is.na(flist$father) & is.na(flist$mother)))
   keep = which(flist$safety == high_level)
   return(flist[keep, ])
@@ -91,15 +91,15 @@ evaluateFeatures.logical = function(flist, X, y, top = 100, cor_fun = cross_enth
     flist$correlation[keep] <- cor_fun(X[, flist$father[keep]]*X[, flist$mother[keep]], y) %>% as.numeric %>% abs
   }
   keep = is.na(flist$correlation) %>% which
-  
+
   for(i in keep){
     flist$correlation[i] <- cor_fun(getFeatureValue.logical(flist, ns[i], X), y)
-  }  
-  
+  }
+
   high_level = max(flist$safety) + 1
   ord = flist$correlation %>% order(decreasing = T)
-  flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = colnames(X)) 
-  
+  flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = colnames(X))
+
   keep = which(flist$safety == high_level)
   return(flist[keep, ])
 }
@@ -115,52 +115,70 @@ genBinFeatBoost.fit = function(X, y, target = 0.9, epochs = 10, cycle_survivors 
     i = i + 1
     flist = createFeatures.logical(flist, cycle_births)
     flist %<>% evaluateFeatures.logical(X, y, cor_fun = metric, top = chif(i == epochs, final_survivors, cycle_survivors))
-    
+
     cat('Iteration: ', i, ': Best Correlation = ', max(flist$correlation), ' nrow(flist) = ', nrow(flist), '\n')
   }
-  
+
   return(flist)
 }
 
 
-
-
-xgb = SCIKIT.XGB()
-dm  = DUMMIFIER()
-
-
 GENETIC = setRefClass(
-  'GENETIC', 
+  'GENETIC',
   fields = list(featlist  = 'data.frame',
                 modelbag  = 'list',
                 models    = 'list',
                 functions = 'list',
-                config    = 'list'), 
-  
+                config    = 'list'),
+
   methods = list(
     initialize = function(){
-      config$cycle_births = 10
+      config$cycle_births <<- 10
       featlist <<- data.frame(
         name   = character(),
         mother = character(),
         correlation = numeric(),
         safety = numeric(), stringsAsFactors = F)
+
+      xgb = SCIKIT.XGB()
+      dm  = DUMMIFIER()
+      ob  = OPTBINNER()
+
       models <<- list(xgb, dm)
     },
-    
+
     createFeatures = function(X,y){
+      colnames = colnames(X)
+      if(is.empty(featlist)){
+        featlist <<- data.frame(
+          name   = colnames,
+          mother = NA,
+          correlation = NA,
+          safety = 0, stringsAsFactors = F) %>% column2Rownames('name')
+      }
       features = rownames(featlist)
+
       for(i in sequence(config$cycle_births)){
-        
+        # pick a subset of rows
+        N   = nrow(X)
+        ns  = floor(N*0.3)
+        trindex = N %>% sequence %>% sample(ns, replace = F)
+
+        X_train = X[trindex,]
+        y_train = y[trindex]
+        # pick a subset of features
+        subfeat = features %>% sample(4)
+        X_train = X_train[subfeat]
         # pick a transformer from modelbag
         # pick a model class and create an abstract model with transformer
-        i     = models %>% length %>% sequence %>% sample(1)
-        model = models[[i]]
-        model$fit(X, y)
+        j     = models %>% length %>% sequence %>% sample(1)
+        model = models[[j]]$copy()
+        # model$name = 'feat' %>% paste(i, sep = '_')
+        model$fit(X_train, y_train)
         modelbag[[model$name]] <<- model
         # train the new built model
         # add the model to modelbag and model output to featlist
-        featlist <<- rbind(featlist, 
+        featlist <<- rbind(featlist,
                            data.frame(
                               name   = model$name %>% paste('out', sep = '_'),
                               mother = model$name,
@@ -168,8 +186,12 @@ GENETIC = setRefClass(
                               safety = 0, stringsAsFactors = F) %>% column2Rownames('name')
         )
       }
+    },
+
+    getFeatureValue = function(X, fname){
+      if(fname %in% colnames(X)){return(X %>% pull(fname))}
+
+      modelbag[[featlist[fname, 'mother']]]$predict(X)
     }
-    
-    
-    
+
   ))
