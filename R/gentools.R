@@ -123,6 +123,13 @@ genBinFeatBoost.fit = function(X, y, target = 0.9, epochs = 10, cycle_survivors 
 }
 
 
+
+
+xgb = SCIKIT.XGB()
+dm  = DUMMIFIER()
+ob  = OPTBINNER()
+
+
 GENETIC = setRefClass(
   'GENETIC',
   fields = list(featlist  = 'data.frame',
@@ -139,16 +146,11 @@ GENETIC = setRefClass(
         mother = character(),
         correlation = numeric(),
         safety = numeric(), stringsAsFactors = F)
-
-      xgb = SCIKIT.XGB()
-      dm  = DUMMIFIER()
-      ob  = OPTBINNER()
-
       models <<- list(xgb, dm)
     },
 
     createFeatures = function(X,y){
-      colnames = colnames(X)
+      colnames = colnames()
       if(is.empty(featlist)){
         featlist <<- data.frame(
           name   = colnames,
@@ -161,20 +163,17 @@ GENETIC = setRefClass(
       for(i in sequence(config$cycle_births)){
         # pick a subset of rows
         N   = nrow(X)
-        ns  = floor(N*0.3)
-        trindex = N %>% sequence %>% sample(ns, replace = F)
+        n1  = floor(N*0.3)
+        trindex = N %>% sequence %>% sample(n1, replace = F)
 
-        X_train = X[trindex,]
-        y_train = y[trindex]
         # pick a subset of features
-        subfeat = features %>% sample(4)
-        X_train = X_train[subfeat]
+        nf = sequence(length(features))1:Nf
+        features %>% sample()
         # pick a transformer from modelbag
         # pick a model class and create an abstract model with transformer
-        j     = models %>% length %>% sequence %>% sample(1)
-        model = models[[j]]$copy()
-        # model$name = 'feat' %>% paste(i, sep = '_')
-        model$fit(X_train, y_train)
+        i     = models %>% length %>% sequence %>% sample(1)
+        model = models[[i]]
+        model$fit(X, y)
         modelbag[[model$name]] <<- model
         # train the new built model
         # add the model to modelbag and model output to featlist
@@ -186,12 +185,8 @@ GENETIC = setRefClass(
                               safety = 0, stringsAsFactors = F) %>% column2Rownames('name')
         )
       }
-    },
-
-    getFeatureValue = function(X, fname){
-      if(fname %in% colnames(X)){return(X %>% pull(fname))}
-
-      modelbag[[featlist[fname, 'mother']]]$predict(X)
     }
+
+
 
   ))
