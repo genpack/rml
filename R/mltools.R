@@ -35,6 +35,82 @@ cross_f1 = function(v1, v2){
   return(a %>% sapply(function(x) max(x, 1-x)))
 }
 
+
+remove_outliers = function(X, sd_threshold = 3){
+  m = ncol(X)
+  Xs = X %>% scale %>% as.data.frame
+  Xs$keep = T
+  for(i in sequence(m)){
+    tbd = (Xs[,i] < sd_threshold) & (Xs[,i] > - sd_threshold)
+    if(sum(!tbd) > 0.1*length(tbd)){cat("-----",i, " ", sum(!tbd))}
+    Xs$keep = Xs$keep & (Xs[,i] < sd_threshold) & (Xs[,i] > -sd_threshold)
+  }
+  X[Xs$keep,]
+}
+
+int_ordinals = function(X){
+  X %<>% as.data.frame
+  nms = colnames(X)
+  for (col in nms){
+    v = X %>% pull(col)
+    if(inherits(v, c('numeric', 'integer'))){
+      if(sum(as.integer(v) != v, na.rm = T) == 0) X[,col] %<>%  as.integer
+    }
+  }
+  return(X)
+}
+
+
+ranker = function(X){
+  X %<>% as.data.frame
+  for(col in colnames(X)){
+    v = X %>% pull(col)
+    if(inherits(v, 'numeric')){
+      X[, col %>% paste('rank', sep = '_')] <-  order(v)
+    }
+  }
+  return(X)
+}
+
+trim_outliers = function(X, scale = F, center = F, only_numeric = F){
+  m = ncol(X)
+  for(i in sequence(m)){
+    xi   = unique(X[,i])
+    mni  = mean(xi)
+    sdi  = mean((xi - mni)^2, na.rm = T) %>% sqrt
+    isint = inherits(X[, i], 'integer')
+    if(sdi > 0){
+      xsi  = (X[, i] - mni)/sdi
+      tbch = (xsi >  3)
+      tbcl = (xsi < -3)
+      xh   = mni + 3*sdi + abs(log(X[tbch, i] - mni - 3*sdi))
+      xl   = mni - 3*sdi - abs(log(mni - X[tbcl, i] - 3*sdi))
+      
+      if(isint){
+        if(!only_numeric){
+          X[tbch, i] = as.integer(xh)
+          X[tbcl, i] = as.integer(xl)
+        }
+      } else {
+        X[tbch, i] = xh
+        X[tbcl, i] = xl
+      }
+      if(scale) if(center) X[, i] = (X[, i] - mni)/sdi else X[, i] = X[, i]/sdi
+    } else if(scale) if(center) X[, i] = 0 else X[, i] = 1
+    # cat(colnames(X)[i], '\n')
+  }
+  X
+}
+
+
+na2median = function(X){
+  X %<>% data.frame
+  for(i in 1:ncol(X)) if(inherits(X[,i], 'numeric')) X[is.na(X[,i]), i] <- median(X[,i], na.rm = T)
+  return(X)
+}
+
+
+
 # Groups features based on count of their unique values
 #' @export
 group_features = function(X, nominals_only = F){
@@ -52,12 +128,10 @@ group_features = function(X, nominals_only = F){
   )
 }
 
-
-
 # Returns binary Chi-Squared statistics for two binary columns
 #' @export
 spark.binchisq = function(tbl, col1, col2){
-  tbl %>% rename(x = col1, y = col2) %>% select(x, y) %>%
+  tbl %>% rename(x = col1, y = col2) %>% dplyr::select(x, y) %>%
     mutate(x = as.numeric(x), y = as.numeric(y), z = as.numeric(as.logical(x) & as.logical(y))) %>%
     sdf_describe %>% collect -> dsc
 
@@ -101,7 +175,7 @@ optimSearch1d = function(fun, domain, ...){
 
 #' @export
 optSplit.chi = function(tbl, num_col, cat_col, fun = NULL){
-  tbl %<>% rename(x = num_col, y = cat_col) %>% select(x, y)
+  tbl %<>% rename(x = num_col, y = cat_col) %>% dplyr::select(x, y)
   if(!is.null(fun)){tbl %<>% mutate(x = fun(x))}
   N = nrow(tbl)
   b = tbl %>% pull('y') %>% mean
@@ -111,7 +185,7 @@ optSplit.chi = function(tbl, num_col, cat_col, fun = NULL){
     mutate(den = a*b*(1-a)*(1-b)) %>%
     mutate(chi = (c- a*b)^2/den) %>% arrange(chi)
 
-  out <- tbl %>% tail(1) %>% select(split = x, correlation = chi) %>% as.list
+  out <- tbl %>% tail(1) %>% dplyr::select(split = x, correlation = chi) %>% as.list
 
   #out$chisq  <- N*out$chisq
   #out$pvalue <- pchisq(out$chisq, df = 1, lower.tail = F)
@@ -120,7 +194,7 @@ optSplit.chi = function(tbl, num_col, cat_col, fun = NULL){
 
 #' @export
 spark.optSplit.chi = function(tbl, num_col, cat_col, breaks = 1000, fun = NULL){
-  tbl %<>% rename(xxx = num_col, yy = cat_col) %>% select(xxx, yy)
+  tbl %<>% rename(xxx = num_col, yy = cat_col) %>% dplyr::select(xxx, yy)
   if(!is.null(fun)){tbl %<>% mutate(xxx = fun(xxx))}
   tbl %>% sdf_describe %>% collect -> dsc
 
@@ -145,7 +219,7 @@ spark.optSplit.chi = function(tbl, num_col, cat_col, breaks = 1000, fun = NULL){
   #   mutate(chi = (c- a*b)^2/den) %>% arrange(desc(chi))
 
   tbl %>% head(1) %>% collect %>% mutate(split = mn + xx*hh/breaks) %>%
-    select(split, correlation = chi) %>% as.list -> out
+    dplyr::select(split, correlation = chi) %>% as.list -> out
   #out$chisq  <- N*out$chisq
   #out$pvalue <- pchisq(out$chisq, df = 1, lower.tail = F)
   return(out)
@@ -157,7 +231,7 @@ spark.optSplit.chi = function(tbl, num_col, cat_col, breaks = 1000, fun = NULL){
 # Returns a table containing performance metrics for each decision threshoild
 #' @export
 spark.dte = function(tbl, prob_col, label_col, breaks = 1000, fun = NULL){
-  tbl %<>% rename(xxx = prob_col, yy = label_col) %>% select(xxx, yy)
+  tbl %<>% rename(xxx = prob_col, yy = label_col) %>% dplyr::select(xxx, yy)
   if(!is.null(fun)){tbl %<>% mutate(xxx = fun(xxx))}
   tbl %>% sdf_describe %>% collect -> dsc
 
@@ -175,7 +249,7 @@ spark.dte = function(tbl, prob_col, label_col, breaks = 1000, fun = NULL){
     mutate(precision = tp/(tp + fp), recall = tp/(tp + fn)) %>%
     mutate(f1 = 2*precision*recall/(precision + recall)) %>%
     mutate(split = mn + xx*hh/breaks) %>%
-    select(split, tp, fp, tn, fn, precision, recall, f1)
+    dplyr::select(split, tp, fp, tn, fn, precision, recall, f1)
 }
 
 #' @export
@@ -241,7 +315,7 @@ spark.optSplitColumns.f1 = function(tbl, columns, label_col = 'label'){
 # Returns a table containing performance metrics for each decision threshoild
 #' @export
 dte = function(df, prob_col, label_col, breaks = 1000, fun = NULL){
-  df %<>% rename(xxx = prob_col, yy = label_col) %>% select(xxx, yy)
+  df %<>% rename(xxx = prob_col, yy = label_col) %>% dplyr::select(xxx, yy)
 
   if(!is.null(fun)){df %<>% mutate(xxx = fun(xxx))}
 
@@ -258,7 +332,7 @@ dte = function(df, prob_col, label_col, breaks = 1000, fun = NULL){
     mutate(precision = tp/(tp + fp), recall = tp/(tp + fn)) %>%
     mutate(f1 = 2*precision*recall/(precision + recall)) %>%
     mutate(split = mn + xx*hh/breaks) %>%
-    select(split, tp, fp, tn, fn, precision, recall, f1)
+    dplyr::select(split, tp, fp, tn, fn, precision, recall, f1)
 }
 
 #' @export
@@ -311,8 +385,36 @@ scorer = function(tbl, prediction_col, actual_col){
   )
 }
 
+
+#' @export
+#' Computes actual performance scores assuming the test set is down-sampled for class 0, by 'weight' times
+#' The precision is expected to be lower than scorer, but recall remains the same.  
+scorer_downsampled = function(tbl, prediction_col, actual_col, weight = 2){
+  tbl %>% rename(x = prediction_col, y = actual_col) %>%
+    group_by(x,y) %>% summarise(count = length(x)) -> scores
+  
+  TP = scores %>% filter(x, y)   %>% pull('count')
+  FN = scores %>% filter(!x, y)  %>% pull('count')
+  FP = scores %>% filter(x, !y)  %>% pull('count') %>% {weight*.}
+  TN = scores %>% filter(!x, !y) %>% pull('count') %>% {weight*.}
+  
+  prc = TP/(TP + FP)
+  rcl = TP/(TP + FN)
+  list(
+    precision = prc,
+    recall    = rcl,
+    accuracy  = (TP+TN)/(TP+FN+FP+TN),
+    f1        = 2*prc*rcl/(prc+rcl)
+  )
+}
+
+
+
 #' @export
 remove_invariant_features = function(X){
   fsds = X %>% apply(2, function(x) length(unique(x)))
   X[, which(fsds > 1), drop = F]
 }
+
+                     
+                     
