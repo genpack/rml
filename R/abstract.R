@@ -42,21 +42,36 @@ MODEL = setRefClass('MODEL',
       X = transform(X)
     },
     treat                = function(out, fet, org){
+      if(!is.null(config$pass_columns)) org = org[config$pass_columns]
+      if(!is.null(config$filter_columns)) org = org[colnames(org) %-% config$filter_columns]
+      
       if(config$keep_columns)
         if(config$keep_features) return(cbind(org, out))
         else return(cbind(org %>% spark.unselect(colnames(fet)), out))
-      else if (config$keep_features) return(cbind(fet, out))
+      else if (config$keep_features){
+        # if(!is.null(config$features.include)){
+        #   extra = config$features.include %-% colnames(fet)
+        #   return(cbind(fet, org[extra], out))
+        # } else return(cbind(fet, out))
+        return(cbind(fet, out))
+      } 
            else return(out)
     },
 
     fit = function(X, y = NULL){
       if(inherits(X, 'matrix')){X %<>% as.data.frame}
+      if(!is.null(config$max_train)){
+        mxt = min(config$max_train, nrow(X))
+        ind = nrow(X) %>% sequence %>% sample(mxt)
+        X = X[ind,]
+        y = y[ind]
+      }
       X = transform(X, y)
       if(!is.null(config$features.include)){X = X %>% spark.select(config$features.include %^% colnames(X))}
       if(!is.null(config$features.exclude)){X = X %>% spark.select(colnames(X) %-% config$features.exclude)}
       X %<>% remove_invariant_features
       objects$features <<- colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
-      return(X)
+      return(list(X = X, y = y))
     },
 
     transform            = function(X, y = NULL){
