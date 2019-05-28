@@ -17,7 +17,8 @@ SMBINNING = setRefClass('SMBINNING', contains = "MODEL",
 
       fit = function(X, y){
         if(!fitted){
-          X = callSuper(X, y)
+          Xy  <- callSuper(X, y)
+          X = Xy$X; y = Xy$y
           objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
           X = X[objects$features$fname]
 
@@ -85,7 +86,8 @@ NORMALIZER = setRefClass('NORMALIZER', contains = 'MODEL',
     },
     fit = function(X, y = NULL){
       if(!fitted){
-        X = callSuper(X, y)
+        Xy  <- callSuper(X, y)
+        X = Xy$X; y = Xy$y
         objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
         X = X[objects$features$fname] %>% as.matrix
         X %>% apply(2, function(v) min(v, na.rm = T)) ->> objects$features$min
@@ -100,7 +102,11 @@ NORMALIZER = setRefClass('NORMALIZER', contains = 'MODEL',
         feat  = objects$features %>% column2Rownames('fname')
 
         XOUT  = objects$features$fname %>% sapply(function(i) (XFET[,i] -  feat[i,'min'])/(feat[i,'max'] - feat[i,'min'])) %>% na2zero %>% as.data.frame
-        colnames(XOUT) <- objects$features$fname %>% paste(config$suffix, sep = '_')
+        if(config$keep_features){
+          colnames(XOUT) <- objects$features$fname %>% paste(config$suffix, sep = '_')
+        } else {
+          colnames(XOUT) <- objects$features$fname
+        }
         treat(XOUT, XFET, XORG)
       }
 
@@ -118,7 +124,8 @@ SCALER = setRefClass('SCALER', contains = "MODEL", methods = list(
 
   fit = function(X, y = NULL){
     if(!fitted){
-      X = callSuper(X, y)
+      Xy  <- callSuper(X, y)
+      X = Xy$X; y = Xy$y
       objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
       X = X[objects$features$fname] %>% as.matrix
       X %>% apply(2, function(v) mean(v, na.rm = T)) ->> objects$features$mean
@@ -133,7 +140,12 @@ SCALER = setRefClass('SCALER', contains = "MODEL", methods = list(
     feat  = objects$features %>% column2Rownames('fname')
 
     XOUT  = objects$features$fname %>% sapply(function(i) (XFET[,i] -  feat[i,'mean'])/feat[i,'stdv']) %>% na2zero %>% as.data.frame
-    colnames(XOUT) <- objects$features$fname %>% paste(config$suffix, sep = '_')
+    if(config$keep_features){
+      colnames(XOUT) <- objects$features$fname %>% paste(config$suffix, sep = '_')
+    } else {
+      colnames(XOUT) <- objects$features$fname
+    }
+    
     treat(XOUT, XFET, XORG)
   }
 ))
@@ -153,7 +165,8 @@ OPTBINNER = setRefClass('OPTBINNER', contains = "MODEL",
 
                           fit = function(X, y){
                             if(!fitted){
-                              X       = callSuper(X, y)
+                              Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
+                              
                               objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
                               X = X[objects$features$fname]
                               if(length(objects$features$fname) > 0){
@@ -173,7 +186,12 @@ OPTBINNER = setRefClass('OPTBINNER', contains = "MODEL",
                             XORG  = callSuper(X)
                             XFET  = XORG[objects$features$fname] %>% as.data.frame
                             XOUT  = XFET %>% ncol %>% sequence %>% sapply(function(i) as.integer(XFET[,i] > objects$model$split[i]))
-                            colnames(XOUT) <- objects$features$fname %>% paste(config$suffix, sep = '.')
+                            if(config$keep_features){
+                              colnames(XOUT) <- objects$features$fname %>% paste(config$suffix, sep = '_')
+                            } else {
+                              colnames(XOUT) <- objects$features$fname
+                            }
+                            
                             treat(XOUT, XFET, XORG)
                           }
                         )
@@ -192,7 +210,7 @@ SEGMENTER.RATIO = setRefClass('SEGMENTER.RATIO', contains = 'MODEL',
 
      fit = function(X, y){
        if(!fitted){
-         X = callSuper(X, y)
+         Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
          objects$features <<- objects$features %>% filter(fname %in% nominals(X))
          X = X[objects$features$fname]
          objects$model <<- list()
@@ -230,7 +248,7 @@ SEGMENTER.MODEL = setRefClass('SEGMENTER.MLR', contains = 'MODEL',
 
     fit = function(X, y){
       if(!fitted){
-        X = callSuper(X, y)
+        Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
         objects$categoricals <<- nominals(X)
         #X = X[objects$categoricals]
         objects$model <<- list()
@@ -286,7 +304,7 @@ CATCONCATER = setRefClass('CATCONCATER', contains = "MODEL",
 
      fit = function(X, y){
        if(!fitted){
-         X = callSuper(X, y)
+         Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
          objects$features <<- data.frame(fname = nominals(X), stringsAsFactors = F)
          fitted <<- TRUE
        }
@@ -312,13 +330,21 @@ DUMMIFIER = setRefClass('DUMMIFIER', contains = "MODEL",
                            },
 
                            fit = function(X, y = NULL){
-                             X = callSuper(X, y)
+                             Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
                              objects$features     <<- objects$features %>% filter(fname %in% nominals(X))
-                             warnif(is.empty(objects$features), 'No categorical columns found for dummification!')
-                             dummies = character()
+                             
+                             warnif(is.empty(objects$features), 'No categorical columns found!')
+                             dummies = character(); nbin = character()
                              for(cat in objects$features %>% pull(fname)){
-                               dummies %<>% c(cat %>% paste(unique(X %>% pull(cat)), sep = '_'))
+                               uval = unique(X %>% pull(cat))
+                               if(length(uval) > 2){
+                                 nbin = c(nbin, cat)              
+                                 dummies %<>% c(cat %>% paste(uval, sep = '_'))
+                               }               
                              }
+                             objects$features     <<- objects$features %>% filter(fname %in% nbin)
+                             warnif(is.empty(objects$features), 'No categorical columns with more than two unique values found!')
+                             
                              ## todo: take care of remove_first_dummy and remove_most_frequent_dummy arguments
                              fitted <<- TRUE
                              objects$dummy_columns <<- dummies
@@ -373,8 +399,11 @@ GENETIC.BOOSTER.GEOMETRIC = setRefClass('GENETIC.BOOSTER.GEOMETRIC', contains = 
 
       fit = function(X, y){
         if(!fitted){
-          objects$columns <<- numerics(X)
-          X = X[objects$columns]
+          Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
+          
+          objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+          X = X[objects$features$fname]
+          objects$columns <<- colnames(X)
           objects$model <<- data.frame(fname = columns, father = NA, mother = NA, correlation = cor(X, y) %>% as.numeric %>% abs, safety = 0) %>% column2Rownames('fname')
           objects$fdata <<- X[columns]
 
@@ -411,7 +440,7 @@ GENETIC.BOOSTER.LOGICAL = setRefClass('GENETIC.BOOSTER.LOGICAL', contains = 'MOD
 
                                           fit = function(X, y){
                                             if(!fitted){
-                                              X                <- callSuper(X, y)
+                                              Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
                                               objects$model    <<- genBinFeatBoost.fit(X, y, target = 0.9, epochs = 10, cycle_survivors = config$cycle_survivors, final_survivors = config$final_survivors, cycle_births = config$cycle_births, metric = config$metric)
                                               objects$features <<- data.frame(fname = objects$model$father %U% objects$model$father, stringsAsFactors = F)
                                               fitted           <<- TRUE
@@ -447,7 +476,7 @@ SUPERVISOR = setRefClass('SUPERVISOR', contains = "MODEL",
 
     fit = function(X, y){
       if(!fitted){
-        X  = callSuper(X, y)
+        Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
         Xt = X %>% spark.unselect(objects$pupils)
         pp = X %>% spark.select(objects$pupils) %>% as.matrix
         pp %>% apply(1, which.max) -> highest
@@ -482,7 +511,7 @@ KMEANS = setRefClass('KMEANS', contains = 'MODEL', methods = list(
   },
   fit = function(X, y = NULL){
     if(!fitted){
-      X = callSuper(X, y)
+      Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
       objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
       X = X[objects$features$fname]
       objects$model <<- kmeans(X, centers = config$num_cluster)
@@ -515,7 +544,7 @@ PRCOMP = setRefClass('PRCOMP', contains = 'MODEL', methods = list(
 
   fit = function(X, y = NULL){
     if(!fitted){
-      X = callSuper(X, y)
+      Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
       objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
       X = X[objects$features$fname]
       objects$model <<- prcomp(X, center = config$center, scale. = config$scale, rank. = config$rank)
@@ -533,3 +562,44 @@ PRCOMP = setRefClass('PRCOMP', contains = 'MODEL', methods = list(
   }
 ))
 
+PYLMNN = setRefClass('PYLMNN', contains = "MODEL", methods = list(
+  initialize = function(...){
+    callSuper(...)
+    type     <<- 'Large Margin Nearest Neighbors'
+    if(is.empty(name)){name <<- 'LMNN' %>% paste0(sample(1000:9999, 1))}
+    config$num_components <<- config$num_components %>% verify(c('numeric', 'integer'), default = 5) %>% as.integer
+    config$num_neighbors  <<- config$neighbors %>% verify(c('numeric', 'integer'), default = 10) %>% as.integer
+    config$epochs         <<- config$epochs %>% verify(c('numeric', 'integer'), default = 100) %>% as.integer
+    lmnn_module   <-  reticulate::import('pylmnn')
+    objects$model <<- lmnn_module$LargeMarginNearestNeighbor(n_neighbors = config$num_neighbors, max_iter = config$epochs, n_components = config$num_components, init = 'pca')
+  },
+  
+  fit = function(X, y = NULL){
+    if(!fitted){
+      Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
+      objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+      X = X[objects$features$fname]
+      objects$model$fit(X %>% data.matrix, y)
+      fitted <<- T
+    }
+  },
+  
+  predict = function(X){
+    XORG = callSuper(X)
+    XFET = XORG[objects$features$fname]
+    XOUT = objects$model$transform(XFET %>% data.matrix) %>% as.data.frame
+    colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
+    treat(XOUT, XFET, XORG)
+  }
+  
+))
+
+GROUPER = setRefClass('GROUPER', contains = "MODEL", methods = list(
+  initialize = function(...){
+    callSuper(...)
+    type     <<- 'Categorical Feature Grouper'
+    if(is.empty(name)){name <<- 'GRP' %>% paste0(sample(1000:9999, 1))}
+    #config$num_components <<- config$num_components %>% verify(c('numeric', 'integer'), default = 5) %>% as.integer
+  },
+  fit = function(X, y){}
+))
