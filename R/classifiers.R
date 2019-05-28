@@ -7,17 +7,17 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
       config$sig_level <<- config$sig_level %>% verify('numeric', domain = c(0,1), default = 0.1)
       config$predict_probabilities <<- config$predict_probabilities %>% verify('logical', domain = c(T,F), default = T)
       config$decision_threshold <<- config$decision_threshold %>% verify('numeric', lengths = 1, domain = c(0,1), default = 0.5)
-      config$decision_threshold_determination <<- config$decision_threshold_determination %>%
-        verify('character', lengths = 1, domain = c('set_as_threshold', 'maximum_f1', 'target_precision', 'target_recall'), default = 'set_as_threshold')
+      config$threshold_determination <<- config$threshold_determination %>%
+        verify('character', lengths = 1, domain = c('set_as_threshold', 'maximum_f1', 'target_precision', 'target_recall'), default = 'maximum_f1')
       if(is.null(config$metric)){
         config$metric <<- chif(config$predict_probabilities, function(y_pred, y_test) {data.frame(prob = y_pred, actual = y_test) %>% optSplit.f1('prob', 'actual')->aa;aa$f1}, function(y1, y2) mean(xor(y1, y2), na.rm = T))
       }
     },
 
     set_decision_threshold = function(X, y){
-      y_prob = predict(X) %>% pull(name %>% paste('out', sep = '_'))
       if(fitted){
-        if(config$decision_threshold_determination == 'maximum_f1'){
+        if(config$threshold_determination == 'maximum_f1'){
+          y_prob = predict(X) %>% pull(name %>% paste('out', sep = '_'))
           res = data.frame(y_pred = y_prob, y_true = y) %>% optSplit.f1('y_pred', 'y_true')
           config$decision_threshold <<- res$split
         }
@@ -50,6 +50,58 @@ CLASSIFIER.SCIKIT = setRefClass('CLASSIFIER.SCIKIT', contains = "CLASSIFIER",
    )
 )
 
+SCIKIT.KNN = setRefClass('SCIKIT.KNN', contains = "CLASSIFIER.SCIKIT",
+  methods = list(
+    initialize = function(...){
+      callSuper(...)
+      type              <<- 'K Nearest Neighbors'
+      
+      config$num_neighbors <<- config$num_neighbors %>% verify(c('numeric', 'integer'), default = 100) %>% as.integer
+      module_knn = reticulate::import('sklearn.neighbors')
+      objects$model <<- module_knn$KNeighborsClassifier(n_neighbors = config$num_neighbors)
+    },
+    
+    fit = function(X, y){
+      if(!fitted){
+        Xy  <- callSuper(X, y)
+        XT = Xy$X; yt = Xy$y
+        objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+        XT = XT[objects$features$fname]
+        objects$model$fit(XT %>% data.matrix, yt)
+        fitted <<- T
+        set_decision_threshold(X, y)
+      }
+    }
+  )
+)
+
+FLASSO = setRefClass('FLASSO', contains = 'CLASSIFIER', methods = list(
+  initialize = function(...){
+    callSuper(...)
+    type              <<- 'Logistic Regression with Fusion Lasso'
+    
+    config$lambda1 <<- config$lambda1 %>% verify('numeric', default = 1)
+    config$lambda2 <<- config$lambda2 %>% verify('numeric', default = 1)
+    config$epochs  <<- config$epochs  %>% verify(c('numeric', 'integer'), default = 100)
+  },
+  
+  fit = function(X, y){
+    if(!fitted){
+      Xy  <- callSuper(X, y)
+      XT = Xy$X; yt = Xy$y
+      objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+      XT = XT[objects$features$fname]
+      objects$model <<- HDPenReg::EMfusedlasso(XT %>% as.matrix, yt, lambda1 = config$lambda1, lambda2 = config$lambda2, 
+                                     maxSteps = config$epochs, burn = 50, intercept = TRUE, model = "logistic",
+                                     eps = 1e-05, eps0 = 1e-08, epsCG = 1e-08)
+      fitted <<- T
+      set_decision_threshold(X, y)
+    }
+  }
+  
+))
+
+
 suppressWarnings({mlr.classification.models = mlr::listLearners('classif')})
 
 #' @export CLASSIFIER.MLR
@@ -66,12 +118,14 @@ CLASSIFIER.MLR = setRefClass('CLASSIFIER.MLR', contains = "CLASSIFIER",
 
       fit = function(X, y){
         if(!fitted){
-          X = callSuper(X, y)
-          if(!inherits(y, 'factor')){y %<>% as.factor; assert(length(levels(y)) == 2)}
+          Xy  <- callSuper(X, y)
+          XT = Xy$X; yt = Xy$y
+          if(!inherits(yt, 'factor')){yt %<>% as.factor; assert(length(levels(yt)) == 2)}
 
-          tsk = mlr::makeClassifTask(data = cbind(X, label = y), target = 'label')
+          tsk = mlr::makeClassifTask(data = cbind(XT, label = yt), target = 'label')
           mlr::train(objects$model, tsk) ->> objects$model
           fitted <<- T
+          set_decision_threshold(X, y)
         }
       },
 
@@ -126,12 +180,13 @@ SCIKIT.LR = setRefClass('SCIKIT.LR', contains = "CLASSIFIER.SCIKIT",
 
       fit = function(X, y){
         if(!fitted){
-          X %<>% callSuper(y)
+          Xy  <- callSuper(X, y)
+          XT = Xy$X; yt = Xy$y
           objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
-          X = X[objects$features$fname]
-          objects$model$fit(X %>% data.matrix, y)
+          XT = XT[objects$features$fname]
+          objects$model$fit(XT %>% data.matrix, yt)
           objects$model$coef_ %>% abs %>% as.numeric -> weights
-          objects$features$importance <<- (weights/(X %>% apply(2, sd))) %>% na2zero %>% {./geomean(.[.>0])} %>% as.numeric
+          objects$features$importance <<- (weights/(XT %>% apply(2, sd))) %>% na2zero %>% {./geomean(.[.>0])} %>% as.numeric
           fitted <<- T
           set_decision_threshold(X, y)
         }
@@ -157,18 +212,21 @@ FE = setRefClass('FE', contains = 'MODEL',
 
                    fit = function(X, y){
                      if(!fitted){
-                       X = transform(X, y)
-                       objects$mother$fit(X, y)
+                       Xy  <- callSuper(X, y)
+                       XT = Xy$X; yt = Xy$y
+                       objects$mother$fit(XT, yt)
                        objects$mother$objects$features$importance %>% order(decreasing = T) %>% head(5) -> w
                        objects$features <<- objects$mother$objects$features[w,]
                        objects$model    <<- objects$mother$copy()
                        objects$model$reset(F)
 
-                       X = X[objects$features$fname]
-                       objects$model$fit(X, y)
+                       XT = XT[objects$features$fname]
+                       objects$model$fit(XT, yt)
                        objects$features <<- objects$model$objects$features
                      }
-                     fitted <<- T                   }
+                     fitted <<- T      
+                     set_decision_threshold(X, y)
+                   }
                  ))
 
 # # Scikit Logistic Regression with feature elimination:
@@ -206,9 +264,10 @@ SCIKIT.DT = setRefClass('SCIKIT.DT', contains = "CLASSIFIER.SCIKIT",
 
     fit = function(X, y){
       if(!fitted){
-        X = callSuper(X, y)
-
-        objects$model$fit(X %>% data.matrix, y)
+        Xy  <- callSuper(X, y)
+        XT = Xy$X; yt = Xy$y
+        
+        objects$model$fit(XT %>% data.matrix, yt)
         imp = try(objects$model$feature_importances_ %>% as.numeric, silent = T)
         if(inherits(imp, 'numeric')) objects$features$importance <<- imp
         ## todo: feature importances
@@ -250,9 +309,10 @@ SCIKIT.XGB = setRefClass('SCIKIT.XGB', contains = "CLASSIFIER.SCIKIT",
 
       fit = function(X, y){
         if(!fitted){
-          X = callSuper(X, y)
-
-          objects$model$fit(X %>% data.matrix, y)
+          Xy  <- callSuper(X, y)
+          XT = Xy$X; yt = Xy$y
+          
+          objects$model$fit(XT %>% data.matrix, yt)
           imp = try(objects$model$feature_importances_ %>% as.numeric, silent = T)
           if(inherits(imp, 'numeric')) objects$features$importance <<- imp
           ## todo: feature importances
@@ -280,13 +340,16 @@ SCIKIT.SVM = setRefClass('SCIKIT.SVM', contains = "CLASSIFIER.SCIKIT",
 
                            fit = function(X, y){
                              if(!fitted){
-                               X = callSuper(X, y)
-
-                               objects$model$fit(X %>% data.matrix, y)
+                               Xy  <- callSuper(X, y)
+                               XT = Xy$X; yt = Xy$y
+                               
+                               objects$model$fit(XT %>% data.matrix, yt)
                                imp = try(objects$model$feature_importances_ %>% as.numeric, silent = T)
                                if(inherits(imp, 'numeric')) objects$features$importance <<- imp
                                ## todo: feature importances
                                fitted <<- T
+                               set_decision_threshold(X, y)
+                               
                              }
                            },
 
@@ -329,17 +392,18 @@ KERAS = setRefClass('KERAS', contains = 'CLASSIFIER',
 
     fit = function(X, y){
     if(!fitted){
-      X = callSuper(X, y)
-      y = to_categorical(y, config$outputs)
+      Xy  <- callSuper(X, y)
+      XT = Xy$X; yt = Xy$y
+      yt = to_categorical(yt, config$outputs)
       objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
-      X = X[objects$features$fname]
+      XT = XT[objects$features$fname]
       # Build the NN:
       objects$model <<- keras_model_sequential()
       for(i in config$layers %>% length %>% sequence){
         lyr = config$layers[[i]]
         if(i == 1){
           objects$model <<- objects$model %>%
-            layer_dense(units = as.integer(lyr$units), activation = lyr$activation, input_shape = ncol(X))
+            layer_dense(units = as.integer(lyr$units), activation = lyr$activation, input_shape = ncol(XT))
         } else {
           objects$model <<- objects$model %>%
             layer_dense(units = as.integer(lyr$units), activation = lyr$activation)
@@ -358,12 +422,14 @@ KERAS = setRefClass('KERAS', contains = 'CLASSIFIER',
         compile(loss = 'categorical_crossentropy', optimizer = optimizer_adam(lr = 0.001), metrics = list('categorical_accuracy'))
 
 
-      objects$model$fit(X %>% data.matrix, y,
+      objects$model$fit(XT %>% data.matrix, yt,
                         epochs = as.integer(config$epochs),
                         batch_size = as.integer(10),
                         validation_split = 0.2,
                         callbacks = list(callback_lambda(on_epoch_end = config$callback))) ->> objects$history
       fitted <<- T
+      set_decision_threshold(X, y)
+      
     }
   },
 
@@ -388,14 +454,17 @@ SPARKLYR.GBT = setRefClass('SPARKLYR.GBT', contains = 'CLASSIFIER', methods = li
 
   fit = function(X, y){
     if(!fitted){
-      X = callSuper(X, y)
-      X_TBL = sdf_copy_to(sc = config$connection, x = cbind(X, label = y), name = 'X_TBL', memory = T, repartition = 10)
+      Xy  <- callSuper(X, y)
+      XT = Xy$X; yt = Xy$y
+      X_TBL = sdf_copy_to(sc = config$connection, x = cbind(XT, label = yt), name = 'X_TBL', memory = T, repartition = 10)
       features = colnames(X)
       formula  = paste0('label ~ ', paste(features, collapse = ' + ')) %>% as.formula
       objects$model <<- ml_gbt_classifier(X_TBL, formula)
       imp = try(objects$model$model$feature_importances() %>% as.numeric, silent = T)
       if(inherits(imp, 'numeric')) objects$features$importance <<- imp
       fitted <<- T
+      set_decision_threshold(X, y)
+      
     }
   },
 
