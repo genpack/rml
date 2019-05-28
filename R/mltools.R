@@ -417,4 +417,74 @@ remove_invariant_features = function(X){
 }
 
                      
-                     
+get_map = function(X, y, source, target){
+  mu = mean(y)
+  suppressWarnings({X %>% cbind(label = y) %>% group_by_(source) %>% summarise(cnt  = length(label), ratio = mean(label), suml = sum(label)) %>% arrange(ratio) -> tbl})
+  nr = tbl %>% pull(ratio) %>% unique %>% length
+  elbow(tbl['ratio'], max.num.clusters = nr) -> res
+  logpval = c()
+  
+  for(clust in res$clst){
+    nc = max(clust$cluster)
+    tbl[, 'cluster'] = clust$cluster
+    
+    contingency = tbl %>% group_by(cluster) %>% summarise(total = sum(cnt), positive = sum(suml)) %>% mutate(negative = total - positive)
+    last_row    = contingency %>% colSums
+    observed    = contingency %>% select(positive, negative, cluster) %>% column2Rownames('cluster') %>% as.matrix
+    expected    = contingency$total %>% matrix(nrow = nc) %*% last_row[c('positive', 'negative')] %>% {./last_row['total']}
+    logpval     %<>%  c(pchisq(sum((observed - expected)^2/expected), df = nc - 1, lower.tail = FALSE, log.p = T))
+  }
+  
+  res$bnc = logpval %>% order %>% first
+  
+  
+  tbl[, target] = res$clst[[res$bnc]]$cluster
+
+  return(tbl[, c(source, target)])
+}
+
+
+
+apply_map = function(X, mapping){
+  X %>% left_join(mapping, by = colnames(mapping)[1])
+}
+
+concat_columns = function(X, sources, target){
+  scr = paste0("X %>% mutate(", target, " = paste(", sources %>% paste(collapse = ','), ", sep = '-'))")
+  parse(text = scr) %>% eval
+}  
+
+fit_map = function(X, y, cats){
+  allmaps  = list()
+  map_base = getmap(X, y, source = cats[1], target = 'new_0')
+  X = applymap(X, map_base)
+  allmaps[[cats[1]]] <- map_base
+  columns = cats[-1]
+  
+  for(i in sequence(length(columns))){
+    col  = columns[i]
+    X    = concat_columns(X, sources = c('new' %>% paste(i - 1, sep = '_'), col), target = 'cnc' %>% paste(i, sep = '_'))
+    mapi = getmap(X, y, source = 'cnc' %>% paste(i, sep = '_'), target = 'new' %>% paste(i, sep = '_'))
+    allmaps[[col]] = mapi
+    X    = applymap(X, mapi)
+  }
+  return(allmaps)
+} 
+
+
+predict_map = function(X, maplist){
+  columns = names(maplist)
+  nmap    = length(maplist)
+  for(i in sequence(nmap)){
+    map    = maplist[[i]]
+    col    = columns[i]
+    ns     = colnames(map)
+    source = ns[1]
+    target = ns[2]
+    X      = applymap(X, map)
+    if(i < nmap){
+      X    = concat_columns(X, sources = c(target, columns[i+1]), target = colnames(maplist[[i+1]])[1])
+    }
+  }
+  return(X %>% pull(target))
+}                     
