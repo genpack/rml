@@ -61,6 +61,22 @@ int_ordinals = function(X){
 }
 
 
+add_keras_layer_dense = function(model, layer, ...){
+  model %>% layer_dense(units       = layer$units %>% verify(c('numeric', 'integer'), lengths = 1, null_allowed = F) %>% as.integer, 
+              activation  = layer$activation %>% verify('character', lengths = 1, default = 'relu'), 
+              use_bias    = layer$use_bias %>% verify('logical', lengths = 1, domain = c(T,F), default = T),
+              kernel_regularizer = layer$kernel_regularizer, 
+              bias_regularizer   = layer$kernel_regularizer,
+              activity_regularizer = layer$activity_regularizer, 
+              kernel_constraint = layer$kernel_constraint,
+              bias_constraint = layer$bias_constraint, 
+              batch_input_shape = layer$batch_input_shape, 
+              batch_size = layer$batch_size, 
+              name = layer$name, trainable = layer$trainable, 
+              weights = layer$weights,
+              ...)
+}
+
 ranker = function(X){
   X %<>% as.data.frame
   for(col in colnames(X)){
@@ -436,8 +452,7 @@ get_map = function(X, y, source, target){
   }
   
   res$bnc = logpval %>% order %>% first
-  
-  
+
   tbl[, target] = res$clst[[res$bnc]]$cluster
 
   return(tbl[, c(source, target)])
@@ -456,20 +471,71 @@ concat_columns = function(X, sources, target){
 
 fit_map = function(X, y, cats){
   allmaps  = list()
-  map_base = getmap(X, y, source = cats[1], target = 'new_0')
-  X = applymap(X, map_base)
+  scores   = get_chisq_scores(X, y, cats)
+  cats     = cats[order(scores)]
+  map_base = get_map(X, y, source = cats[1], target = 'M0')
+  X = apply_map(X, map_base)
   allmaps[[cats[1]]] <- map_base
   columns = cats[-1]
-  
+  benchmark = Inf; iii = 1
   for(i in sequence(length(columns))){
-    col  = columns[i]
-    X    = concat_columns(X, sources = c('new' %>% paste(i - 1, sep = '_'), col), target = 'cnc' %>% paste(i, sep = '_'))
-    mapi = getmap(X, y, source = 'cnc' %>% paste(i, sep = '_'), target = 'new' %>% paste(i, sep = '_'))
-    allmaps[[col]] = mapi
-    X    = applymap(X, mapi)
+    col   = columns[i]
+    XT    = concat_columns(X, sources = c('M' %>% paste0(iii - 1), col), target = 'C' %>% paste0(iii))
+    mapi  = get_map(XT, y, source = 'C' %>% paste0(iii), target = 'M' %>% paste0(iii))
+    XT    = apply_map(XT, mapi)
+    fval  = suppressWarnings({chisq.test(XT %>% pull('M' %>% paste0(iii)), y)})
+    fval  = fval$statistic %>% pchisq(df = fval$parameter['df'], lower.tail = F, log.p = T)
+    
+    if(fval < benchmark){
+      allmaps[[col]] = mapi
+      X = XT
+      benchmark = fval
+      iii   = iii + 1
+    }
   }
   return(allmaps)
 } 
+
+get_chisq_scores = function(X, y, cats){
+  scores = c()
+  for(col in cats){
+    fval  = suppressWarnings({chisq.test(X %>% pull(col), y)})
+    fval  = fval$statistic %>% pchisq(df = fval$parameter['df'], lower.tail = F, log.p = T)
+    scores = c(scores, fval)
+  }
+  return(scores)
+}
+
+fit_map_new = function(X, y, cats){
+  allmaps  = list()
+  scores   = get_chisq_scores(X, y, cats)
+  cats     = cats[order(scores)]
+  map_base = get_map(X, y, source = cats[1], target = 'M0')
+  X = apply_map(X, map_base)
+  allmaps[[cats[1]]] <- map_base
+  columns = cats[-1]
+  benchmark = Inf; iii = 1
+  for(col in columns){
+    XT    = concat_columns(X, sources = c('M' %>% paste0(iii - 1), col), target = 'C' %>% paste0(iii))
+    ind1  = XT %>% nrow %>% sequence %>% sample(floor(0.5*nrow(XT)))
+    ind2  = XT %>% nrow %>% sequence %>% setdiff(ind1)
+    X1    = XT[ind1,]; X2 = XT[ind2,]; y1 = y[ind1]; y2 = y[ind2]
+    mapi  = get_map(X1, y1, source = 'C' %>% paste0(iii), target = 'M' %>% paste0(iii))
+    X1    = apply_map(X1, mapi)
+    X2    = apply_map(X2, mapi)
+    p1    = get_chisq_scores(X1, y1, 'M' %>% paste0(iii))
+    p2    = get_chisq_scores(X2, y2, 'M' %>% paste0(iii))
+    
+    if((p1 < benchmark) & (p2<benchmark)){
+      allmaps[[col]] = mapi
+      X = apply_map(XT, mapi)
+      benchmark = max(p1, p2)
+      iii   = iii + 1
+    }
+  }
+  return(allmaps)
+} 
+
 
 
 predict_map = function(X, maplist){
@@ -481,7 +547,7 @@ predict_map = function(X, maplist){
     ns     = colnames(map)
     source = ns[1]
     target = ns[2]
-    X      = applymap(X, map)
+    X      = apply_map(X, map)
     if(i < nmap){
       X    = concat_columns(X, sources = c(target, columns[i+1]), target = colnames(maplist[[i+1]])[1])
     }
