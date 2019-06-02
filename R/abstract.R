@@ -1,14 +1,15 @@
 #' @export MODEL
 MODEL = setRefClass('MODEL',
-  fields = list(name = "character", type = "character", config = "list", fitted = 'logical', objects = "list"),
+  fields = list(name = "character", type = "character", config = "list", fitted = 'logical', transformers = 'list', objects = "list"),
 
   methods = list(
-    initialize           = function(..., name = character(), transformer = NULL, mother = NULL, features = NULL, pupils = NULL){
+    initialize           = function(..., name = character(), transformers = list(), mother = NULL, features = NULL, pupils = NULL){
       callSuper(name = name)
       settings = list(...)
-      for (sn in sequence(length(settings))){
+      ns       = names(settings)
+      for (sn in ns){
         set = settings[[sn]]
-        if(inherits(set, 'list')) {
+        if(inherits(set, 'list') &  sn == 'config') {
           settings = settings %<==>% set
           settings[[sn]] <- NULL
         }
@@ -20,20 +21,24 @@ MODEL = setRefClass('MODEL',
       if(is.null(settings$cv.split_ratio)){settings$cv.split_ratio <- 0.7}
       if(is.null(settings$cv.split_method)){settings$cv.split_method <- 'shuffle'}
       if(is.null(settings$cv.reset_transformer)){settings$cv.reset_transformer = T}
+      if(is.null(settings$rfe.enabled)){settings$rfe.enabled = F}
+      if(is.null(settings$rfe.importance_threshold)){settings$rfe.importance_threshold = 0}
+      if(is.null(settings$remove_invariant_features)){settings$remove_invariant_features = T}
 
-      config      <<- settings
-      fitted      <<- FALSE
-      objects$transformer <<- transformer
-      objects$mother      <<- mother
-      objects$features    <<- features
-      objects$pupils      <<- pupils
+      config       <<- settings
+      fitted       <<- FALSE
+      transformers <<- transformers %>% {if(inherits(.,'list')) . else list(.)}
+      objects$mother       <<- mother
+      objects$features     <<- features
+      objects$pupils       <<- pupils
     },
-    reset                = function(reset_transformer = T){
+    reset                = function(reset_transformers = T){
       fitted <<- FALSE
       objects$features <<- NULL
-      if (reset_transformer & !is.null(objects$transformer)){
-        objects$transformer$reset(reset_transformer = T)
-      }},
+      if (reset_transformers & !is.empty(transformers)){
+        for (transformer in transformers) transformer$reset(reset_transformers = T)
+      }
+    },
     get.feature.names    = function(){character()},
     get.feature.weights  = function(){},
     predict              = function(X){
@@ -58,30 +63,59 @@ MODEL = setRefClass('MODEL',
            else return(out)
     },
 
-    fit = function(X, y = NULL){
-      if(inherits(X, 'matrix')){X %<>% as.data.frame}
-      if(!is.null(config$max_train)){
-        mxt = min(config$max_train, nrow(X))
-        ind = nrow(X) %>% sequence %>% sample(mxt)
-        X = X[ind,]
-        y = y[ind]
+    # Fitting with recursive feature elimination (RFE). Works only for model fitters which generate feature importance
+    fit.rfe = function(X, y){
+      .self$model.fit(X, y)
+      if('importance' %in% colnames(objects$features)){
+        fns = objects$features$fname
+        ftk = fns[which(objects$features$importance > config$rfe.importance_threshold)] # features to keep
+        fte = fns %-% ftk
+        while(  (length(fte) > 0) | (length(fte) < nrow(objects$features))  ){
+          objects$features %<>% filter(fname %in% ftk) 
+          .self$model.fit(X, y)
+          ftk = fns[which(objects$features$importance > config$rfe.importance_threshold)] # features to keep
+          fte = fns %-% ftk
+        }
+        
+        if(length(fte) == nrow(objects$features)){
+          cat('No features will be left after elimination. RFE process terminated!')
+        }
       }
-      X = transform(X, y)
-      if(!is.null(config$features.include)){X = X %>% spark.select(config$features.include %^% colnames(X))}
-      if(!is.null(config$features.exclude)){X = X %>% spark.select(colnames(X) %-% config$features.exclude)}
-      X %<>% remove_invariant_features
-      objects$features <<- colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
-      return(list(X = X, y = y))
+    },
+    
+    fit = function(X, y = NULL){
+      if(!fitted){
+        if(inherits(X, 'matrix')){X %<>% as.data.frame}
+        if(!is.null(config$max_train)){
+          mxt = min(config$max_train, nrow(X))
+          ind = nrow(X) %>% sequence %>% sample(mxt)
+          X = X[ind,]
+          y = y[ind]
+        }
+        X = transform(X, y)
+        if(!is.null(config$features.include)){X = X %>% spark.select(config$features.include %^% colnames(X))}
+        if(!is.null(config$features.exclude)){X = X %>% spark.select(colnames(X) %-% config$features.exclude)}
+        if(config$remove_invariant_features) X %<>% remove_invariant_features
+        objects$features <<- colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
+        if(config$rfe.enabled) {fit.rfe(X, y)} else {.self$model.fit(X, y)} 
+      }
+      fitted <<- TRUE
     },
 
     transform            = function(X, y = NULL){
-      if(!is.null(objects$transformer)){
-        if(!objects$transformer$fitted) {
-          objects$transformer$fit(X, y)
+      nt = length(transformers)
+      if(nt > 0){
+        for(i in sequence(nt)){
+          transformer = transformers[[i]]
+          if(!transformer$fitted) {transformer$fit(X, y)}
+          if(i == 1){
+            XT = transformer$predict(X)
+          } else {
+            XT = cbind(XT, transformer$predict(X) %>% {.[colnames(.) %-% colnames(XT)]})
+          }
         }
-        X = objects$transformer$predict(X)
-      }
-      return(X)
+      } else {XT = X}
+      return(XT)
     },
     get.performance.fit  = function(){},
 
@@ -127,30 +161,20 @@ MODEL = setRefClass('MODEL',
     get.expert.features  = function(){}
 ))
 
-# REGRESSOR  = setRefClass('REGRESSOR', contains = 'MODEL',
-#     methods = list(
-#       # todo: add k-fold, chronological shuffle, chronological split
-#       get.performance.cv = function(X, y){
-#         keep   = objects$model
-#         N       = X %>% nrow
-#         acc     = c()
-#         for(i in sequence(ntest)){
-#           test    = N %>% sequence %>% sample(config$cv.split_ratio*N, replace = F)
-#           X_train = X[- test, ]
-#           X_test  = X[  test, ]
-#           y_train = y[- test]
-#           y_test  = y[  test]
-#           fit(X_train, y_train)
-#           yht = predict(X_test)
-#           acc = c(acc, config$metric(yht, y_test))
-#         }
-#         objects$model <<- keep
-#         return(acc)
-#       }
-#
-#     ))
 
-# tools.R
-
-
-
+COLFILTER = setRefClass('COLFILOTER', contains = 'MODEL', methods = list(
+  fit = function(X, y = NULL){
+    if(!fitted){
+      callSuper(X, y)
+    }  
+    fitted <<- T
+  },
+  
+  predict = function(X, prob){
+    XORG = callSuper(X)
+    XFET = XORG[objects$features$fname]
+    XOUT = XFET[character()]
+    treat(XOUT, XFET, XORG)
+  }
+  
+))
