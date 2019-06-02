@@ -1,10 +1,33 @@
 
+TRANSFORMER = setRefClass('TRANSFORMER', contains = "MODEL", methods = list(
+  
+  predict = function(X){
+    XORG = callSuper(X) %>% as.data.frame
+    XFET = XORG[objects$features$fname]
+    XOUT = .self$model.predict(XFET)
+    if(is.null(colnames(XOUT))){
+      if(ncol(XOUT) == nrow(objects$features)){
+        colnames(XOUT) <- name %>% paste(objects$features$fname, sep = '_')
+      } else if (ncol(XOUT) == 1){
+        colnames(XOUT) <- name %>% paste('out', sep = '_')
+      } else{
+        colnames(XOUT) <- name %>% paste('out', sequence(ncol(XOUT)), sep = '_')
+      }
+    } else {
+      colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
+    }
+    
+    treat(XOUT, XFET, XORG)
+  }
+  
+))
+
 # This model, finds all numeric features in X and uses smbinning R package to optimally bin them to categorical columns and returns the table with additional features
 # original features are NOT maintained in the output table
 # This model is using stupid package smbinning. It only divides to 5 buckets, so it's not really optimal binning but better than nothing!
 # Also, make sure there is no '.' character in column labels because the package author has problem with dots!!!!!!
 #' @export SMBINNING
-SMBINNING = setRefClass('SMBINNING', contains = "MODEL",
+SMBINNING = setRefClass('SMBINNING', contains = "TRANSFORMER",
     methods = list(
       initialize = function(...){
         callSuper(...)
@@ -15,10 +38,7 @@ SMBINNING = setRefClass('SMBINNING', contains = "MODEL",
         if(is.empty(name)){name <<- 'SMBIN' %>% paste0(sample(1000:9999, 1))}
       },
 
-      fit = function(X, y){
-        if(!fitted){
-          Xy  <- callSuper(X, y)
-          X = Xy$X; y = Xy$y
+      model.fit = function(X, y){
           objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
           X = X[objects$features$fname]
 
@@ -46,160 +66,98 @@ SMBINNING = setRefClass('SMBINNING', contains = "MODEL",
           }
           objects$features <<- data.frame(fname = columns, stringsAsFactors = F)
           # todo: add importance
-          fitted <<- TRUE
-        }
-      },
-
-      get.features.name = function(){
-        names(objects$model)
-      },
-
-      get.features.weight = function(){
-      },
+        },
 
       # predict acts like transformer
-      predict = function(X){
-        XORG  = callSuper(X)
-        XFET  = XORG[objects$features$fname]
+      model.predict = function(X){
         ns    = names(objects$model)
-        ds    = XFET[, ns]
+        ds    = X[, ns]
         for(ft in ns){
           ds  %<>% smbinning::smbinning.gen(objects$model[[ft]], chrname = ft %>% paste(config$suffix, sep = '.'))
         }
-        columns = colnames(ds) %>% setdiff(colnames(XFET))
-        XOUT    = ds[, columns, drop = F]
-        treat(XOUT, XFET, XORG)
+        columns = colnames(ds) %>% setdiff(colnames(X))
+        ds[, columns, drop = F]
       }
     )
 )
 
 #' @export NORMALIZER
-NORMALIZER = setRefClass('NORMALIZER', contains = 'MODEL',
+NORMALIZER = setRefClass('NORMALIZER', contains = 'TRANSFORMER',
   methods = list(
     initialize = function(...){
       callSuper(...)
       config$suffix <<- config$suffix %>% verify('character', default = 'NRM')
       type          <<- 'Normalizer'
       if(is.empty(name)){name <<- 'NRMR' %>% paste0(sample(1000:9999, 1))}
-
-
     },
-    fit = function(X, y = NULL){
-      if(!fitted){
-        Xy  <- callSuper(X, y)
-        X = Xy$X; y = Xy$y
+    
+    model.fit = function(X, y = NULL){
         objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
         X = X[objects$features$fname] %>% as.matrix
         X %>% apply(2, function(v) min(v, na.rm = T)) ->> objects$features$min
         X %>% apply(2, function(v) max(v, na.rm = T)) ->> objects$features$max
-        fitted <<- TRUE
-      }
     },
 
-      predict = function(X){
-        XORG  = callSuper(X)
-        XFET  = XORG[objects$features$fname] %>% as.data.frame
-        feat  = objects$features %>% column2Rownames('fname')
-
-        XOUT  = objects$features$fname %>% sapply(function(i) (XFET[,i] -  feat[i,'min'])/(feat[i,'max'] - feat[i,'min'])) %>% na2zero %>% as.data.frame
-        if(config$keep_features){
-          colnames(XOUT) <- objects$features$fname %>% paste(config$suffix, sep = '_')
-        } else {
-          colnames(XOUT) <- objects$features$fname
-        }
-        treat(XOUT, XFET, XORG)
-      }
-
+    model.predict = function(X){
+      feat  = objects$features %>% column2Rownames('fname')
+      objects$features$fname %>% sapply(function(i) (X[,i] -  feat[i,'min'])/(feat[i,'max'] - feat[i,'min'])) %>% na2zero %>% as.data.frame
+    }
   ))
 
 #' @export SCALER
-SCALER = setRefClass('SCALER', contains = "MODEL", methods = list(
+SCALER = setRefClass('SCALER', contains = "TRANSFORMER", methods = list(
   initialize = function(...){
     callSuper(...)
     config$suffix              <<- config$suffix %>% verify('character', default = 'SCALED')
     type                       <<- 'ZFactor Scaler'
     if(is.empty(name)){name <<- 'SCLR' %>% paste0(sample(1000:9999, 1))}
-
   },
 
-  fit = function(X, y = NULL){
-    if(!fitted){
-      Xy  <- callSuper(X, y)
-      X = Xy$X; y = Xy$y
+  model.fit = function(X, y = NULL){
       objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
       X = X[objects$features$fname] %>% as.matrix
       X %>% apply(2, function(v) mean(v, na.rm = T)) ->> objects$features$mean
       X %>% apply(2, function(v)   sd(v, na.rm = T)) ->> objects$features$stdv
-      fitted <<- TRUE
-    }
   },
 
-  predict = function(X){
-    XORG  = callSuper(X)
-    XFET  = XORG[objects$features$fname] %>% as.data.frame
+  model.predict = function(X){
     feat  = objects$features %>% column2Rownames('fname')
-
-    XOUT  = objects$features$fname %>% sapply(function(i) (XFET[,i] -  feat[i,'mean'])/feat[i,'stdv']) %>% na2zero %>% as.data.frame
-    if(config$keep_features){
-      colnames(XOUT) <- objects$features$fname %>% paste(config$suffix, sep = '_')
-    } else {
-      colnames(XOUT) <- objects$features$fname
-    }
-    
-    treat(XOUT, XFET, XORG)
+    objects$features$fname %>% sapply(function(i) (X[,i] -  feat[i,'mean'])/feat[i,'stdv']) %>% na2zero %>% as.data.frame
   }
 ))
 
 #' @export OPTBINNER
-OPTBINNER = setRefClass('OPTBINNER', contains = "MODEL",
-                        methods = list(
-                          initialize = function(...){
-                            callSuper(...)
-                            # refer to help page for package smbinning (?smbinning::smbinning)
-                            config$suffix              <<- config$suffix %>% verify('character', default = 'BIN')
-                            config$basis               <<- config$basis %>% verify('character', domain = c('f1', 'chi'), default = 'chi')
-                            type                       <<- 'Optimal Binner'
-                            if(is.empty(name)){name <<- 'OBIN' %>% paste0(sample(1000:9999, 1))}
+OPTBINNER = setRefClass('OPTBINNER', contains = "TRANSFORMER", methods = list(
+  initialize = function(...){
+    callSuper(...)
+    # refer to help page for package smbinning (?smbinning::smbinning)
+    config$suffix              <<- config$suffix %>% verify('character', default = 'BIN')
+    config$basis               <<- config$basis %>% verify('character', domain = c('f1', 'chi'), default = 'chi')
+    type                       <<- 'Optimal Binner'
+    if(is.empty(name)){name <<- 'OBIN' %>% paste0(sample(1000:9999, 1))}
+  },
 
-                          },
+  model.fit = function(X, y){
+      objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+      X = X[objects$features$fname]
+      if(length(objects$features$fname) > 0){
+        ds = cbind(X, Y = y)
+        objects$model <<- ds %>% optSplitColumns.chi(objects$features$fname, label_col = 'Y') %>% mutate(Column = as.character(Column))
+        # objects$model <<- ds %>% optSplitColumns.f1(objects$features$fname, label_col = 'Y') %>% mutate(Column = as.character(Column))
+        # todo: use 'metric' property of the config (must be class function) and change default functions for f1 and chi in mltools to return same column names
+      }
+      objects$features$importance <<- objects$model$correlation %>% vect.map(0,1)
+  },
 
-                          fit = function(X, y){
-                            if(!fitted){
-                              Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
-                              
-                              objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
-                              X = X[objects$features$fname]
-                              if(length(objects$features$fname) > 0){
-                                ds = cbind(X, Y = y)
-                                objects$model <<- ds %>% optSplitColumns.chi(objects$features$fname, label_col = 'Y') %>% mutate(Column = as.character(Column))
-                                # objects$model <<- ds %>% optSplitColumns.f1(objects$features$fname, label_col = 'Y') %>% mutate(Column = as.character(Column))
-                                # todo: use 'metric' property of the config (must be class function) and change default functions for f1 and chi in mltools to return same column names
-                              }
-                              objects$features$importance <<- objects$model$chisq %>% vect.map(0,1)
-                              # todo: add importance
-                              fitted <<- TRUE
-                            }
-                          },
-
-                          # predict acts like transformer
-                          predict = function(X){
-                            XORG  = callSuper(X)
-                            XFET  = XORG[objects$features$fname] %>% as.data.frame
-                            XOUT  = XFET %>% ncol %>% sequence %>% sapply(function(i) as.integer(XFET[,i] > objects$model$split[i]))
-                            if(config$keep_features){
-                              colnames(XOUT) <- objects$features$fname %>% paste(config$suffix, sep = '_')
-                            } else {
-                              colnames(XOUT) <- objects$features$fname
-                            }
-                            
-                            treat(XOUT, XFET, XORG)
-                          }
-                        )
-)
+  # predict acts like transformer
+  model.predict = function(X){
+    X %>% ncol %>% sequence %>% sapply(function(i) as.integer(X[,i] > objects$model$split[i])) %>% as.data.frame %>% {colnames(.)<-NULL;.}
+  }
+))
 
 # Replaces categorical features with class ratios associated with each category
 #' @export SEGMENTER.RATIO
-SEGMENTER.RATIO = setRefClass('SEGMENTER.RATIO', contains = 'MODEL',
+SEGMENTER.RATIO = setRefClass('SEGMENTER.RATIO', contains = 'TRANSFORMER',
    methods = list(
      initialize = function(...){
        callSuper(...)
@@ -208,34 +166,30 @@ SEGMENTER.RATIO = setRefClass('SEGMENTER.RATIO', contains = 'MODEL',
 
      },
 
-     fit = function(X, y){
+     model.fit = function(X, y){
        if(!fitted){
-         Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
          objects$features <<- objects$features %>% filter(fname %in% nominals(X))
          X = X[objects$features$fname]
          objects$model <<- list()
          for(col in colnames(X)){
            objects$model[[col]] <<- cbind(X, label = y) %>% group_by_(col) %>% summarise(ratio = mean(label))
          }
-         fitted <<- T
-       }
+       }   
      },
 
-     predict = function(X){
-       XORG  = callSuper(X)
-       XFET  = XORG[objects$features$fname]
-       XOUT  = XFET
+     model.predict = function(X){
+       XOUT  = X
        for(col in objects$features$fname){
-         cn = 'ratio' %>% {names(.)<-'ratio' %>% paste(col, sep = '_');.}
-         XOUT %<>% left_join(objects$model[[col]], by = col) %>% spark.rename(cn) %>% spark.unselect(col)
+         cn = 'ratio' %>% {names(.) <- name %>% paste(col, sep = '_');.}
+         XOUT %<>% left_join(objects$model[[col]], by = col) %>% spark.rename(cn) %>% spark.unselect(col) %>% na2median
        }
-       treat(XOUT, XFET, XORG)
+       return(XOUT)
      }
    )
 )
 
 #' @export SEGMENTER.MODEL
-SEGMENTER.MODEL = setRefClass('SEGMENTER.MLR', contains = 'MODEL',
+SEGMENTER.MODEL = setRefClass('SEGMENTER.MLR', contains = 'TRANSFORMER',
   methods = list(
     initialize = function(...){
       callSuper(...)
@@ -246,9 +200,7 @@ SEGMENTER.MODEL = setRefClass('SEGMENTER.MLR', contains = 'MODEL',
       if(is.empty(name)){name <<- 'SEGMOD' %>% paste0(sample(1000:9999, 1))}
     },
 
-    fit = function(X, y){
-      if(!fitted){
-        Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
+    model.fit = function(X, y){
         objects$categoricals <<- nominals(X)
         #X = X[objects$categoricals]
         objects$model <<- list()
@@ -256,25 +208,21 @@ SEGMENTER.MODEL = setRefClass('SEGMENTER.MLR', contains = 'MODEL',
           objects$model[[col]] <<- list()
           Xcol = X %>% pull(col)
           uval = Xcol %>% unique
-          objects$model[[col]][['__global__']] <<- new(config$model_class, config$model_config)
+          objects$model[[col]][['__global__']] <<- new(config$model_class, config = config$model_config)
           for(val in uval){
             vlc = as.character(val)
             www = which(Xcol == val)
             if(length(www) > config$min_rows){
-              objects$model[[col]][[vlc]] <<- new(config$model_class, config$model_config)
+              objects$model[[col]][[vlc]] <<- new(config$model_class, config = config$model_config)
               objects$model[[col]][[vlc]]$fit(X[www,], y[www])
             } else {
               objects$model[[col]][['__global__']]$fit(X %>% spark.unselect(col), y)
             }
           }
         }
-        fitted <<- T
-      }
     },
 
-    predict = function(X){
-      XORG  = callSuper(X)
-      XFET  = XORG[objects$features %>% pull(fname)]
+    model.predict = function(X){
       XOUT  = NULL
 
       for(col in objects$categoricals){
@@ -286,15 +234,16 @@ SEGMENTER.MODEL = setRefClass('SEGMENTER.MLR', contains = 'MODEL',
           data.frame(value = mdl$predict(dot), stringsAsFactors = F)
         }
         cn = 'value' %>% {names(.) <- name %>% paste(col, sep = '_');.}
-        df = XFET %>% group_by_(col) %>% do({bibi(.)}) %>% spark.rename(cn)
+        df = X %>% group_by_(col) %>% do({bibi(.)}) %>% spark.rename(cn)
         if(is.null(XOUT)){XOUT = df[,2, drop = F]} else {XOUT %<>% cbind(df[,2, drop = F])}
       }
-      treat(XOUT, XFET, XORG)
+      colnames(XOUT) <- NULL
+      return(XOUT)
     }
   ))
 
 #' @export CATCONCATER
-CATCONCATER = setRefClass('CATCONCATER', contains = "MODEL",
+CATCONCATER = setRefClass('CATCONCATER', contains = "TRANSFORMER",
    methods = list(
      initialize = function(...){
        callSuper(...)
@@ -302,74 +251,61 @@ CATCONCATER = setRefClass('CATCONCATER', contains = "MODEL",
        if(is.empty(name)){name <<- 'CATCON' %>% paste0(sample(1000:9999, 1))}
      },
 
-     fit = function(X, y){
-       if(!fitted){
-         Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
+     model.fit = function(X, y){
          objects$features <<- data.frame(fname = nominals(X), stringsAsFactors = F)
-         fitted <<- TRUE
-       }
      },
 
-     predict = function(X){
-       XORG = callSuper(X)
-       XFET = XORG[objects$features$fname]
-       bibi = function(x) paste(x, collapse = '-')
-       XOUT = XFET %>% apply(1, bibi)
-       treat(XOUT, XFET, XORG)
+     model.predict = function(X){
+       X %>% apply(1, function(x) paste(x, collapse = '-')) %>% as.data.frame
      }
    )
 )
 
 #' @export DUMMIFIER
-DUMMIFIER = setRefClass('DUMMIFIER', contains = "MODEL",
-                         methods = list(
-                           initialize = function(...){
-                             callSuper(...)
-                             type     <<- 'Categorical Feature Dummifier'
-                             if(is.empty(name)){name <<- 'DMFR' %>% paste0(sample(1000:9999, 1))}
-                           },
+DUMMIFIER = setRefClass('DUMMIFIER', contains = "TRANSFORMER",
+   methods = list(
+     initialize = function(...){
+       callSuper(...)
+       type     <<- 'Categorical Feature Dummifier'
+       if(is.empty(name)){name <<- 'DMFR' %>% paste0(sample(1000:9999, 1))}
+     },
 
-                           fit = function(X, y = NULL){
-                             Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
-                             objects$features     <<- objects$features %>% filter(fname %in% nominals(X))
-                             
-                             warnif(is.empty(objects$features), 'No categorical columns found!')
-                             dummies = character(); nbin = character()
-                             for(cat in objects$features %>% pull(fname)){
-                               uval = unique(X %>% pull(cat))
-                               if(length(uval) > 2){
-                                 nbin = c(nbin, cat)              
-                                 dummies %<>% c(cat %>% paste(uval, sep = '_'))
-                               }               
-                             }
-                             objects$features     <<- objects$features %>% filter(fname %in% nbin)
-                             warnif(is.empty(objects$features), 'No categorical columns with more than two unique values found!')
-                             
-                             ## todo: take care of remove_first_dummy and remove_most_frequent_dummy arguments
-                             fitted <<- TRUE
-                             objects$dummy_columns <<- dummies
-                             # todo: rename to output_features and add importance(performance)
-                           },
+     model.fit = function(X, y = NULL){
+       objects$features     <<- objects$features %>% filter(fname %in% nominals(X))
+       
+       warnif(is.empty(objects$features), 'No categorical columns found!')
+       dummies = character(); nbin = character()
+       for(cat in objects$features %>% pull(fname)){
+         uval = unique(X %>% pull(cat))
+         if(length(uval) > 2){
+           nbin = c(nbin, cat)              
+           dummies %<>% c(cat %>% paste(uval, sep = '_'))
+         }               
+       }
+       objects$features     <<- objects$features %>% filter(fname %in% nbin)
+       warnif(is.empty(objects$features), 'No categorical columns with more than two unique values found!')
+       
+       ## todo: take care of remove_first_dummy and remove_most_frequent_dummy arguments
+       objects$dummy_columns <<- dummies
+       # todo: rename to output_features and add importance(performance)
+     },
 
-                           predict = function(X){
-                             XORG  = callSuper(X)
-                             XFET  = XORG[objects$features$fname]
-                             XFET %>%
-                               fastDummies::dummy_cols(objects$features$fname, remove_first_dummy = FALSE, remove_most_frequent_dummy = TRUE) %>%
-                               {.[, -(sequence(length(objects$features$fname))), drop = F]} -> res
-                             # We need to make sure the column names of the output is exactly the same as the table given in fitting
-                             comm_cols  = colnames(res) %^% objects$dummy_columns
-                             less_cols  = objects$dummy_columns %-% colnames(res)
-                             extra      = data.frame.na(nrow = nrow(res), ncol = length(less_cols), col_names = less_cols)
+     model.predict = function(X){
+       X %>%
+         fastDummies::dummy_cols(objects$features$fname, remove_first_dummy = FALSE, remove_most_frequent_dummy = TRUE) %>%
+         {.[, -(sequence(length(objects$features$fname))), drop = F]} -> res
+       # We need to make sure the column names of the output is exactly the same as the table given in fitting
+       comm_cols  = colnames(res) %^% objects$dummy_columns
+       less_cols  = objects$dummy_columns %-% colnames(res)
+       extra      = data.frame.na(nrow = nrow(res), ncol = length(less_cols), col_names = less_cols)
 
-                             XOUT = res[comm_cols] %>% cbind(extra) %>% na2zero %>% {.[, objects$dummy_columns, drop = F]}
-                             treat(XOUT, XFET, XORG)
-                           }
-                         )
+       res[comm_cols] %>% cbind(extra) %>% na2zero %>% {.[, objects$dummy_columns, drop = F]}
+     }
+   )
 )
 
 #' @export GENETIC.BOOSTER.GEOMETRIC
-GENETIC.BOOSTER.GEOMETRIC = setRefClass('GENETIC.BOOSTER.GEOMETRIC', contains = 'MODEL',
+GENETIC.BOOSTER.GEOMETRIC = setRefClass('GENETIC.BOOSTER.GEOMETRIC', contains = 'TRANSFORMER',
     methods = list(
       initialize = function(...){
         callSuper(...)
@@ -397,10 +333,7 @@ GENETIC.BOOSTER.GEOMETRIC = setRefClass('GENETIC.BOOSTER.GEOMETRIC', contains = 
             safety = 0, stringsAsFactors = F) %>% column2Rownames('fname'))
       },
 
-      fit = function(X, y){
-        if(!fitted){
-          Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
-          
+      model.fit = function(X, y){
           objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
           X = X[objects$features$fname]
           objects$columns <<- colnames(X)
@@ -415,55 +348,47 @@ GENETIC.BOOSTER.GEOMETRIC = setRefClass('GENETIC.BOOSTER.GEOMETRIC', contains = 
 
             cat('Iteration:', i, ': Best Correlation = ', 100*max(flist$correlation), ' nrow(flist) = ', nrow(flist), '\n')
           }
-
-        }
       }
+      
+      # todo: add model.predict
     )
                                         )
 
 #' @export GENETIC.BOOSTER.LOGICAL
-GENETIC.BOOSTER.LOGICAL = setRefClass('GENETIC.BOOSTER.LOGICAL', contains = 'MODEL',
-                                        methods = list(
-                                          initialize = function(...){
-                                            callSuper(...)
-                                            if(is.null(config$metric)){config$metric <<- cross_enthropy}
-                                            if(is.null(config$num_top_features)) {config$num_top_features <<- 1}
-                                            if(is.null(config$cycle_births)) {config$num_top_features <<- 1000}
-                                            if(is.null(config$cycle_survivors)) {config$num_top_features <<- 100}
-                                            if(is.null(config$final_survivors)) {config$final_survivors <<- 1}
-                                          },
+GENETIC.BOOSTER.LOGICAL = setRefClass('GENETIC.BOOSTER.LOGICAL', contains = 'TRANSFORMER', methods = list(
+  initialize = function(...){
+    callSuper(...)
+    if(is.null(config$metric)){config$metric <<- cross_enthropy}
+    if(is.null(config$num_top_features)) {config$num_top_features <<- 1}
+    if(is.null(config$cycle_births)) {config$num_top_features <<- 1000}
+    if(is.null(config$cycle_survivors)) {config$num_top_features <<- 100}
+    if(is.null(config$final_survivors)) {config$final_survivors <<- 1}
+  },
 
-                                          getFeatureValue = function(fname, dataset){
-                                            if(!fitted) stop(paste('from', fname, 'of type', type, ':', 'Model not fitted!', '\n'))
-                                            getFeatureValue.logical(objects$model, fname, dataset)
-                                          },
+  getFeatureValue = function(fname, dataset){
+    if(!fitted) stop(paste('from', fname, 'of type', type, ':', 'Model not fitted!', '\n'))
+    getFeatureValue.logical(objects$model, fname, dataset)
+  },
 
-                                          fit = function(X, y){
-                                            if(!fitted){
-                                              Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
-                                              objects$model    <<- genBinFeatBoost.fit(X, y, target = 0.9, epochs = 10, cycle_survivors = config$cycle_survivors, final_survivors = config$final_survivors, cycle_births = config$cycle_births, metric = config$metric)
-                                              objects$features <<- data.frame(fname = objects$model$father %U% objects$model$father, stringsAsFactors = F)
-                                              fitted           <<- TRUE
-                                            }
-                                          },
+  model.fit = function(X, y){
+      objects$model    <<- genBinFeatBoost.fit(X, y, target = 0.9, epochs = 10, cycle_survivors = config$cycle_survivors, final_survivors = config$final_survivors, cycle_births = config$cycle_births, metric = config$metric)
+      objects$features <<- data.frame(fname = objects$model$father %U% objects$model$father, stringsAsFactors = F)
+  },
 
-                                          predict = function(X){
-                                            XORG   = callSuper(X)
-                                            XFET   = XORG[objects$features$fname]
-                                            top = objects$model %>% rownames2Column('fname') %>% distinct(correlation, .keep_all = T) %>%
-                                              arrange(desc(correlation)) %>% head(config$num_top_features)
-                                            XOUT = NULL
-                                            for (i in top %>% nrow %>% sequence){
-                                              XOUT %<>% cbind(getFeatureValue(top$fname[i], XFET))
-                                            }
-                                            colnames(XOUT) <- top$fname
-                                            treat(XOUT, XFET, XORG)
-                                          }
-                                        )
-)
+  predict = function(X){
+    top = objects$model %>% rownames2Column('fname') %>% distinct(correlation, .keep_all = T) %>%
+      arrange(desc(correlation)) %>% head(config$num_top_features)
+    XOUT = NULL
+    for (i in top %>% nrow %>% sequence){
+      XOUT %<>% cbind(getFeatureValue(top$fname[i], X))
+    }
+    colnames(XOUT) <- top$fname
+    return(XOUT)
+  }
+))
 
 #' @export SUPERVISOR
-SUPERVISOR = setRefClass('SUPERVISOR', contains = "MODEL",
+SUPERVISOR = setRefClass('SUPERVISOR', contains = "TRANSFORMER",
   methods = list(
     initialize = function(...){
       callSuper(...)
@@ -471,12 +396,10 @@ SUPERVISOR = setRefClass('SUPERVISOR', contains = "MODEL",
       if(is.empty(name)){name <<- 'SUP' %>% paste0(sample(1000:9999, 1))}
       config$model_class  <<- config$model_class  %>% verify('character', default = 'SCIKIT.XGB')
       config$model_config <<- config$model_config %>% verify('character', default = list())
-      objects$model <<- new(config$model_class, config$model_config)
+      objects$model <<- new(config$model_class, config = config$model_config)
     },
 
-    fit = function(X, y){
-      if(!fitted){
-        Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
+    model.fit = function(X, y){
         Xt = X %>% spark.unselect(objects$pupils)
         pp = X %>% spark.select(objects$pupils) %>% as.matrix
         pp %>% apply(1, which.max) -> highest
@@ -484,24 +407,18 @@ SUPERVISOR = setRefClass('SUPERVISOR', contains = "MODEL",
 
         yt = ifelse(y, highest, lowest) - 1
         objects$model$fit(Xt, yt)
-        fitted <<- TRUE
-      }
     },
 
-    predict = function(X){
-      XORG = callSuper(X)
-      XFET = XORG[objects$features$fname]
-      pp   = XFET %>% spark.select(objects$pupils)
-      yout = objects$model$predict(XFET) %>% as.matrix
-      XOUT = pp %>% nrow %>% sequence %>% sapply(function(i) pp[i, yout[i,1] + 1]) %>% as.data.frame
-      colnames(XOUT) <- name %>% paste('out', sep = '_')
-      treat(XOUT, XFET, XORG)
+    model.predict = function(X){
+      pp   = X %>% spark.select(objects$pupils)
+      yout = objects$model$predict(X) %>% as.matrix
+      pp %>% nrow %>% sequence %>% sapply(function(i) pp[i, yout[i,1] + 1]) %>% as.data.frame
     }
   )
 )
 
 #' @export KMEANS
-KMEANS = setRefClass('KMEANS', contains = 'MODEL', methods = list(
+KMEANS = setRefClass('KMEANS', contains = 'TRANSFORMER', methods = list(
   initialize = function(...){
     callSuper(...)
     type     <<- 'KMeans Clustering Transformer'
@@ -509,30 +426,22 @@ KMEANS = setRefClass('KMEANS', contains = 'MODEL', methods = list(
     config$num_clusters <<- config$num_clusters %>% verify(c('numeric', 'integer'), default = 5)
 
   },
-  fit = function(X, y = NULL){
-    if(!fitted){
-      Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
+  model.fit = function(X, y = NULL){
       objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
       X = X[objects$features$fname]
       objects$model <<- kmeans(X, centers = config$num_cluster)
-      fitted <<- T
-    }
   },
 
-  predict = function(X){
-    XORG = callSuper(X)
-    XFET = XORG[objects$features$fname]
+  model.predict = function(X){
     bibi = function(u){
       objects$model$centers %>% apply(1, function(v) gener::difference(u, v)) %>% order %>% first
     }
-    XOUT = XFET %>% as.matrix %>% apply(1, bibi) %>% as.data.frame
-    colnames(XOUT) <- name %>% paste('out', sep = '_')
-    treat(XOUT, XFET, XORG)
+    X %>% as.matrix %>% apply(1, bibi) %>% as.data.frame %>% {colnames(.)<-NULL;.}
   }
 ))
 
 #' @export PRCOMP
-PRCOMP = setRefClass('PRCOMP', contains = 'MODEL', methods = list(
+PRCOMP = setRefClass('PRCOMP', contains = 'TRANSFORMER', methods = list(
   initialize = function(...){
     callSuper(...)
     type     <<- 'Principal Component Transformer'
@@ -542,27 +451,21 @@ PRCOMP = setRefClass('PRCOMP', contains = 'MODEL', methods = list(
     config$center <<- config$center %>% verify('logical', domain = c(F,T), default = T)
   },
 
-  fit = function(X, y = NULL){
-    if(!fitted){
-      Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
+  model.fit = function(X, y = NULL){
       objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
       X = X[objects$features$fname]
       objects$model <<- prcomp(X, center = config$center, scale. = config$scale, rank. = config$rank)
-      fitted <<- T
-    }
   },
 
-  predict = function(X){
-    XORG = callSuper(X)
-    XFET = XORG[objects$features$fname]
-    XOUT = stats::predict(objects$model, XFET %>% as.matrix)
+  model.predict = function(X){
+    XOUT = stats::predict(objects$model, X %>% as.matrix)
     XOUT = XOUT[,sequence(min(ncol(XOUT), config$num_components))] %>% as.data.frame
     colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
-    treat(XOUT, XFET, XORG)
+    return(XOUT)
   }
 ))
 
-PYLMNN = setRefClass('PYLMNN', contains = "MODEL", methods = list(
+PYLMNN = setRefClass('PYLMNN', contains = "TRANSFORMER", methods = list(
   initialize = function(...){
     callSuper(...)
     type     <<- 'Large Margin Nearest Neighbors'
@@ -574,32 +477,35 @@ PYLMNN = setRefClass('PYLMNN', contains = "MODEL", methods = list(
     objects$model <<- lmnn_module$LargeMarginNearestNeighbor(n_neighbors = config$num_neighbors, max_iter = config$epochs, n_components = config$num_components, init = 'pca')
   },
   
-  fit = function(X, y = NULL){
-    if(!fitted){
-      Xy  <- callSuper(X, y);X = Xy$X; y = Xy$y
+  model.fit = function(X, y){
       objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
       X = X[objects$features$fname]
       objects$model$fit(X %>% data.matrix, y)
-      fitted <<- T
-    }
   },
   
-  predict = function(X){
-    XORG = callSuper(X)
-    XFET = XORG[objects$features$fname]
-    XOUT = objects$model$transform(XFET %>% data.matrix) %>% as.data.frame
+  model.predict = function(X){
+    XOUT = objects$model$transform(XF %>% data.matrix) %>% as.data.frame
     colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
-    treat(XOUT, XFET, XORG)
+    return(XOUT)
   }
-  
 ))
 
-GROUPER = setRefClass('GROUPER', contains = "MODEL", methods = list(
+GROUPER = setRefClass('GROUPER', contains = "TRANSFORMER", methods = list(
   initialize = function(...){
     callSuper(...)
     type     <<- 'Categorical Feature Grouper'
     if(is.empty(name)){name <<- 'GRP' %>% paste0(sample(1000:9999, 1))}
     #config$num_components <<- config$num_components %>% verify(c('numeric', 'integer'), default = 5) %>% as.integer
   },
-  fit = function(X, y){}
+  
+  model.fit = function(X, y){
+      objects$features <<- objects$features %>% filter(fclass %in% c('character','factor','logical', 'integer'))
+      X = X[objects$features$fname]
+      # objects$model <<- fit_map_new(X, y, objects$features$fname)
+      objects$model <<- fit_map(X, y, objects$features$fname)
+  },
+  
+  model.predict = function(X){
+    predict_map(X, objects$model) %>% as.data.frame %>% {colnames(.)<-NULL;.}
+  }
 ))
