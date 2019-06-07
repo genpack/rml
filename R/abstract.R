@@ -70,9 +70,10 @@ MODEL = setRefClass('MODEL',
         fns = objects$features$fname
         ftk = fns[which(objects$features$importance > config$rfe.importance_threshold)] # features to keep
         fte = fns %-% ftk
-        while(  (length(fte) > 0) | (length(fte) < nrow(objects$features))  ){
-          objects$features %<>% filter(fname %in% ftk) 
+        while((length(fte) > 0) & (length(fte) < nrow(objects$features))){
+          objects$features <<- objects$features %>% filter(fname %in% ftk) 
           .self$model.fit(X, y)
+          fns = objects$features$fname
           ftk = fns[which(objects$features$importance > config$rfe.importance_threshold)] # features to keep
           fte = fns %-% ftk
         }
