@@ -12,6 +12,18 @@ cross_accuracy = function(v1, v2){
   return(a %>% sapply(function(x) max(x, 1-x)))
 }
 
+rmse = function(y1, y2){
+  mean((y1 - y2)^2, na.rm = T) %>% sqrt
+}
+
+mae = function(y1, y2){
+  (y1 - y2) %>% abs %>% mean(na.rm = T)  
+}
+
+medae = function(y1, y2){
+  (y1 - y2) %>% abs %>% median(na.rm = T)  
+}
+
 #' @export
 cross_f1 = function(v1, v2){
   v2 %<>% verify(c('logical', 'integer', 'numeric'), null_allowed = F) %>% as.logical
@@ -536,8 +548,6 @@ fit_map_new = function(X, y, cats){
   return(allmaps)
 } 
 
-
-
 predict_map = function(X, maplist){
   columns = names(maplist)
   nmap    = length(maplist)
@@ -554,3 +564,121 @@ predict_map = function(X, maplist){
   }
   return(X %>% pull(target))
 }                     
+
+
+predict_glm_fit <- function(glmfit, newmatrix, addintercept=TRUE){
+  newmatrix %<>% as.matrix
+  if (addintercept)
+    newmatrix <- cbind(1,newmatrix)
+  eta <- newmatrix %*% glmfit$coef
+  glmfit$family$linkinv(eta)
+}
+
+
+# First all the raw data are read from csv file and then 
+# all combinations of figures are 
+# function evaluate is modified. It gets the raw data and a list of column numbers as input 
+
+# File: init.R must be in the working directory
+
+evaluate <- function (D, tt_ratio = 0.7, yfun = function(x){x}, yfun.inv = yfun) {
+  if(!inherits(D, 'matrix')) D %<>% as.matrix
+     
+  N = dim(D)[1]
+  m = dim(D)[2]
+  
+  prt = D %>% partition(tt_ratio)
+  
+  X = prt$part1[, 1:(m - 1)]
+  y = prt$part1[, m] %>% yfun
+  
+  Xt = prt$part2[, 1:(m - 1)]
+  yt = prt$part2[, m] %>% yfun
+  
+  # X = scale(X, center = FALSE)
+  # sorting the predictors based on R squared in a linear regression with single regressor
+  # Number of predictors: m-1
+  
+  ter = c()
+  bstmdl = NULL
+  
+  CC  = cor(x = X, y = y, method = "pearson") %>% na2zero %>% abs
+  index = order(CC, decreasing=TRUE)
+  CC = CC[index]
+  index = index[CC > 0.1]
+  if(is.empty(index)){return(NULL)}
+  
+  X   = X[,index]
+  Xt  = Xt[,index]
+  
+  # Construct the initial model using the best predictor
+  A  = X[,1]
+  At = Xt[,1, drop = F]
+  
+  fig.index = index[1]
+  # Set zero as the initial value of r adjusted
+  
+  # reg = glm.fit(x = A, y = y)
+  reg = glm(y ~ A)
+  rss = sum(reg$residuals^2)
+  dfr = length(reg$coefficients)
+  # prediction accuracy with test data:
+  prd = reg %>% predict_glm_fit(At, addintercept = !(ncol(At) %>% equals(reg$coefficients %>% length)))
+  pss = sum(((prd[,1] %>% yfun.inv) - (yt %>% yfun.inv))^2)
+  
+  for (i in sequence(index %>% length) %-% 1){
+    # Add predictor to the model
+    A_new  = cbind(A, X[,i])
+    At_new = cbind(At, Xt[,i, drop = F])
+    colnames(At_new)  <- c(colnames(At), colnames(X)[i])
+    colnames(A_new) <- colnames(At_new)
+    # Run the regression
+    # reg     = try(glm.fit(y = y, x = A_new), silent = T)
+    reg     = try(glm(y ~ A_new), silent = T)
+    
+    if(!inherits(reg, 'try-error')){
+      prd_new = reg %>% predict_glm_fit(At_new)
+      pss_new = sum(((prd_new[,1] %>% yfun.inv) - (yt %>% yfun.inv))^2)
+      # If successful, replace it with the new model
+      permit = pss_new < pss
+      if(is.na(permit)){permit = F}
+      
+      if(permit){
+        sum.reg = summary(reg)
+        dftest  = nrow(At_new) - dfr
+        ft      = dftest*(pss - pss_new)/pss_new
+        pvlt    = pf(ft, 1, dftest, lower.tail = F)
+        ter_new = sqrt(pss_new/length(yt))
+        rss_new = sum(reg$residuals^2)
+        fstats  = ((rss - rss_new)*reg$df.residual)/(rss_new)
+        pvl     = pf(fstats, 1, reg$df.residual, lower.tail = F)
+        pvls    = sum.reg$coefficients[-1, "Pr(>|t|)"]
+        det     = det(t(A_new) %*% A_new)
+        permit  = !equals(det, 0) & (sum(pvls > 0.05, na.rm = T) %>% equals(0)) & (pvl < 0.05) & (pvlt < 0.05)
+        
+        if(is.na(permit)){permit = F}
+      }
+      
+      if (permit){
+        cat("Det            = ", det, "\n")
+        cat("Test Error     = ", ter_new, "\n")
+        cat("F Statistics   = ", fstats, "\n")
+        cat("P-Value        = ", pvl, "\n \n")
+        A   = A_new
+        At  = At_new
+        rss = rss_new
+        pss = pss_new
+        fig.index = c(fig.index, index[i])
+        bstmdl  = reg
+        names(bstmdl$coefficients)[-1] = colnames(A)
+        fig.names = colnames(A)
+        ter = c(ter, ter_new)
+      }
+    }
+  }
+  
+  output = list(sig.feature.values = A, sig.feature.indexes = fig.index, sig.feature.names = fig.names,test.error = ter, model = bstmdl)
+  return(output)
+}
+
+
