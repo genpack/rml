@@ -184,7 +184,7 @@ CLS.SCIKIT.LR = setRefClass('CLS.SCIKIT.LR', contains = "CLS.SCIKIT",
       },
 
       model.fit = function(X, y){
-          callSuper(x, Y)
+          callSuper(X, y)
           objects$model$coef_ %>% abs %>% as.numeric -> weights
           objects$features$importance <<- (weights/(X %>% apply(2, sd))) %>% na2zero %>% {./geomean(.[.>0])} %>% as.numeric
       }
