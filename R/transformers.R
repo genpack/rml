@@ -261,6 +261,28 @@ CATCONCATER = setRefClass('CATCONCATER', contains = "TRANSFORMER",
    )
 )
 
+       
+LOGGER = setRefClass('LOGGER', contains = "TRANSFORMER", methods = list(
+  initialize = function(...){
+    callSuper(...)
+    type     <<- 'Logger Transformer'
+    if(is.empty(name)){name <<- 'LOG' %>% paste0(sample(1000:9999, 1))}
+    config$apply_abs <<- config$apply_abs %>% verify(c('logical'), default = T)
+    config$intercept <<- config$intercept %>% verify(c('numeric'), default = 1)
+  },
+  
+  model.fit = function(X, y){
+    objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+    X = X[objects$features$fname]
+  },
+  
+  model.predict = function(X){
+    if(config$apply_abs){X = abs(X)}
+    XOUT = log(X + config$intercept)
+    return(XOUT)
+  }
+))
+
 #' @export DUMMIFIER
 DUMMIFIER = setRefClass('DUMMIFIER', contains = "TRANSFORMER",
    methods = list(
@@ -292,7 +314,7 @@ DUMMIFIER = setRefClass('DUMMIFIER', contains = "TRANSFORMER",
 
      model.predict = function(X){
        X %>%
-         fastDummies::dummy_cols(objects$features$fname, remove_first_dummy = FALSE, remove_most_frequent_dummy = TRUE) %>%
+         fastDummies::dummy_cols(objects$features$fname, remove_first_dummy = FALSE, remove_most_frequent_dummy = FALSE) %>%
          {.[, -(sequence(length(objects$features$fname))), drop = F]} -> res
        # We need to make sure the column names of the output is exactly the same as the table given in fitting
        comm_cols  = colnames(res) %^% objects$dummy_columns
