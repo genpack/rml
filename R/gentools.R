@@ -12,7 +12,6 @@ createFeatures.multiplicative = function(flist, nf, prefix = 'Feat'){
       safety = 0, stringsAsFactors = F) %>% column2Rownames('name'))
 }
 
-
 createFeatures.logical = function(flist, nf, prefix = 'Feat', actions = c('AND', 'OR', 'XOR')){
   features = rownames(flist)
   flist %>% rbind(
@@ -82,7 +81,7 @@ evaluateFeatures.multiplicative = function(flist, X, y, top = 100, cor_fun = cor
   return(flist[keep, ])
 }
 
-evaluateFeatures.logical = function(flist, X, y, top = 100, cor_fun = cross_enthropy){
+evaluateFeatures.logical = function(flist, X, y, top = 100, cor_fun = cross_accuracy){
   columns = colnames(X)
   ns      = rownames(flist)
   top     = min(top, length(ns) - 1)
@@ -123,11 +122,11 @@ genBinFeatBoost.fit = function(X, y, target = 0.9, epochs = 10, cycle_survivors 
 }
 
 
-
-
-xgb = SCIKIT.XGB()
-dm  = DUMMIFIER()
-ob  = OPTBINNER()
+# 
+# 
+# xgb = SCIKIT.XGB()
+# dm  = DUMMIFIER()
+# ob  = OPTBINNER()
 
 
 GENETIC = setRefClass(
@@ -167,7 +166,7 @@ GENETIC = setRefClass(
         trindex = N %>% sequence %>% sample(n1, replace = F)
 
         # pick a subset of features
-        nf = sequence(length(features))1:Nf
+        nf = sequence(length(features))
         features %>% sample()
         # pick a transformer from modelbag
         # pick a model class and create an abstract model with transformer
