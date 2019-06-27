@@ -331,6 +331,11 @@ GENETIC.BOOSTER.GEOMETRIC = setRefClass('GENETIC.BOOSTER.GEOMETRIC', contains = 
     methods = list(
       initialize = function(...){
         callSuper(...)
+        if(is.null(config$num_top_features)) {config$num_top_features <<- 1}
+        if(is.null(config$epochs)) {config$epochs <<- 10}
+        if(is.null(config$cycle_births)) {config$cycle_births <<- 1000}
+        if(is.null(config$cycle_survivors)) {config$cycle_survivors <<- 100}
+        if(is.null(config$final_survivors)) {config$final_survivors <<- 1}
         if(is.null(config$metric)){config$metric <<- cor}
       },
 
@@ -344,60 +349,103 @@ GENETIC.BOOSTER.GEOMETRIC = setRefClass('GENETIC.BOOSTER.GEOMETRIC', contains = 
       },
 
       # nf features are born by random parents:
-      createFeatures = function(flist, nf, prefix = 'Feat'){
+      createFeatures = function(flist, prefix = 'F'){
         features = rownames(flist)
         flist %>% rbind(
           data.frame(
-            fname  = prefix %>% paste(nrow(flist) + sequence(nf)),
-            father = features %>% sample(nf, replace = T),
-            mother = features %>% sample(nf, replace = T),
+            fname  = prefix %>% paste0(nrow(flist) + sequence(config$cycle_births)),
+            father = features %>% sample(config$cycle_births, replace = T),
+            mother = features %>% sample(config$cycle_births, replace = T),
             correlation = NA,
             safety = 0, stringsAsFactors = F) %>% column2Rownames('fname'))
       },
+      
+      evaluateFeatures = function(X, y){
+        cor_fun = config$metric
+        top     = config$cycle_survivors
+        columns = colnames(X)
+        flist   = objects$model
+        ns      = rownames(flist)
+        
+        keep = is.na(flist$correlation) & (flist$father %in% columns) & (flist$mother %in% columns)
+        if(sum(keep) > 0){
+          flist$correlation[keep] <- cor_fun(X[, flist$father[keep]]*X[, flist$mother[keep]], y) %>% as.numeric %>% abs
+        }
+        keep = is.na(flist$correlation) %>% which
+        
+        for(i in keep){
+          flist$correlation[i] <- cor_fun(getFeatureValue.multiplicative(flist, ns[i], X), y)
+        }
+        
+        high_level = max(flist$safety) + 1
+        # ord = flist$correlation %>% order(decreasing = T) %>% intersect(which(!duplicated(flist$correlation)))
+        ord = flist$correlation %>% order(decreasing = T)
+        
+        top  = min(top, length(ord) - 1)
+        
+        flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = colnames(X))
+        
+        # keep = which(flist$safety == high_level | (is.na(flist$father) & is.na(flist$mother)))
+        keep = which(flist$safety == high_level)
+        objects$model <<- flist[keep, ]
+      },
+      
+      model.predict = function(X){
+        top = objects$model %>% rownames2Column('fname') %>% distinct(correlation, .keep_all = T) %>%
+          arrange(desc(correlation)) %>% head(config$num_top_features)
+        XOUT = NULL
+        for (i in top %>% nrow %>% sequence){
+          XOUT %<>% cbind(getFeatureValue(objects$model, top$fname[i], X))
+        }
+        colnames(XOUT) <- top$fname
+        return(XOUT)
+      },
+      
 
       model.fit = function(X, y){
+          cor_fun = config$metric
           objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
           X = X[objects$features$fname]
-          objects$columns <<- colnames(X)
-          objects$model <<- data.frame(fname = columns, father = NA, mother = NA, correlation = cor(X, y) %>% as.numeric %>% abs, safety = 0) %>% column2Rownames('fname')
-          objects$fdata <<- X[columns]
+          objects$model <<- data.frame(fname = objects$features$fname, father = NA, mother = NA, correlation = cor_fun(X, y) %>% as.numeric %>% abs, safety = 0) %>% column2Rownames('fname')
+          objects$fdata <<- X[objects$features$fname]
 
           i = 0
-          while(i < 10){
+          while(i < config$epochs){
             i = i + 1
-            flist = createFeatures(flist, 1000)
-            flist %<>% evaluateFeatures.multiplicative(X = dataset[,columns], y = dataset[,'Y'], top = 100)
+            objects$model <<- createFeatures(objects$model)
+            evaluateFeatures(X = X[objects$features$fname], y = y)
 
-            cat('Iteration:', i, ': Best Correlation = ', 100*max(flist$correlation), ' nrow(flist) = ', nrow(flist), '\n')
+            cat('Iteration:', i, ': Best Correlation = ', 100*max(objects$model$correlation), ' nrow(flist) = ', nrow(objects$model), '\n')
           }
       }
       
       # todo: add model.predict
     )
-                                        )
+)
 
 #' @export GENETIC.BOOSTER.LOGICAL
 GENETIC.BOOSTER.LOGICAL = setRefClass('GENETIC.BOOSTER.LOGICAL', contains = 'TRANSFORMER', methods = list(
   initialize = function(...){
     callSuper(...)
-    if(is.null(config$metric)){config$metric <<- cross_enthropy}
+    if(is.null(config$metric)){config$metric <<- cross_accuracy}
     if(is.null(config$num_top_features)) {config$num_top_features <<- 1}
-    if(is.null(config$cycle_births)) {config$num_top_features <<- 1000}
+    if(is.null(config$epochs)) {config$epochs <<- 10}
+    if(is.null(config$cycle_births)) {config$cycle_births <<- 1000}
     if(is.null(config$cycle_survivors)) {config$num_top_features <<- 100}
     if(is.null(config$final_survivors)) {config$final_survivors <<- 1}
   },
-
+  
   getFeatureValue = function(fname, dataset){
     if(!fitted) stop(paste('from', fname, 'of type', type, ':', 'Model not fitted!', '\n'))
     getFeatureValue.logical(objects$model, fname, dataset)
   },
-
+  
   model.fit = function(X, y){
-      objects$model    <<- genBinFeatBoost.fit(X, y, target = 0.9, epochs = 10, cycle_survivors = config$cycle_survivors, final_survivors = config$final_survivors, cycle_births = config$cycle_births, metric = config$metric)
-      objects$features <<- data.frame(fname = objects$model$father %U% objects$model$father, stringsAsFactors = F)
+    objects$model    <<- genBinFeatBoost.fit(X, y, target = 0.9, epochs = config$epochs, cycle_survivors = config$cycle_survivors, final_survivors = config$final_survivors, cycle_births = config$cycle_births, metric = config$metric)
+    objects$features <<- data.frame(fname = objects$model$father %U% objects$model$father, stringsAsFactors = F)
   },
-
-  predict = function(X){
+  
+  model.predict = function(X){
     top = objects$model %>% rownames2Column('fname') %>% distinct(correlation, .keep_all = T) %>%
       arrange(desc(correlation)) %>% head(config$num_top_features)
     XOUT = NULL
