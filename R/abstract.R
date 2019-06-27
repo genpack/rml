@@ -72,7 +72,7 @@ MODEL = setRefClass('MODEL',
         fte = fns %-% ftk
         while((length(fte) > 0) & (length(fte) < nrow(objects$features))){
           objects$features <<- objects$features %>% filter(fname %in% ftk) 
-          .self$model.fit(X, y)
+          .self$model.fit(X[objects$features$fname], y)
           fns = objects$features$fname
           ftk = fns[which(objects$features$importance > config$rfe.importance_threshold)] # features to keep
           fte = fns %-% ftk
@@ -81,6 +81,20 @@ MODEL = setRefClass('MODEL',
         if(length(fte) == nrow(objects$features)){
           cat('No features will be left after elimination. RFE process terminated!')
         }
+      }
+    },
+    
+    fit.quad = function(X, y){
+      fit.rfe(X, y)
+      clmns = colnames(X)
+      XP    = X[objects$features$fname]
+      for(i in 1:ncol(X)){
+        v  = X[,i]
+        Xi <- X %>% as.matrix %>% apply(2, function(u) u*v) %>% as.data.frame %>% {colnames(.) <- clmns %>% paste(clmns[i], sep = 'X');.}
+        XP = XP %>% cbind(Xi)
+        objects$features <<- colnames(XP) %>% sapply(function(i) XP %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
+        fit.rfe(XP, y)
+        XP  = XP[objects$features$fname]
       }
     },
     
@@ -99,6 +113,8 @@ MODEL = setRefClass('MODEL',
         if(config$remove_invariant_features) X %<>% remove_invariant_features
         objects$features <<- colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
         if(config$rfe.enabled) {fit.rfe(X, y)} else {.self$model.fit(X, y)} 
+        # if(config$quad.enabled) {fit.quad(X, y)}
+        
       }
       fitted <<- TRUE
     },
