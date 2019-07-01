@@ -12,6 +12,7 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
       if(is.null(config$metric)){
         config$metric <<- chif(config$predict_probabilities, function(y_pred, y_test) {data.frame(prob = y_pred, actual = y_test) %>% optSplit.f1('prob', 'actual')->aa;aa$f1}, function(y1, y2) mean(xor(y1, y2), na.rm = T))
       }
+      config$return_logit <<- config$return_logit %>% verify('logical', domain = c(T,F), default = F)
     },
 
     fit = function(X, y){
@@ -26,7 +27,14 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
       XFET = XORG[objects$features$fname]
       XOUT = .self$model.predict(XFET)
       if(!prob){XOUT[,1] = as.numeric(XOUT[,1] > config$decision_threshold)}
-      colnames(XOUT) <- name %>% paste('out', sep = '_')
+      # if(prob & config$return_logit){for (i in 1:ncol(XOUT)){XOUT[,i] <- log(XOUT[,i]/(1 - XOUT[,i]))}}
+      if(prob & config$return_logit){XOUT %<>% as.matrix %>% apply(2, function(x) log(x/(1-x))) %>% as.data.frame}
+      
+      if(ncol(XOUT) > 1){
+        colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
+      } else {
+        colnames(XOUT) <- name %>% paste('out', sep = '_')
+      }
       treat(XOUT, XFET, XORG)
     },
     
