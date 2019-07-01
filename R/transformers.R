@@ -189,12 +189,12 @@ SEGMENTER.RATIO = setRefClass('SEGMENTER.RATIO', contains = 'TRANSFORMER',
 )
 
 #' @export SEGMENTER.MODEL
-SEGMENTER.MODEL = setRefClass('SEGMENTER.MLR', contains = 'TRANSFORMER',
+SEGMENTER.MODEL = setRefClass('SEGMENTER.MODEL', contains = 'TRANSFORMER',
   methods = list(
     initialize = function(...){
       callSuper(...)
       type     <<- 'Model Segmenter'
-      config$model_class  <<- config$model_class %>% verify('character', default = 'SCIKIT.XGB')
+      config$model_class  <<- config$model_class %>% verify('character', default = 'CLS.SCIKIT.XGB')
       config$model_config <<- config$model_config %>% verify('list', default = list(predict_probabilities = T))
       config$min_rows     <<- config$min_rows %>% verify(c('numeric', 'integer'), lengths = 1, default = 25)
       if(is.empty(name)){name <<- 'SEGMOD' %>% paste0(sample(1000:9999, 1))}
@@ -204,19 +204,18 @@ SEGMENTER.MODEL = setRefClass('SEGMENTER.MLR', contains = 'TRANSFORMER',
         objects$categoricals <<- nominals(X)
         #X = X[objects$categoricals]
         objects$model <<- list()
+        objects$model[['__global__']] <<- new(config$model_class, config = config$model_config)
+        objects$model[['__global__']]$fit(X, y)
         for(col in objects$categoricals){
           objects$model[[col]] <<- list()
           Xcol = X %>% pull(col)
           uval = Xcol %>% unique
-          objects$model[[col]][['__global__']] <<- new(config$model_class, config = config$model_config)
           for(val in uval){
             vlc = as.character(val)
             www = which(Xcol == val)
             if(length(www) > config$min_rows){
               objects$model[[col]][[vlc]] <<- new(config$model_class, config = config$model_config)
               objects$model[[col]][[vlc]]$fit(X[www,], y[www])
-            } else {
-              objects$model[[col]][['__global__']]$fit(X %>% spark.unselect(col), y)
             }
           }
         }
@@ -224,23 +223,63 @@ SEGMENTER.MODEL = setRefClass('SEGMENTER.MLR', contains = 'TRANSFORMER',
 
     model.predict = function(X){
       XOUT  = NULL
-
+      X['__rowid__'] = nrow(X) %>% sequence
       for(col in objects$categoricals){
         bibi = function(dot){
           dot %<>% as.data.frame
           NNN = nrow(dot)
           mdl = objects$model[[col]][[dot[1,col] %>% as.character]]
-          if(is.null(mdl)) {mdl = objects$model[[col]][['__global__']]}
-          data.frame(value = mdl$predict(dot), stringsAsFactors = F)
+          if(is.null(mdl)) {mdl = objects$model[['__global__']]}
+          dot$value = mdl$predict(dot)[,1]
+          dot[c('__rowid__', 'value')]
         }
         cn = 'value' %>% {names(.) <- name %>% paste(col, sep = '_');.}
-        df = X %>% group_by_(col) %>% do({bibi(.)}) %>% spark.rename(cn)
-        if(is.null(XOUT)){XOUT = df[,2, drop = F]} else {XOUT %<>% cbind(df[,2, drop = F])}
+        df = X %>% group_by_(col) %>% do({bibi(.)}) %>% left_join(x = X['__rowid__'], by = '__rowid__') %>% select(value) %>% spark.rename(cn)
+        
+        if(is.null(XOUT)){XOUT = df[,1, drop = F]} else {XOUT %<>% cbind(df[,1, drop = F])}
       }
-      colnames(XOUT) <- NULL
+      # colnames(XOUT) <- NULL
       return(XOUT)
     }
   ))
+
+
+
+SEGMENTER.MODEL.BOOSTER = 
+  setRefClass('SEGMENTER.MODEL.BOOSTER', 
+              contains = 'SEGMENTER.MODEL',
+                                      
+              methods = list(
+                          model.fit = function(X, y){
+                            nn = nrow(X)
+                            indtrain = nn %>% sequence %>% sample(floor(0.7*nn))
+                            X_train  = X[indtrain,]
+                            y_train  = y[indtrain]
+                            X_test   = X[- indtrain,]
+                            y_test   = y[- indtrain]
+                            
+                            callSuper(X_train, y_train)
+                            
+                            colnms = objects$model %>% names %>% setdiff("__global__")
+                            glb    =  objects$model[['__global__']]
+                            for(col in colnms){
+                              nms = names(objects$model[[col]])
+                              for(valc in nms){
+                                mdl = objects$model[[col]][[valc]]
+                                ind = X_test[,col] == valc
+                                if(sum(ind) > config$min_rows){
+                                  pm = mdl$performance(X_test[ind,], y_test[ind], metric = 'gini')
+                                  pg = glb$performance(X_test[ind,], y_test[ind], metric = 'gini')
+                                  if(pg > pm){
+                                    objects$model[[col]][[valc]] <<- NULL
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        )
+)
+
 
 #' @export CATCONCATER
 CATCONCATER = setRefClass('CATCONCATER', contains = "TRANSFORMER",
