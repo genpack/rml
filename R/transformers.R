@@ -266,8 +266,8 @@ SEGMENTER.MODEL.BOOSTER =
                               nms = names(objects$model[[col]])
                               for(valc in nms){
                                 mdl = objects$model[[col]][[valc]]
-                                ind = X_test[,col] == valc
-                                if(sum(ind) > config$min_rows){
+                                ind = which(X_test[,col] == valc)
+                                if(length(ind) > config$min_rows){
                                   pm = mdl$performance(X_test[ind,], y_test[ind], metric = 'gini')
                                   pg = glb$performance(X_test[ind,], y_test[ind], metric = 'gini')
                                   if(pg > pm){
