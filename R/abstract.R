@@ -1,3 +1,7 @@
+maler_words = c('keep_columns', 'keep_features', 'cv.ntest', 'cv.split_ratio', 'cv.split_method', 'cv.reset_transformer',
+'rfe.enabled', 'rfe.importance_threshold', 'remove_invariant_features')
+
+
 #' @export MODEL
 MODEL = setRefClass('MODEL',
   fields = list(name = "character", type = "character", config = "list", fitted = 'logical', transformers = 'list', objects = "list"),
@@ -49,7 +53,7 @@ MODEL = setRefClass('MODEL',
     treat                = function(out, fet, org){
       if(!is.null(config$pass_columns)) org = org[config$pass_columns]
       if(!is.null(config$filter_columns)) org = org[colnames(org) %-% config$filter_columns]
-      
+
       if(config$keep_columns)
         if(config$keep_features) return(cbind(org, out))
         else return(cbind(org %>% spark.unselect(colnames(fet)), out))
@@ -59,7 +63,7 @@ MODEL = setRefClass('MODEL',
         #   return(cbind(fet, org[extra], out))
         # } else return(cbind(fet, out))
         return(cbind(fet, out))
-      } 
+      }
            else return(out)
     },
 
@@ -71,19 +75,19 @@ MODEL = setRefClass('MODEL',
         ftk = fns[which(objects$features$importance > config$rfe.importance_threshold)] # features to keep
         fte = fns %-% ftk
         while((length(fte) > 0) & (length(fte) < nrow(objects$features))){
-          objects$features <<- objects$features %>% filter(fname %in% ftk) 
+          objects$features <<- objects$features %>% filter(fname %in% ftk)
           .self$model.fit(X[objects$features$fname], y)
           fns = objects$features$fname
           ftk = fns[which(objects$features$importance > config$rfe.importance_threshold)] # features to keep
           fte = fns %-% ftk
         }
-        
+
         if(length(fte) == nrow(objects$features)){
           cat('No features will be left after elimination. RFE process terminated!')
         }
       }
     },
-    
+
     fit.quad = function(X, y){
       fit.rfe(X, y)
       clmns = colnames(X)
@@ -97,7 +101,7 @@ MODEL = setRefClass('MODEL',
         XP  = XP[objects$features$fname]
       }
     },
-    
+
     fit = function(X, y = NULL){
       if(!fitted){
         if(inherits(X, 'matrix')){X %<>% as.data.frame}
@@ -112,9 +116,9 @@ MODEL = setRefClass('MODEL',
         if(!is.null(config$features.exclude)){X = X %>% spark.select(colnames(X) %-% config$features.exclude)}
         if(config$remove_invariant_features) X %<>% remove_invariant_features
         objects$features <<- colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
-        if(config$rfe.enabled) {fit.rfe(X, y)} else {.self$model.fit(X, y)} 
+        if(config$rfe.enabled) {fit.rfe(X, y)} else {.self$model.fit(X, y)}
         # if(config$quad.enabled) {fit.quad(X, y)}
-        
+
       }
       fitted <<- TRUE
     },
@@ -183,15 +187,15 @@ COLFILTER = setRefClass('COLFILOTER', contains = 'MODEL', methods = list(
   fit = function(X, y = NULL){
     if(!fitted){
       callSuper(X, y)
-    }  
+    }
     fitted <<- T
   },
-  
+
   predict = function(X, prob){
     XORG = callSuper(X)
     XFET = XORG[objects$features$fname]
     XOUT = XFET[character()]
     treat(XOUT, XFET, XORG)
   }
-  
+
 ))

@@ -21,7 +21,7 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
         set_decision_threshold(X, y)
       }
     },
-    
+
     predict = function(X, prob = config$predict_probabilities){
       XORG = callSuper(X)
       XFET = XORG[objects$features$fname]
@@ -29,7 +29,7 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
       if(!prob){XOUT[,1] = as.numeric(XOUT[,1] > config$decision_threshold)}
       # if(prob & config$return_logit){for (i in 1:ncol(XOUT)){XOUT[,i] <- log(XOUT[,i]/(1 - XOUT[,i]))}}
       if(prob & config$return_logit){XOUT %<>% as.matrix %>% apply(2, function(x) log(x/(1-x))) %>% as.data.frame}
-      
+
       if(ncol(XOUT) > 1){
         colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
       } else {
@@ -37,7 +37,7 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
       }
       treat(XOUT, XFET, XORG)
     },
-    
+
     set_decision_threshold = function(X, y){
       if(fitted){
         if(config$threshold_determination == 'maximum_f1'){
@@ -57,11 +57,11 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
         #todo: do for other options
       }
     },
-    
+
     performance = function(X, y, metric = c('aurc', 'gini', 'precision', 'recall', 'f1', 'sensitivity', 'specificity', 'accuracy')){
       metric = match.arg(metric)
       cutoff_free = metric %in% c('aurc', 'gini')
-      yp = predict(X, cutoff_free) %>% pull(name %>% paste('out', sep = '_')) 
+      yp = predict(X, cutoff_free) %>% pull(name %>% paste('out', sep = '_'))
       if(metric %in% c('aurc', 'gini')){
         aurc = AUC::auc(AUC::roc(yp, y %>% as.factor))
         if(metric == 'aurc') return(aurc) else return(2*aurc - 1)
@@ -94,7 +94,7 @@ CLS.SCIKIT = setRefClass('CLS.SCIKIT', contains = "CLASSIFIER",
        X = X[objects$features$fname]
        objects$model$fit(X %>% data.matrix, y)
      },
-     
+
      get.feature.weights = function(){
        if(fitted){
          return(objects$model$feature_importances_/sum(objects$model$feature_importances_))
@@ -108,7 +108,7 @@ CLS.SCIKIT.KNN = setRefClass('SCIKIT.KNN', contains = "CLS.SCIKIT",
     initialize = function(...){
       callSuper(...)
       type              <<- 'K Nearest Neighbors'
-      
+
       config$num_neighbors <<- config$num_neighbors %>% verify(c('numeric', 'integer'), default = 100) %>% as.integer
       module_knn = reticulate::import('sklearn.neighbors')
       objects$model <<- module_knn$KNeighborsClassifier(n_neighbors = config$num_neighbors)
@@ -120,19 +120,19 @@ CLS.FLASSO = setRefClass('CLS.FLASSO', contains = 'CLASSIFIER', methods = list(
   initialize = function(...){
     callSuper(...)
     type              <<- 'Logistic Regression with Fusion Lasso'
-    
+
     config$lambda1 <<- config$lambda1 %>% verify('numeric', default = 1)
     config$lambda2 <<- config$lambda2 %>% verify('numeric', default = 1)
     config$epochs  <<- config$epochs  %>% verify(c('numeric', 'integer'), default = 100)
   },
-  
+
   model.fit = function(X, y){
     objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
     X = X[objects$features$fname]
-    objects$model <<- HDPenReg::EMfusedlasso(X %>% as.matrix, y, lambda1 = config$lambda1, lambda2 = config$lambda2, 
+    objects$model <<- HDPenReg::EMfusedlasso(X %>% as.matrix, y, lambda1 = config$lambda1, lambda2 = config$lambda2,
                                              maxSteps = config$epochs, burn = 50, intercept = TRUE, model = "logistic",
                                              eps = 1e-05, eps0 = 1e-08, epsCG = 1e-08)
-    
+
   }
 ))
 
@@ -176,19 +176,7 @@ CLS.SCIKIT.LR = setRefClass('CLS.SCIKIT.LR', contains = "CLS.SCIKIT",
         type             <<- 'Logistic Regression'
         if(is.empty(name)){name <<- 'SKLR' %>% paste0(sample(1000:9999, 1))}
         module_lm = reticulate::import('sklearn.linear_model')
-        config$penalty <<- config$penalty %>% verify('character', lengths = 1, domain = c('l1', 'l2'), default = 'l1')
-        config$dual    <<- config$dual %>% verify('logical', lengths = 1, domain = c(F,T), default = F)
-        config$tol     <<- config$tol %>% verify('numeric', lengths = 1, domain = c(0,1), default = 0.0001)
-        config$C       <<- config$C %>% verify('numeric', lengths = 1, domain = c(0,1), default = 1)
-        config$fit_intercept <<- config$fit_intercept %>% verify('logical', lengths = 1, domain = c(F,T), default = T)
-        # config$class_weight  <<- config$class_weight %>% verify('list', default = list(0.5, 0.5))
-        config$solver   <<- config$solver %>% verify('character', lengths = 1, domain =c('newton-cg', 'lbfgs', 'liblinear', 'sag', 'saga'), default = 'liblinear')
-        config$max_iter <<- config$max_iter %>% verify(c('integer', 'numeric'), lengths = 1, domain =c(0, Inf), default = 100) %>% as.integer
-        # todo: add multi_class, verbose, warm_start, n_jobs
-        objects$model <<- module_lm$LogisticRegression(penalty = config$penalty, dual = config$dual, tol = config$tol,
-                                                       C = config$C, fit_intercept = config$fit_intercept, solver = config$solver,
-                                                       random_state = config$random_state,
-                                                       max_iter = config$max_iter)
+        objects$model <<- do.call(module_lm$LogisticRegression, config %>% list.remove(maler_words))
       },
 
       model.fit = function(X, y){
@@ -209,8 +197,7 @@ CLS.SCIKIT.DT = setRefClass('SCIKIT.DT', contains = "CLS.SCIKIT",
       type               <<- 'Decision Tree'
       if(is.empty(name)){name <<- 'SKDT' %>% paste0(sample(1000:9999, 1))}
       module_dt = reticulate::import('sklearn.tree')
-      objects$model <<- module_dt$DecisionTreeClassifier()
-
+      objects$model <<- do.call(module_dt$DecisionTreeClassifier, config %>% list.remove(maler_words))
     }
 
   )
@@ -224,14 +211,7 @@ CLS.SCIKIT.XGB = setRefClass('CLS.SCIKIT.XGB', contains = "CLS.SCIKIT",
         type               <<- 'Extreme Gradient Boosting'
         if(is.empty(name)){name <<- 'SKXGB' %>% paste0(sample(1000:9999, 1))}
         module_xgb = reticulate::import('xgboost')
-        config$max_depth        <<- config$max_depth %>% verify(c('numeric', 'integer'), default = 4) %>% as.integer
-        config$min_child_weight <<- config$min_child_weight %>% verify(c('numeric', 'integer'), default = 40) %>% as.numeric
-        config$subsample  <<- config$subsample %>% verify('numeric', domain = c(0,1), lengths = 1, default = 0.4)
-        config$lambda     <<- config$lambda %>% verify('numeric', lengths = 1, default = 20000)
-        config$alpha      <<- config$alpha %>% verify('numeric', lengths = 1, default = 2000)
-        config$gamma      <<- config$gamma %>% verify('numeric', lengths = 1, default = 1.3)
-        config$partial    <<- config$partial %>% verify('logical', lengths = 1, domain = c(F,T), default = TRUE)
-        objects$model     <<- module_xgb$XGBClassifier(max_depth = config$max_depth, min_child_weight = config$min_child_weight, subsample = config$subsample, lambda = config$lambda, alpha = config$alpha, gamma = config$gamma, partial = config$partial)
+        objects$model     <<- do.call(module_xgb$XGBClassifier, config %>% list.remove(maler_words))
       },
 
       model.fit = function(X, y){
@@ -309,7 +289,7 @@ CLS.KERAS = setRefClass('KERAS', contains = 'CLASSIFIER',
         }
         objects$model <<- objects$model %>%
           layer_dense(name = 'output', units = as.integer(config$outputs), activation = config$output_activation, kernel_initializer = initializer_random_uniform(seed = 42))
-        
+
         # Compile the NN:
         objects$model <<- objects$model %>%
           # compile(loss = 'mse', optimizer = optimizer_rmsprop(), metrics = list('mean_absolute_error'))
