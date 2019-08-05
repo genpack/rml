@@ -1,5 +1,6 @@
 maler_words = c('keep_columns', 'keep_features', 'cv.ntest', 'cv.split_ratio', 'cv.split_method', 'cv.reset_transformer',
-'rfe.enabled', 'rfe.importance_threshold', 'remove_invariant_features')
+                'rfe.enabled', 'rfe.importance_threshold', 'remove_invariant_features', 'sig_level', 'predict_probabilities',
+                'decision_threshold', 'threshold_determination', 'metric', 'return_logit')
 
 
 #' @export MODEL
