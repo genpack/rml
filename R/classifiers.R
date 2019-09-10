@@ -203,7 +203,7 @@ CLS.SCIKIT.DT = setRefClass('SCIKIT.DT', contains = "CLS.SCIKIT",
   )
 )
 
-#' @export SCIKIT.XGB
+#' @export CLS.SCIKIT.XGB
 CLS.SCIKIT.XGB = setRefClass('CLS.SCIKIT.XGB', contains = "CLS.SCIKIT",
     methods = list(
       initialize = function(...){
