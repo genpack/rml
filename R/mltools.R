@@ -72,6 +72,20 @@ int_ordinals = function(X){
   return(X)
 }
 
+#' @export
+outliers = function(X, sd_threshold = 4){
+  if(inherits(X, 'numeric')){X = matrix(X, ncol = 1)}
+  out = integer()
+  
+  for(i in ncol(X)){
+    if(inherits(X[,i], 'numeric')){
+      mu = mean(X[,i], na.rm = T)
+      sg = sd(X[,i], na.rm = T)
+      out = c(out, which(abs(X[,i] - mu) > sd_threshold*sg))
+    }
+  }
+  return(unique(out))
+}
 
 add_keras_layer_dense = function(model, layer, ...){
   model %>% layer_dense(units       = layer$units %>% verify(c('numeric', 'integer'), lengths = 1, null_allowed = F) %>% as.integer, 
