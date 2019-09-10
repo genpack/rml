@@ -1,5 +1,5 @@
 maler_words = c('keep_columns', 'keep_features', 'cv.ntest', 'cv.split_ratio', 'cv.split_method', 'cv.reset_transformer',
-                'rfe.enabled', 'rfe.importance_threshold', 'remove_invariant_features', 'sig_level', 'predict_probabilities',
+                'sfs.enabled', 'rfe.enabled', 'rfe.importance_threshold', 'remove_invariant_features', 'sig_level', 'predict_probabilities',
                 'decision_threshold', 'threshold_determination', 'metric', 'return_logit')
 
 
@@ -75,16 +75,18 @@ MODEL = setRefClass('MODEL',
         fns = objects$features$fname
         ftk = fns[which(objects$features$importance > config$rfe.importance_threshold)] # features to keep
         fte = fns %-% ftk
-        while((length(fte) > 0) & (length(fte) < nrow(objects$features))){
+        while(length(fte) > 0){
           objects$features <<- objects$features %>% filter(fname %in% ftk)
-          .self$model.fit(X[objects$features$fname], y)
-          fns = objects$features$fname
-          ftk = fns[which(objects$features$importance > config$rfe.importance_threshold)] # features to keep
-          fte = fns %-% ftk
+          if(is.empty(objects$features)){.self$fit.distribution(X, y); fte = c()} else {
+            .self$model.fit(X[objects$features$fname], y)
+            fns = objects$features$fname
+            ftk = fns[which(objects$features$importance > config$rfe.importance_threshold)] # features to keep
+            fte = fns %-% ftk
+          }
         }
 
-        if(length(fte) == nrow(objects$features)){
-          cat('No features will be left after elimination. RFE process terminated!')
+        if(is.empty(objects$features)){
+          cat(name, ': ', 'No features left after elimination! Distribution fitted for output variable.', '\n')
         }
       }
     },
@@ -102,6 +104,18 @@ MODEL = setRefClass('MODEL',
         XP  = XP[objects$features$fname]
       }
     },
+    
+    fit.distribution = function(X = NULL, y){
+      out = outliers(y); while(!is.empty(out)){y = y[-out]; out = outliers(y)}
+      objects$model <<- list(family = 'normal', mean = mean(y, na.rm = T), sd = sd(y, na.rm = T))
+    },
+    
+    predict.distribution = function(X){
+      N = try(nrow(X), silent = T)
+      if(!inherits(N, 'integer')) N = as.integer(N)
+      # rnorm(N, objects$model$mean, objects$model$sd) %>% as.data.frame 
+      rep(objects$model$mean, N) %>% as.data.frame
+    },
 
     fit = function(X, y = NULL){
       if(!fitted){
@@ -117,7 +131,8 @@ MODEL = setRefClass('MODEL',
         if(!is.null(config$features.exclude)){X = X %>% spark.select(colnames(X) %-% config$features.exclude)}
         if(config$remove_invariant_features) X %<>% remove_invariant_features
         objects$features <<- colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
-        if(config$rfe.enabled) {fit.rfe(X, y)} else {.self$model.fit(X, y)}
+        if(is.empty(objects$features)){fit.distribution(X, y)} 
+        else if(config$rfe.enabled) {fit.rfe(X, y)} else {.self$model.fit(X, y)}
         # if(config$quad.enabled) {fit.quad(X, y)}
 
       }
