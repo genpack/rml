@@ -18,7 +18,7 @@ REGRESSOR = setRefClass('REGRESSOR', contains = "MODEL",
    predict = function(X){
      XORG = callSuper(X)
      XFET = XORG[objects$features$fname]
-     XOUT = .self$model.predict(XFET)
+     if(ncol(XFET) == 0){XOUT = predict.distribution(X)} else {XOUT = .self$model.predict(XFET)}
      colnames(XOUT) <- name %>% paste('out', sep = '_')
      treat(XOUT, XFET, XORG)
    },
@@ -42,25 +42,28 @@ REGRESSOR = setRefClass('REGRESSOR', contains = "MODEL",
 
 # A simple linear regression model. Features with linear dependency to others, will be removed to avoid singularity.
 # feature importances are based on p-values of coefficients.
-#' @export STATS.LM
+#' @export REG.LM
 REG.LM = setRefClass('REG.LM', contains = "REGRESSOR",
    methods = list(
      initialize = function(...){
        callSuper(...)
        config$sig_level <<- config$sig_level %>% verify('numeric', domain = c(0,1), default = '0.1')
        type             <<- 'Linear Regression'
+       if(is.empty(name)){name <<- 'LREG' %>% paste0(sample(1000:9999, 1))}
      },
 
      model.fit = function(X, y){
        objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+       X = X[objects$features$fname] %>% na2zero
+
+       if(ncol(X) == 0){fit.distribution(X, y); return(NULL)}
        if(config$sfs.enabled){
          D   = cbind(X, Y = y) %>% as.matrix
          res = evaluate(D)
          objects$features <<- objects$features %>% filter(fname %in% res$sig.feature.names)
        }
-       X = X[objects$features$fname]
-       forml = as.formula('y ~ ' %>% paste(paste(colnames(X), collapse = ' + ')))
-       objects$model <<- stats::lm(forml, data = cbind(X, y))
+       # forml = as.formula('y ~ ' %>% paste(paste(colnames(X), collapse = ' + ')))
+       objects$model <<- stats::lm(y ~ ., data = cbind(X, y))
        singulars = is.na(objects$model$coefficients) %>% which %>% names
        while(length(singulars) > 0){
          objects$features <<- objects$features %>% filter(!(fname %in% singulars))
@@ -73,7 +76,8 @@ REG.LM = setRefClass('REG.LM', contains = "REGRESSOR",
 
      get.features.weight = function(){
        objects$model.summary <<- summary(objects$model)
-       pv   = objects$model.summary$coefficients[-1, 'Pr(>|t|)']
+       pv   = objects$model.summary$coefficients[-1, 'Pr(>|t|)'] %>% na2zero
+       # Usually NA p-values appear when there is a perfect fit (100% R-squared), so each feature shall be considerd as important!?
        keep = (pv < 0.1)
        weights = pv
        weights[!keep] <- 0
@@ -82,7 +86,7 @@ REG.LM = setRefClass('REG.LM', contains = "REGRESSOR",
      },
 
      model.predict = function(X){
-       objects$model %>% stats::predict(X) %>% as.data.frame
+       objects$model %>% stats::predict(X %>% na2zero) %>% as.data.frame
      },
 
      get.performance.fit = function(){
@@ -133,6 +137,63 @@ REG.LM = setRefClass('REG.LM', contains = "REGRESSOR",
    )
 )
 
+
+#' @export REG.XGB
+REG.XGB = setRefClass('REG.XGB', contains = "REGRESSOR",
+                     methods = list(
+                       initialize = function(...){
+                         callSuper(...)
+                         type             <<- 'XGBoost Regression'
+                         if(is.empty(name)){name <<- 'XGBREG' %>% paste0(sample(1000:9999, 1))}
+                         if(is.null(config$nrounds)){config$nrounds <<- 100}
+                       },
+                       
+                       model.fit = function(X, y){
+                         objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+                         X = X[objects$features$fname] %>% na2zero
+                         
+                         if(ncol(X) == 0){fit.distribution(X, y); return(NULL)}
+                         if(config$sfs.enabled){
+                           # Not supported yet
+                         }
+                         
+                         objects$model <<- xgboost::xgb.train(data = xgboost::xgb.DMatrix(X %>% as.matrix, label = y), nrounds = config$nrounds, params = config %>% list.remove(maler_words))
+                       },
+
+                       model.predict = function(X){
+                         objects$model %>% stats::predict(X %>% as.matrix) %>% as.data.frame
+                       }
+                       
+                     )
+)
+
+
+#' @export REG.SCIKIT.XGB
+REG.SCIKIT.XGB = setRefClass('REG.SCIKIT.XGB', contains = "REGRESSOR",
+                             methods = list(
+                               initialize = function(...){
+                                 callSuper(...)
+                                 type               <<- 'Extreme Gradient Boosting for Regression'
+                                 if(is.empty(name)){name <<- 'SKGBREG' %>% paste0(sample(1000:9999, 1))}
+                                 module_xgb = reticulate::import('xgboost')
+                                 objects$model     <<- do.call(module_xgb$XGBRegressor, config %>% list.remove(maler_words))
+                               },
+                               
+                               model.fit = function(X, y){
+                                 objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+                                 X = X[objects$features$fname]
+                                 
+                                 objects$model$fit(X %>% data.matrix, y)
+                                 imp = try(objects$model$feature_importances_ %>% as.numeric, silent = T)
+                                 if(inherits(imp, 'numeric')) objects$features$importance <<- imp
+                               },
+
+                               model.predict = function(X){
+                                 objects$model$predict(X %>% data.matrix) %>% as.data.frame
+                               }
+                               
+                             )
+)
 # REG.TAYLOR = setRefClass('REG.TAYLOR', contains = 'MODEL', methods = list(
 #   initialize = function(...){
 #     callSuper(...)
