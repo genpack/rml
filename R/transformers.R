@@ -197,36 +197,28 @@ SEGMENTER.MODEL = setRefClass('SEGMENTER.MODEL', contains = 'TRANSFORMER',
       config$model_class  <<- config$model_class %>% verify('character', default = 'CLS.SCIKIT.XGB')
       config$model_config <<- config$model_config %>% verify('list', default = list(predict_probabilities = T))
       config$min_rows     <<- config$min_rows %>% verify(c('numeric', 'integer'), lengths = 1, default = 25)
-      config$build_global_model  <<- config$build_global_model %>% verify('logical', domain = c(T,F), lengths = 1, default = T)
       if(is.empty(name)){name <<- 'SEGMOD' %>% paste0(sample(1000:9999, 1))}
     },
 
     model.fit = function(X, y){
-        objects$categoricals <<- config$segmentation_features %>% verify('character', domain = nominals(X), default = nominals(X))
-        objects$model <<- list()
-        nrowx = nrow(X)
-        if(config$build_global_model){
-          objects$model[['__global__']] <<- do.call('new', args = config$model_config %>% list.add(Class = config$model_class))
-          objects$model[['__global__']]$fit(X, y)
+        if(is.null(config$segmentation_features)){
+          objects$categoricals <<- nominals(X)
         } else {
-          objects$model[['__global__']] <<- mean(y, na.rm = T)
+          objects$categoricals <<- config$segmentation_features %^% colnames(X)
         }
+        objects$model <<- list()
+        objects$model[['__global__']] <<- new(config$model_class, config = config$model_config)
+        objects$model[['__global__']]$fit(X, y)
         for(col in objects$categoricals){
           objects$model[[col]] <<- list()
           Xcol = X %>% pull(col)
           uval = Xcol %>% unique
-          cat('Segmentation for categorical feature ', col, ':\n')
           for(val in uval){
             vlc = as.character(val)
             www = which(Xcol == val)
-            cat('  Value: ', vlc, ' (', length(www), ' rows, mean(y) = ', mean(y[www]),')', '\n')
             if(length(www) > config$min_rows){
-              objects$model[[col]][[vlc]] <<- do.call('new', args = config$model_config %>% list.add(Class = config$model_class))
+              objects$model[[col]][[vlc]] <<- new(config$model_class, config = config$model_config)
               objects$model[[col]][[vlc]]$fit(X[www,], y[www])
-            } else {
-              if((!config$build_global_model) & (length(www) > 0)){
-                objects$model[[col]][[vlc]] <<- mean(y[www], na.rm = T)
-              }
             }
           }
         }
@@ -241,9 +233,7 @@ SEGMENTER.MODEL = setRefClass('SEGMENTER.MODEL', contains = 'TRANSFORMER',
           NNN = nrow(dot)
           mdl = objects$model[[col]][[dot[1,col] %>% as.character]]
           if(is.null(mdl)) {mdl = objects$model[['__global__']]}
-          if(inherits(mdl, 'numeric')){dot$value = mdl} 
-          else if(inherits(mdl, 'MODEL')){dot$value = mdl$predict(dot)[,1]}
-          else stop("I shoud not be here!!!")
+          dot$value = mdl$predict(dot)[,1]
           dot[c('__rowid__', 'value')]
         }
         cn = 'value' %>% {names(.) <- name %>% paste(col, sep = '_');.}
@@ -251,10 +241,10 @@ SEGMENTER.MODEL = setRefClass('SEGMENTER.MODEL', contains = 'TRANSFORMER',
         
         if(is.null(XOUT)){XOUT = df[,1, drop = F]} else {XOUT %<>% cbind(df[,1, drop = F])}
       }
-      colnames(XOUT) <- NULL
+      # colnames(XOUT) <- NULL
       return(XOUT)
     }
-  ))
+))
 
 
 
@@ -298,22 +288,17 @@ SEGMENTER.MODEL.BOOSTER =
 CATCONCATER = setRefClass('CATCONCATER', contains = "TRANSFORMER",
    methods = list(
      initialize = function(...){
-       args = list(...) %>% names
        callSuper(...)
        type     <<- 'Categorical Features Concater'
        if(is.empty(name)){name <<- 'CATCON' %>% paste0(sample(1000:9999, 1))}
-       if(!'keep_columns' %in% args) {config$keep_columns  <<- T}
-       if(!'keep_features' %in% args){config$keep_features <<- F}
      },
 
      model.fit = function(X, y){
-       categoricals     <- config$concatenating_features %>% verify('character', domain = nominals(X), default = nominals(X))
-       objects$features <<- objects$features %>% filter(fname %in% categoricals)
+         objects$features <<- data.frame(fname = nominals(X), stringsAsFactors = F)
      },
 
      model.predict = function(X){
-       X %>% apply(1, function(x) paste(x, collapse = '-')) %>% 
-         as.data.frame %>% {colnames(.)<- NULL;.} 
+       X %>% apply(1, function(x) paste(x, collapse = '-')) %>% as.data.frame
      }
    )
 )
@@ -344,17 +329,13 @@ LOGGER = setRefClass('LOGGER', contains = "TRANSFORMER", methods = list(
 DUMMIFIER = setRefClass('DUMMIFIER', contains = "TRANSFORMER",
    methods = list(
      initialize = function(...){
-       args = list(...) %>% names
        callSuper(...)
        type     <<- 'Categorical Feature Dummifier'
        if(is.empty(name)){name <<- 'DMFR' %>% paste0(sample(1000:9999, 1))}
-       if(!'keep_columns' %in% args) {config$keep_columns  <<- T}
-       if(!'keep_features' %in% args){config$keep_features <<- F}
      },
 
      model.fit = function(X, y = NULL){
-       categoricals     <- config$dummified_features %>% verify('character', domain = nominals(X), default = nominals(X))
-       objects$features <<- objects$features %>% filter(fname %in% categoricals)
+       objects$features     <<- objects$features %>% filter(fname %in% nominals(X))
        
        warnif(is.empty(objects$features), 'No categorical columns found!')
        dummies = character(); nbin = character()
