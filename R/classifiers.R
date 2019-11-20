@@ -359,5 +359,42 @@ CLS.SPARKLYR.GBT = setRefClass('SPARKLYR.GBT', contains = 'CLASSIFIER', methods 
     ml_predict(objects$model, X_TBL) %>% pull(prediction) %>% as.data.frame
   }
 
-)
-                           )
+))
+
+      
+ CLS.E1071.NB = setRefClass('CLS.E1071.NB', contains = 'CLS.BIN', methods = list(
+    initialize = function(...){
+      callSuper(...)
+      type <<- 'Naive Bayes Classifier'
+      if(is.empty(name)){name <<- 'E1071NB' %>% paste0(sample(1000:9999, 1))}
+      library(e1071)
+    },
+    
+    model.fit = function(X, y){
+      naiveBayes(Y ~ ., data = cbind(X, Y = y)) ->> objects$model
+    },
+    
+    model.predict = function(X){
+      stats::predict(objects$model, X) %>% as.data.frame
+    }
+    
+  ))
+
+
+CLS.RPART.DT = setRefClass('CLS.RPART.DT', contains = 'MODEL', methods = list(
+    initialize = function(...){
+      callSuper(...)
+      type <<- 'Decision Tree Classifier'
+      if(is.empty(name)){name <<- 'RPRTDT' %>% paste0(sample(1000:9999, 1))}
+      library(rpart)
+    },
+    
+    model.fit = function(X, y){
+      naiveBayes(Y ~ ., data = cbind(X, Y = y)) ->> objects$model
+    },
+    
+    model.predict = function(X){
+      stats::predict(objects$model, X) %>% as.data.frame
+    }
+    
+  ))  
