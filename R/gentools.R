@@ -36,6 +36,15 @@ immune = function(flist, features, level, columns){
 
 
 getFeatureValue.logical = function(flist, name, dataset){
+  if(length(name) > 1){
+    out = NULL
+    for(nm in name){
+      out = cbind(out, getFeatureValue.logical(flist, nm, dataset))
+    }
+    names(out) <- name
+    return(out)
+  }
+  
   if(name %in% colnames(dataset)){return(dataset[, name])}
 
   if(name %in% rownames(flist)){
@@ -47,6 +56,15 @@ getFeatureValue.logical = function(flist, name, dataset){
 
 
 getFeatureValue.multiplicative = function(flist, name, dataset){
+  if(length(name) > 1){
+    out = NULL
+    for(nm in name){
+      out = cbind(out, getFeatureValue.multiplicative(flist, nm, dataset))
+    }
+    names(out) <- name
+    return(out)
+  }
+  
   if(name %in% colnames(dataset)){return(dataset[, name])}
   if(name %in% rownames(flist)){
     if(flist[name, 'father'] %in% names(dataset)) {father = dataset[, flist[name, 'father']]} else {father = getFeatureValue.multiplicative(flist, flist[name, 'father'], dataset)}
@@ -82,17 +100,31 @@ evaluateFeatures.multiplicative = function(flist, X, y, top = 100, cor_fun = cor
 }
 
 evaluateFeatures.logical = function(flist, X, y, top = 100, cor_fun = cross_accuracy){
-  columns = colnames(X)
-  ns      = rownames(flist)
-  top     = min(top, length(ns) - 1)
-  keep    = is.na(flist$correlation) & (flist$father %in% columns) & (flist$mother %in% columns)
-  if(sum(keep) > 0){
-    flist$correlation[keep] <- cor_fun(X[, flist$father[keep]]*X[, flist$mother[keep]], y) %>% as.numeric %>% abs
+  columns  = colnames(X)
+  ns       = rownames(flist)
+  top      = min(top, length(ns) - 1)
+  
+  keep_and = which(is.na(flist$correlation) & (flist$father %in% columns) & (flist$mother %in% columns) & (flist$action == 'AND'))
+  if(length(keep_and) > 0){
+    flist$correlation[keep_and] <- cor_fun(X[, flist$father[keep_and]]*X[, flist$mother[keep_and]], y) %>% 
+      as.numeric %>% na2zero %>% abs
   }
+  keep_or = which(is.na(flist$correlation) & (flist$father %in% columns) & (flist$mother %in% columns) & (flist$action == 'OR'))
+  if(length(keep_or) > 0){
+    flist$correlation[keep_or] <- (X[flist$father[keep_or]] | X[, flist$mother[keep_or]]) %>% 
+      cor_fun(y) %>% as.numeric %>% na2zero %>% abs
+  }
+  keep_xor = which(is.na(flist$correlation) & (flist$father %in% columns) & (flist$mother %in% columns) & (flist$action == 'XOR'))
+  if(length(keep_xor) > 0){
+    flist$correlation[keep_xor] <- xor(X[, flist$father[keep_xor]], X[, flist$mother[keep_xor]]) %>% 
+      cor_fun(y) %>% as.numeric %>% na2zero %>% abs
+  }
+  
   keep = is.na(flist$correlation) %>% which
 
-  for(i in keep){
-    flist$correlation[i] <- cor_fun(getFeatureValue.logical(flist, ns[i], X), y)
+  if(length(keep) > 0){
+    flist$correlation[keep] <- getFeatureValue.logical(flist, ns[keep], X) %>% cor_fun(y) %>% 
+      as.numeric %>% na2zero %>% abs
   }
 
   high_level = max(flist$safety) + 1
