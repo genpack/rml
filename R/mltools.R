@@ -65,27 +65,13 @@ int_ordinals = function(X){
   nms = colnames(X)
   for (col in nms){
     v = X %>% pull(col)
-    if(inherits(v, c('numeric', 'integer'))){
+    if(inherits(v, c('numeric', 'integer', 'integer64'))){
       if(sum(as.integer(v) != v, na.rm = T) == 0) X[,col] %<>%  as.integer
     }
   }
   return(X)
 }
 
-#' @export
-outliers = function(X, sd_threshold = 4){
-  if(inherits(X, 'numeric')){X = matrix(X, ncol = 1)}
-  out = integer()
-  
-  for(i in ncol(X)){
-    if(inherits(X[,i], 'numeric')){
-      mu = mean(X[,i], na.rm = T)
-      sg = sd(X[,i], na.rm = T)
-      out = c(out, which(abs(X[,i] - mu) > sd_threshold*sg))
-    }
-  }
-  return(unique(out))
-}
 
 add_keras_layer_dense = function(model, layer, ...){
   model %>% layer_dense(units       = layer$units %>% verify(c('numeric', 'integer'), lengths = 1, null_allowed = F) %>% as.integer, 
@@ -112,6 +98,22 @@ ranker = function(X){
     }
   }
   return(X)
+}
+
+
+#' @export
+outliers = function(X, sd_threshold = 4){
+  if(inherits(X, 'numeric')){X = matrix(X, ncol = 1)}
+  out = integer()
+  
+  for(i in ncol(X)){
+    if(inherits(X[,i], 'numeric')){
+      mu = mean(X[,i], na.rm = T)
+      sg = sd(X[,i], na.rm = T)
+      out = c(out, which(abs(X[,i] - mu) > sd_threshold*sg))
+    }
+  }
+  return(unique(out))
 }
 
 trim_outliers = function(X, scale = F, center = F, only_numeric = F){
@@ -522,11 +524,17 @@ fit_map = function(X, y, cats){
   return(allmaps)
 } 
 
+
 get_chisq_scores = function(X, y, cats){
   scores = c()
   for(col in cats){
-    fval  = suppressWarnings({chisq.test(X %>% pull(col), y)})
-    fval  = fval$statistic %>% pchisq(df = fval$parameter['df'], lower.tail = F, log.p = T)
+    colv  = X %>% pull(col)
+    if((length(unique(colv)) < 2) | length(unique(y)) < 2){
+      fval = 0
+    } else {
+      fval  = suppressWarnings({chisq.test(colv, y)})
+      fval  = fval$statistic %>% pchisq(df = fval$parameter['df'], lower.tail = F, log.p = T)
+    }
     scores = c(scores, fval)
   }
   return(scores)
@@ -552,7 +560,7 @@ fit_map_new = function(X, y, cats){
     p1    = get_chisq_scores(X1, y1, 'M' %>% paste0(iii))
     p2    = get_chisq_scores(X2, y2, 'M' %>% paste0(iii))
     
-    if((p1 < benchmark) & (p2<benchmark)){
+    if((p1 < benchmark) & (p2 < benchmark)){
       allmaps[[col]] = mapi
       X = apply_map(XT, mapi)
       benchmark = max(p1, p2)
@@ -563,6 +571,9 @@ fit_map_new = function(X, y, cats){
 } 
 
 predict_map = function(X, maplist){
+  if(inherits(maplist, 'character')){
+    return(X[maplist])
+  }
   columns = names(maplist)
   nmap    = length(maplist)
   for(i in sequence(nmap)){
@@ -695,4 +706,32 @@ evaluate <- function (D, tt_ratio = 0.7, yfun = function(x){x}, yfun.inv = yfun)
   return(output)
 }
 
+save_model = function(model, path = getwd()){
+  if(!file.exists(path)) {dir.create(path)}
+  path %<>% paste(model$name, sep = '/')
+  model$model.save(path)
+  model %>% saveRDS(path %>% paste0('/', model$name, '.rds'))
+}
+
+load_model = function(model_name, path = getwd()){
+  path %<>% paste(model_name, sep = '/')
+  assert(file.exists(path), paste0('No folder named as ', model_name, ' found in the given path!'))
+  model = readRDS(path %>% paste0('/', model_name, '.rds'))
+  model$model.load(path)
+  return(model)
+}
+
+
+model_size = function(model){
+  t_size = list(config = 0, objects = 0, transformers = 0)
+  for(tr in model$transformers){
+    slist  = model_size(tr)
+    t_size$config  = t_size$config  + slist$config
+    t_size$objects = t_size$objects + slist$objects
+    t_size$transformers = t_size$transformers + slist$transformers
+  }
+  list(config  = object.size(model$config), 
+       objects = object.size(model$objects),
+       transformers = object.size(model$transformers) + t_size$config + t_size$objects + t_size$transformers)
+}
 
