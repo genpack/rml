@@ -1,6 +1,11 @@
-maler_words = c('keep_columns', 'keep_features', 'cv.ntest', 'cv.split_ratio', 'cv.split_method', 'cv.reset_transformer',
+# 25 Oct 2019 'fitted', 'features.include' and 'transformer' added to maler_words
+
+
+maler_words = c('keep_columns', 'keep_features', 'max_train',
+                'cv.ntrain', 'cv.ntest', 'cv.test_ratio','cv.train_ratio', 'cv.split_method', 'cv.performance_metric', 'cv.reset_transformer', 'cv.restore_model',
                 'sfs.enabled', 'rfe.enabled', 'rfe.importance_threshold', 'remove_invariant_features', 'sig_level', 'predict_probabilities',
-                'decision_threshold', 'threshold_determination', 'metric', 'return_logit')
+                'decision_threshold', 'threshold_determination', 'metric', 'return_logit', 'transformers', 'fitted', 
+                'segmentation_features', 'features.include')
 
 
 #' @export MODEL
@@ -22,8 +27,12 @@ MODEL = setRefClass('MODEL',
 
       if(is.null(settings$keep_columns)){settings$keep_columns = F}
       if(is.null(settings$keep_features)){settings$keep_features = F}
-      if(is.null(settings$cv.ntest)){settings$cv.ntest <- 10}
-      if(is.null(settings$cv.split_ratio)){settings$cv.split_ratio <- 0.7}
+      if(is.null(settings$cv.ntest)){settings$cv.ntest <- 5}
+      if(is.null(settings$cv.ntrain)){settings$cv.ntrain <- 1}
+      if(is.null(settings$cv.restore_model)){settings$cv.restore_model <- F}
+      if(is.null(settings$cv.train_ratio)){settings$cv.train_ratio <- 0.5}
+      if(is.null(settings$cv.test_ratio)){settings$cv.test_ratio <- 0.2}
+      if(is.null(settings$cv.performance_metric)){settings$cv.performance_metric <- 'gini'}
       if(is.null(settings$cv.split_method)){settings$cv.split_method <- 'shuffle'}
       if(is.null(settings$cv.reset_transformer)){settings$cv.reset_transformer = T}
       if(is.null(settings$rfe.enabled)){settings$rfe.enabled = F}
@@ -126,6 +135,13 @@ MODEL = setRefClass('MODEL',
           X = X[ind,]
           y = y[ind]
         }
+        
+        if(!is.null(config$upsample)){
+          w1 = which(y == 1)
+          w0 = which(y == 0) %>% sample(length(w1))
+          ww = c(w1, w2) %>% sample(length(w1) + length(w2))
+          X = X[ww,]; y = y[ww]
+        }
         X = transform(X, y)
         if(!is.null(config$features.include)){X = X %>% spark.select(config$features.include %^% colnames(X))}
         if(!is.null(config$features.exclude)){X = X %>% spark.select(colnames(X) %-% config$features.exclude)}
@@ -134,7 +150,6 @@ MODEL = setRefClass('MODEL',
         if(is.empty(objects$features)){fit.distribution(X, y)} 
         else if(config$rfe.enabled) {fit.rfe(X, y)} else {.self$model.fit(X, y)}
         # if(config$quad.enabled) {fit.quad(X, y)}
-
       }
       fitted <<- TRUE
     },
@@ -155,44 +170,98 @@ MODEL = setRefClass('MODEL',
       return(XT)
     },
     get.performance.fit  = function(){},
+    
+    transformer_count = function(){
+      cnt = 1
+      for(tr in transformers){
+        cnt = cnt + tr$transformer_count()
+      }
+      return(cnt)
+    },
+    
+    model.save = function(path = getwd()){
+      if(!file.exists(path)) {dir.create(path)}
+      for(tr in transformers){
+        tr$model.save(path)
+      }
+    },
+    
+    model.load = function(path = getwd()){
+      for(tr in transformers){
+        tr$model.load(path)
+      }
+    },
+    
+    transformer_names = function(){
+      mdlns = name
+      for(tr in transformers){
+        mdlns = c(mdlns, tr$transformer_names())
+      }
+      return(mdlns %>% unique)
+    },
 
     # todo: add k-fold, chronological shuffle, chronological split
-    get.performance.cv = function(X, y, ntest = 20, method = 'shuffle'){
+    get.performance.cv = function(X, y, method = 'shuffle'){
       method = match.arg(method)
-      keep   = objects$model
-
-      # X  = transform(X, y)
+      if(config$cv.restore_model){
+        keep   = list(objects = objects, fitted = fitted, config = config)
+      }
 
       # Split by shuffling: todo: support other splitting methods(i.e.: chronological)
       N       = nrow(X)
 
       scores = c()
 
-      for (i in sequence(ntest)){
-        trindex = N %>% sequence %>% sample(size = floor(config$cv.split_ratio*N), replace = F)
+      for (i in sequence(config$cv.ntrain)){
+        ind_train = N %>% sequence %>% sample(size = floor(config$cv.train_ratio*N), replace = F)
 
-        X_train = X[trindex, ]
-        y_train = y[trindex]
-        X_test  = X[- trindex,]
-        y_test  = y[- trindex]
-
-        perf   = get.performance(X_train, y_train, X_test, y_test)
-        scores = c(scores, config$metric(perf$y_pred, perf$y_true))
+        X_train = X[ind_train, ]
+        y_train = y[ind_train]
+         
+        reset(config$cv.reset_transformer)
+        .self$fit(X_train, y_train)
+        
+        for(j in sequence(config$cv.ntest)){
+          N2 = N - length(ind_train)
+          ind_test = sequence(N) %>% setdiff(ind_train) %>% sample(size = floor(config$cv.test_ratio*N2), replace = F)
+          X_test  = X[ind_test,]
+          y_test  = y[ind_test]
+          scores = c(scores, .self$performance(X_test, y_test, metric = config$cv.performance_metric))
+        }
       }
-      objects$model <<- keep
+      
+      if(config$cv.restore_model){
+        objects <<- keep$objects
+        fitted  <<- keep$fitted
+        config  <<- keep$config
+      }
       return(scores)
     },
 
-    get.performance = function(X_train, y_train, X_test, y_test){
-      keep   = objects$model
+    # get.performance = function(X_train, y_train, X_test, y_test){
+    #   
+    # 
+    #   reset(config$cv.reset_transformer)
+    #   .self$fit(X_train, y_train)
+    #   yhat   = predict(X_test) # this has error! Fix it!
+    #   objects$model <<- keep
+    #   return(list(y_pred = yhat, y_true = y_test))
+    # },
 
-      reset(config$cv.reset_transformer)
-      .self$fit(X_train, y_train)
-      yhat   = predict(X_test) # this has error! Fix it!
-      objects$model <<- keep
-      return(list(y_pred = yhat, y_true = y_test))
+    get.size             = function(){
+      t_size = list(config = 0, objects = 0, transformers = 0)
+      for(tr in transformers){
+        slist          = tr$get.size()
+        t_size$config  = t_size$config  + slist$config
+        t_size$objects = t_size$objects + slist$objects
+        t_size$transformers = t_size$transformers + slist$transformers
+      }
+      list(config  = object.size(config), 
+           objects = object.size(objects),
+           transformers = object.size(transformers) + t_size$config + t_size$objects + t_size$transformers)
+      
     },
-
+    
     get.parameters       = function(){},
     get.expert.predictor = function(){},
     get.expert.features  = function(){}
