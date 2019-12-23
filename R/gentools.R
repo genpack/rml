@@ -44,7 +44,7 @@ getFeatureValue.logical = function(flist, name, dataset){
     names(out) <- name
     return(out)
   }
-  
+
   if(name %in% colnames(dataset)){return(dataset[, name])}
 
   if(name %in% rownames(flist)){
@@ -64,7 +64,7 @@ getFeatureValue.multiplicative = function(flist, name, dataset){
     names(out) <- name
     return(out)
   }
-  
+
   if(name %in% colnames(dataset)){return(dataset[, name])}
   if(name %in% rownames(flist)){
     if(flist[name, 'father'] %in% names(dataset)) {father = dataset[, flist[name, 'father']]} else {father = getFeatureValue.multiplicative(flist, flist[name, 'father'], dataset)}
@@ -103,27 +103,27 @@ evaluateFeatures.logical = function(flist, X, y, top = 100, cor_fun = cross_accu
   columns  = colnames(X)
   ns       = rownames(flist)
   top      = min(top, length(ns) - 1)
-  
+
   keep_and = which(is.na(flist$correlation) & (flist$father %in% columns) & (flist$mother %in% columns) & (flist$action == 'AND'))
   if(length(keep_and) > 0){
-    flist$correlation[keep_and] <- cor_fun(X[, flist$father[keep_and]]*X[, flist$mother[keep_and]], y) %>% 
+    flist$correlation[keep_and] <- cor_fun(X[, flist$father[keep_and]]*X[, flist$mother[keep_and]], y) %>%
       as.numeric %>% na2zero %>% abs
   }
   keep_or = which(is.na(flist$correlation) & (flist$father %in% columns) & (flist$mother %in% columns) & (flist$action == 'OR'))
   if(length(keep_or) > 0){
-    flist$correlation[keep_or] <- (X[flist$father[keep_or]] | X[, flist$mother[keep_or]]) %>% 
+    flist$correlation[keep_or] <- (X[flist$father[keep_or]] | X[, flist$mother[keep_or]]) %>%
       cor_fun(y) %>% as.numeric %>% na2zero %>% abs
   }
   keep_xor = which(is.na(flist$correlation) & (flist$father %in% columns) & (flist$mother %in% columns) & (flist$action == 'XOR'))
   if(length(keep_xor) > 0){
-    flist$correlation[keep_xor] <- xor(X[, flist$father[keep_xor]], X[, flist$mother[keep_xor]]) %>% 
+    flist$correlation[keep_xor] <- xor(X[, flist$father[keep_xor]], X[, flist$mother[keep_xor]]) %>%
       cor_fun(y) %>% as.numeric %>% na2zero %>% abs
   }
-  
+
   keep = is.na(flist$correlation) %>% which
 
   if(length(keep) > 0){
-    flist$correlation[keep] <- getFeatureValue.logical(flist, ns[keep], X) %>% cor_fun(y) %>% 
+    flist$correlation[keep] <- getFeatureValue.logical(flist, ns[keep], X) %>% cor_fun(y) %>%
       as.numeric %>% na2zero %>% abs
   }
 
@@ -154,8 +154,8 @@ genBinFeatBoost.fit = function(X, y, target = 0.9, epochs = 10, cycle_survivors 
 }
 
 
-# 
-# 
+#
+#
 # xgb = SCIKIT.XGB()
 # dm  = DUMMIFIER()
 # ob  = OPTBINNER()
@@ -221,3 +221,81 @@ GENETIC = setRefClass(
 
 
   ))
+
+
+########## GENERIC GENETIC ##############
+transtypes = c(IDENTITY = 3, NORMALIZER = 2, DUMMIFIER = 1, GROUPER = 0.2, ENCODER.JAMESSTEIN = 1, OPTBINNER = 1, ENCODER.CATBOOST = 1, ENCODER.HELMERT = 1,
+              SMBINNING = 1, LOGGER = 1, KMEANS = 1, PRCOMP = 1, CLS.SCIKIT.XGB = 1, CLS.SCIKIT.KNN = 0.2, CLS.SCIKIT.LR = 1, CLS.SCIKIT.SVM = 0.2)
+
+createFeatures = function(flist, nf, prefix = 'FEAT', X, y){
+  features = names(flist)
+  lenflist = length(flist)
+  for(i in sequence(nf)){
+    fname   = prefix %>% paste(lenflist + i)
+    parents = features %>% sample(5, replace = F)
+    feature_parents = parent %^% colnames(X)
+    trans_parents   = parents %-% feature_parents
+    translist       = flist %>% list.extract(trans_parents)
+
+    if(!is.empty(feature_parents)){
+      idt = IDENTITY(features.include = feature_parents)
+      translist[[idt$name]] <- idt
+    }
+
+    transname = pick(transtypes)
+    model     = new(transname, transformers = translist)
+    res       = try(model$fit(X, y), silent = T)
+    if(!inherits(res, 'try-error')){
+      flist[[fname]] <- list(
+        name = fname,
+        parents = parents,
+        action  = transname,
+        performance = NA,
+        safety = 0
+      )
+    }
+  }
+}
+
+getFeatureValue = function(flist, name, X){
+  if(length(name) > 1){
+    out = NULL
+    for(nm in name){
+      out = cbind(out, getFeatureValue.multiplicative(flist, nm, X))
+    }
+    names(out) <- name
+    return(out)
+  }
+
+  if(name %in% colnames(X)){return(X[, name])}
+  if(name %in% names(flist)){
+    return(flist[[name]]$model$predict(X))
+  } else {
+    stop('feature name not in the list!')
+  }
+}
+
+
+########### SUPERVISOR GENETIC ####################
+
+createFeatures.supervisor = function(flist, nf, prefix = 'Feat'){
+  features = rownames(flist)
+  flist %>% rbind(
+    data.frame(
+      name = prefix %>% paste(nrow(flist) + sequence(nf)),
+      father = features %>% sample(nf, replace = T),
+      mother = features %>% sample(nf, replace = T),
+      m_type = 'CLS.SCIKIT.XGB',
+      correlation = NA,
+      safety = 0, stringsAsFactors = F) %>% column2Rownames('name'))
+}
+
+
+
+
+
+
+
+
+
+

@@ -4,8 +4,8 @@
 maler_words = c('keep_columns', 'keep_features', 'max_train',
                 'cv.ntrain', 'cv.ntest', 'cv.test_ratio','cv.train_ratio', 'cv.split_method', 'cv.performance_metric', 'cv.reset_transformer', 'cv.restore_model',
                 'sfs.enabled', 'rfe.enabled', 'rfe.importance_threshold', 'remove_invariant_features', 'sig_level', 'predict_probabilities',
-                'decision_threshold', 'threshold_determination', 'metric', 'return_logit', 'transformers', 'fitted', 
-                'segmentation_features', 'features.include')
+                'decision_threshold', 'threshold_determination', 'metric', 'return_logit', 'transformers', 'fitted',
+                'segmentation_features', 'features.include', 'cv.set')
 
 
 #' @export MODEL
@@ -113,16 +113,16 @@ MODEL = setRefClass('MODEL',
         XP  = XP[objects$features$fname]
       }
     },
-    
+
     fit.distribution = function(X = NULL, y){
       out = outliers(y); while(!is.empty(out)){y = y[-out]; out = outliers(y)}
       objects$model <<- list(family = 'normal', mean = mean(y, na.rm = T), sd = sd(y, na.rm = T))
     },
-    
+
     predict.distribution = function(X){
       N = try(nrow(X), silent = T)
       if(!inherits(N, 'integer')) N = as.integer(N)
-      # rnorm(N, objects$model$mean, objects$model$sd) %>% as.data.frame 
+      # rnorm(N, objects$model$mean, objects$model$sd) %>% as.data.frame
       rep(objects$model$mean, N) %>% as.data.frame
     },
 
@@ -135,19 +135,19 @@ MODEL = setRefClass('MODEL',
           X = X[ind,]
           y = y[ind]
         }
-        
+
         if(!is.null(config$upsample)){
           w1 = which(y == 1)
           w0 = which(y == 0) %>% sample(length(w1))
           ww = c(w1, w2) %>% sample(length(w1) + length(w2))
           X = X[ww,]; y = y[ww]
         }
-        X = transform(X, y)
         if(!is.null(config$features.include)){X = X %>% spark.select(config$features.include %^% colnames(X))}
         if(!is.null(config$features.exclude)){X = X %>% spark.select(colnames(X) %-% config$features.exclude)}
+        X = transform(X, y)
         if(config$remove_invariant_features) X %<>% remove_invariant_features
         objects$features <<- colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
-        if(is.empty(objects$features)){fit.distribution(X, y)} 
+        if(is.empty(objects$features)){fit.distribution(X, y)}
         else if(config$rfe.enabled) {fit.rfe(X, y)} else {.self$model.fit(X, y)}
         # if(config$quad.enabled) {fit.quad(X, y)}
       }
@@ -170,7 +170,7 @@ MODEL = setRefClass('MODEL',
       return(XT)
     },
     get.performance.fit  = function(){},
-    
+
     transformer_count = function(){
       cnt = 1
       for(tr in transformers){
@@ -178,20 +178,20 @@ MODEL = setRefClass('MODEL',
       }
       return(cnt)
     },
-    
+
     model.save = function(path = getwd()){
       if(!file.exists(path)) {dir.create(path)}
       for(tr in transformers){
         tr$model.save(path)
       }
     },
-    
+
     model.load = function(path = getwd()){
       for(tr in transformers){
         tr$model.load(path)
       }
     },
-    
+
     transformer_names = function(){
       mdlns = name
       for(tr in transformers){
@@ -201,8 +201,7 @@ MODEL = setRefClass('MODEL',
     },
 
     # todo: add k-fold, chronological shuffle, chronological split
-    get.performance.cv = function(X, y, method = 'shuffle'){
-      method = match.arg(method)
+    get.performance.cv = function(X, y){
       if(config$cv.restore_model){
         keep   = list(objects = objects, fitted = fitted, config = config)
       }
@@ -215,21 +214,27 @@ MODEL = setRefClass('MODEL',
       for (i in sequence(config$cv.ntrain)){
         ind_train = N %>% sequence %>% sample(size = floor(config$cv.train_ratio*N), replace = F)
 
-        X_train = X[ind_train, ]
+        X_train = X[ind_train, drop = F]
         y_train = y[ind_train]
-         
+
         reset(config$cv.reset_transformer)
         .self$fit(X_train, y_train)
-        
-        for(j in sequence(config$cv.ntest)){
-          N2 = N - length(ind_train)
-          ind_test = sequence(N) %>% setdiff(ind_train) %>% sample(size = floor(config$cv.test_ratio*N2), replace = F)
-          X_test  = X[ind_test,]
-          y_test  = y[ind_test]
-          scores = c(scores, .self$performance(X_test, y_test, metric = config$cv.performance_metric))
+
+        if(is.null(config$cv.set)){
+          for(j in sequence(config$cv.ntest)){
+            N2 = N - length(ind_train)
+            ind_test = sequence(N) %>% setdiff(ind_train) %>% sample(size = floor(config$cv.test_ratio*N2), replace = F)
+            X_test  = X[ind_test,]
+            y_test  = y[ind_test]
+            scores = c(scores, .self$performance(X_test, y_test, metric = config$cv.performance_metric))
+          }
+        } else {
+          for(vset in config$cv.set){
+            scores = c(scores, .self$performance(vset$X, vset$y, metric = config$cv.performance_metric))
+          }
         }
       }
-      
+
       if(config$cv.restore_model){
         objects <<- keep$objects
         fitted  <<- keep$fitted
@@ -239,8 +244,8 @@ MODEL = setRefClass('MODEL',
     },
 
     # get.performance = function(X_train, y_train, X_test, y_test){
-    #   
-    # 
+    #
+    #
     #   reset(config$cv.reset_transformer)
     #   .self$fit(X_train, y_train)
     #   yhat   = predict(X_test) # this has error! Fix it!
@@ -256,12 +261,12 @@ MODEL = setRefClass('MODEL',
         t_size$objects = t_size$objects + slist$objects
         t_size$transformers = t_size$transformers + slist$transformers
       }
-      list(config  = object.size(config), 
+      list(config  = object.size(config),
            objects = object.size(objects),
            transformers = object.size(transformers) + t_size$config + t_size$objects + t_size$transformers)
-      
+
     },
-    
+
     get.parameters       = function(){},
     get.expert.predictor = function(){},
     get.expert.features  = function(){}

@@ -1,6 +1,6 @@
 
 TRANSFORMER = setRefClass('TRANSFORMER', contains = "MODEL", methods = list(
-  
+
   predict = function(X){
     XORG = callSuper(X) %>% as.data.frame
     XFET = XORG[objects$features$fname]
@@ -16,10 +16,10 @@ TRANSFORMER = setRefClass('TRANSFORMER', contains = "MODEL", methods = list(
     } else {
       colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
     }
-    
+
     treat(XOUT, XFET, XORG)
   }
-  
+
 ))
 # This model, finds all numeric features in X and uses smbinning R package to optimally bin them to categorical columns and returns the table with additional features
 # original features are NOT maintained in the output table
@@ -34,7 +34,7 @@ SMBINNING = setRefClass('SMBINNING', contains = "TRANSFORMER",
         config$percentageOfRecords <<- config$percentageOfRecords %>% verify('numeric', domain = c(0, 0.5), default = '0.05')
         config$suffix              <<- config$suffix %>% verify('character', default = 'BIN')
         type                       <<- 'Optimal Binner'
-        if(is.empty(name)){name <<- 'SMBIN' %>% paste0(sample(1000:9999, 1))}
+        if(is.empty(name)){name <<- 'SMBIN' %>% paste0(sample(10000:99999, 1))}
       },
 
       model.fit = function(X, y){
@@ -65,7 +65,7 @@ SMBINNING = setRefClass('SMBINNING', contains = "TRANSFORMER",
             }
           }
           objects$features <<- data.frame(fname = columns, stringsAsFactors = F)
-          
+
           # Remove ctree objects to save space (They are not needed for prediction):
           config$keep_ctrees %<>% verify('logical', lengths = 1, domain = c(T,F), default = F)
 
@@ -100,9 +100,9 @@ NORMALIZER = setRefClass('NORMALIZER', contains = 'TRANSFORMER',
       callSuper(...)
       config$suffix <<- config$suffix %>% verify('character', default = 'NRM')
       type          <<- 'Normalizer'
-      if(is.empty(name)){name <<- 'NRMR' %>% paste0(sample(1000:9999, 1))}
+      if(is.empty(name)){name <<- 'NRMR' %>% paste0(sample(10000:99999, 1))}
     },
-    
+
     model.fit = function(X, y = NULL){
         objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
         X = X[objects$features$fname] %>% as.matrix
@@ -122,7 +122,7 @@ SCALER = setRefClass('SCALER', contains = "TRANSFORMER", methods = list(
     callSuper(...)
     config$suffix              <<- config$suffix %>% verify('character', default = 'SCALED')
     type                       <<- 'ZFactor Scaler'
-    if(is.empty(name)){name <<- 'SCLR' %>% paste0(sample(1000:9999, 1))}
+    if(is.empty(name)){name <<- 'SCLR' %>% paste0(sample(10000:99999, 1))}
   },
 
   model.fit = function(X, y = NULL){
@@ -146,7 +146,7 @@ OPTBINNER = setRefClass('OPTBINNER', contains = "TRANSFORMER", methods = list(
     config$suffix              <<- config$suffix %>% verify('character', default = 'BIN')
     config$basis               <<- config$basis %>% verify('character', domain = c('f1', 'chi'), default = 'chi')
     type                       <<- 'Optimal Binner'
-    if(is.empty(name)){name <<- 'OBIN' %>% paste0(sample(1000:9999, 1))}
+    if(is.empty(name)){name <<- 'OBIN' %>% paste0(sample(10000:99999, 1))}
   },
 
   model.fit = function(X, y){
@@ -168,81 +168,81 @@ OPTBINNER = setRefClass('OPTBINNER', contains = "TRANSFORMER", methods = list(
 ))
 
 ENCODER.HELMERT = setRefClass(
-  'ENCODER.HELMERT', 
+  'ENCODER.HELMERT',
   contains = 'TRANSFORMER',
   methods = list(
     initialize = function(...){
       callSuper(...)
       type     <<- 'Helmert Categorical Encoder'
-      if(is.empty(name)){name <<- 'HLMRTENC' %>% paste0(sample(1000:9999, 1))}
+      if(is.empty(name)){name <<- 'HLMRTENC' %>% paste0(sample(10000:99999, 1))}
     },
-    
+
     model.fit = function(X, y){
       if(!fitted){
         objects$features <<- objects$features %>% filter(fname %in% nominals(X))
         X = X[objects$features$fname]
-        
+
         module = reticulate::import('category_encoders')
-        objects$model <<- do.call(module$helmert$HelmertEncoder, 
+        objects$model <<- do.call(module$helmert$HelmertEncoder,
                                   config %>% list.remove(maler_words) %>% list.add(cols = objects$features$fname))
         objects$model$fit(X, y)
       }
     },
-    
+
     model.predict = function(X){
       objects$model$transform(X)
     }
   ))
 
 ENCODER.CATBOOST = setRefClass(
-  'ENCODER.CATBOOST', 
+  'ENCODER.CATBOOST',
   contains = 'TRANSFORMER',
   methods = list(
     initialize = function(...){
       callSuper(...)
       type     <<- 'CatBoost Categorical Encoder'
-      if(is.empty(name)){name <<- 'CTBSTENC' %>% paste0(sample(1000:9999, 1))}
+      if(is.empty(name)){name <<- 'CTBSTENC' %>% paste0(sample(10000:99999, 1))}
     },
-    
+
     model.fit = function(X, y){
       if(!fitted){
         objects$features <<- objects$features %>% filter(fname %in% nominals(X))
         X = X[objects$features$fname]
-        
+
         module = reticulate::import('category_encoders')
-        objects$model <<- do.call(module$cat_boost$CatBoostEncoder, 
+        objects$model <<- do.call(module$cat_boost$CatBoostEncoder,
                                   config %>% list.remove(maler_words) %>% list.add(cols = objects$features$fname))
         objects$model$fit(X, y)
       }
     },
-    
+
     model.predict = function(X){
       objects$model$transform(X)
     }
   ))
 
 ENCODER.JAMESSTEIN = setRefClass(
-  'ENCODER.JAMESSTEIN', 
+  'ENCODER.JAMESSTEIN',
   contains = 'TRANSFORMER',
   methods = list(
     initialize = function(...){
       callSuper(...)
       type     <<- 'James Stein Categorical Target Encoder'
-      if(is.empty(name)){name <<- 'JSTNENC' %>% paste0(sample(1000:9999, 1))}
+      if(is.empty(name)){name <<- 'JSTNENC' %>% paste0(sample(10000:99999, 1))}
     },
-    
+
     model.fit = function(X, y){
       if(!fitted){
         objects$features <<- objects$features %>% filter(fname %in% nominals(X))
         X = X[objects$features$fname]
-        
+
         module = reticulate::import('category_encoders')
-        objects$model <<- do.call(module$james_stein$JamesSteinEncoder, 
+        objects$model <<- do.call(module$james_stein$JamesSteinEncoder,
                                   config %>% list.remove(maler_words) %>% list.add(cols = objects$features$fname))
         objects$model$fit(X, y)
       }
     },
-    
+
     model.predict = function(X){
       objects$model$transform(X)
     }
@@ -257,7 +257,7 @@ SEGMENTER.RATIO = setRefClass('SEGMENTER.RATIO', contains = 'TRANSFORMER',
        callSuper(...)
        # type     <<- 'Class-Ratio Categorical Target Encoder'
        type     <<- 'Class-Ratio Segmenter (Target Encoder)'
-       if(is.empty(name)){name <<- 'SMR' %>% paste0(sample(1000:9999, 1))}
+       if(is.empty(name)){name <<- 'SMR' %>% paste0(sample(10000:99999, 1))}
 
      },
 
@@ -269,7 +269,7 @@ SEGMENTER.RATIO = setRefClass('SEGMENTER.RATIO', contains = 'TRANSFORMER',
          for(col in colnames(X)){
            objects$model[[col]] <<- cbind(X, label = y) %>% group_by_(col) %>% summarise(ratio = mean(label))
          }
-       }   
+       }
      },
 
      model.predict = function(X){
@@ -292,7 +292,7 @@ SEGMENTER.MODEL = setRefClass('SEGMENTER.MODEL', contains = 'TRANSFORMER',
       config$model_class  <<- config$model_class %>% verify('character', default = 'CLS.SCIKIT.XGB')
       config$model_config <<- config$model_config %>% verify('list', default = list(predict_probabilities = T))
       config$min_rows     <<- config$min_rows %>% verify(c('numeric', 'integer'), lengths = 1, default = 100)
-      if(is.empty(name)){name <<- 'SEGMOD' %>% paste0(sample(1000:9999, 1))}
+      if(is.empty(name)){name <<- 'SEGMOD' %>% paste0(sample(10000:99999, 1))}
     },
 
     model.fit = function(X, y){
@@ -301,7 +301,7 @@ SEGMENTER.MODEL = setRefClass('SEGMENTER.MODEL', contains = 'TRANSFORMER',
         } else {
           objects$categoricals <<- config$segmentation_features %^% nominals(X)
         }
-        assert(!is.empty(objects$categoricals), 'No descrete features found!') 
+        assert(!is.empty(objects$categoricals), 'No descrete features found!')
 
         objects$model <<- list()
         objects$model[['__global__']] <<- new(config$model_class, config = config$model_config)
@@ -334,9 +334,9 @@ SEGMENTER.MODEL = setRefClass('SEGMENTER.MODEL', contains = 'TRANSFORMER',
           dot[c('__rowid__', 'value')]
         }
         cn = 'value' %>% {names(.) <- name %>% paste(col, sep = '_');.}
-        df = X['__rowid__'] %>% 
+        df = X['__rowid__'] %>%
           left_join(X %>% group_by_(col) %>% do({bibi(.)}), by = '__rowid__') %>% select(value) %>% spark.rename(cn)
-        
+
         if(is.null(XOUT)){XOUT = df[,1, drop = F]} else {XOUT %<>% cbind(df[,1, drop = F])}
       }
       # colnames(XOUT) <- NULL
@@ -346,10 +346,10 @@ SEGMENTER.MODEL = setRefClass('SEGMENTER.MODEL', contains = 'TRANSFORMER',
 
 
 
-SEGMENTER.MODEL.BOOSTER = 
-  setRefClass('SEGMENTER.MODEL.BOOSTER', 
+SEGMENTER.MODEL.BOOSTER =
+  setRefClass('SEGMENTER.MODEL.BOOSTER',
               contains = 'SEGMENTER.MODEL',
-                                      
+
               methods = list(
                           model.fit = function(X, y){
                             nn = nrow(X)
@@ -358,9 +358,9 @@ SEGMENTER.MODEL.BOOSTER =
                             y_train  = y[indtrain]
                             X_test   = X[- indtrain,]
                             y_test   = y[- indtrain]
-                            
+
                             callSuper(X_train, y_train)
-                            
+
                             colnms = objects$model %>% names %>% setdiff("__global__")
                             glb    =  objects$model[['__global__']]
                             for(col in colnms){
@@ -381,11 +381,65 @@ SEGMENTER.MODEL.BOOSTER =
                         )
 )
 
-GENERATOR = setRefClass('GENERATOR', contains = 'TRANSFORMER', methods = list())
-GENERATOR.INVERTER = setRefClass('GENERATOR.INVERTER', contains = 'GENERATOR', methods = list())
-GENERATOR.POLYNOMIAL = setRefClass('GENERATOR.POLYNOMIAL', contains = 'GENERATOR', methods = list())
-GENERATOR.GEOPOLY = setRefClass('GENERATOR.GEOPOLY', contains = 'GENERATOR', methods = list())
-GENERATOR.PARABOLIC = setRefClass('GENERATOR.PARABOLIC', contains = 'GENERATOR', methods = list())
+GENERATOR.INVERTER = setRefClass('GENERATOR.INVERTER', contains = 'TRANSFORMER', methods = list())
+GENERATOR.GEOPOLY = setRefClass('GENERATOR.GEOPOLY', contains = 'TRANSFORMER', methods = list())
+GENERATOR.PARABOLIC = setRefClass('GENERATOR.PARABOLIC', contains = 'TRANSFORMER', methods = list())
+GENERATOR.QUADRATIC = setRefClass('GENERATOR.QUADRATIC', contains = 'TRANSFORMER', methods = list(
+  initialize = function(...){
+    callSuper(...)
+    type     <<- 'Quadratic Feature Generator'
+    if(is.empty(name)){name <<- 'QFG' %>% paste0(sample(10000:99999, 1))}
+  },
+
+  model.fit = function(X, y = NULL){
+    objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+  },
+
+  model.predict = function(X){
+    out = X[, c()]
+    for(i in colnames(X)){
+      for(j in colnames(X)){
+        out[, paste(i, j, sep = '_X_')] <- X[,i]*X[,j]
+      }
+    }
+    return(out)
+  }
+))
+
+GENERATOR.POLYNOMIAL = setRefClass('GENERATOR.POLYNOMIAL', contains = 'TRANSFORMER', methods = list(
+  initialize = function(...){
+    callSuper(...)
+    type     <<- 'Polynomial Generator'
+    if(is.empty(name)){name <<- 'PLYG' %>% paste0(sample(10000:99999, 1))}
+
+    # Sigma{k = 1}{n_terms} (gain*x + intercept)^k
+    config$apply_abs <<- config$apply_abs %>% verify('logical', default = F)
+    config$intercept <<- config$intercept %>% verify('numeric', default = 0)
+    config$gain      <<- config$gain %>% verify('numeric', default = 0)
+    config$n_terms   <<- config$n_terms %>% verify('numeric', default = 3) %>% as.integer
+  },
+
+  model.fit = function(X, y = NULL){
+    object$features <<- object$features %>% filter(fclass %in% c('numeric', 'integer'))
+  },
+
+  model.predict = function(X){
+    XOUT = NULL; ns = character()
+    for(i in objects$features$fname){
+      v = X[,i] %>% as.numeric
+      v = config$gain*v + config$intercept
+      if(config$apply_abs){v = abs(v)}
+      for(j in sequence(config$n_terms)){
+        XOUT %<>% cbind(v^j)
+        ns   %<>% c(name %>% paste('_', i, '_T', j))
+      }
+    }
+    colnames(XOUT) <- ns
+    return(XOUT %>% as.data.frame)
+  }
+
+))
+
 
 
 #' @export CATCONCATER
@@ -394,7 +448,7 @@ CATCONCATER = setRefClass('CATCONCATER', contains = "TRANSFORMER",
      initialize = function(...){
        callSuper(...)
        type     <<- 'Categorical Features Concater'
-       if(is.empty(name)){name <<- 'CATCON' %>% paste0(sample(1000:9999, 1))}
+       if(is.empty(name)){name <<- 'CATCON' %>% paste0(sample(10000:99999, 1))}
      },
 
      model.fit = function(X, y){
@@ -407,20 +461,20 @@ CATCONCATER = setRefClass('CATCONCATER', contains = "TRANSFORMER",
    )
 )
 
-       
+
 LOGGER = setRefClass('LOGGER', contains = "TRANSFORMER", methods = list(
   initialize = function(...){
     callSuper(...)
     type     <<- 'Logger Transformer'
-    if(is.empty(name)){name <<- 'LOG' %>% paste0(sample(1000:9999, 1))}
+    if(is.empty(name)){name <<- 'LOG' %>% paste0(sample(10000:99999, 1))}
     config$apply_abs <<- config$apply_abs %>% verify(c('logical'), default = T)
     config$intercept <<- config$intercept %>% verify(c('numeric'), default = 1)
   },
-  
+
   model.fit = function(X, y){
     objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
   },
-  
+
   model.predict = function(X){
     if(config$apply_abs){X = abs(X)}
     XOUT = log(as.matrix(X) + config$intercept)
@@ -434,13 +488,13 @@ DUMMIFIER = setRefClass('DUMMIFIER', contains = "TRANSFORMER",
      initialize = function(...){
        callSuper(...)
        type     <<- 'Categorical Feature Dummifier'
-       if(is.empty(name)){name <<- 'DMFR' %>% paste0(sample(1000:9999, 1))}
+       if(is.empty(name)){name <<- 'DMFR' %>% paste0(sample(10000:99999, 1))}
        config$max_domain <<- config$max_domain %>% verify(c('numeric', 'integer'), default = 25) %>% as.integer
      },
 
      model.fit = function(X, y = NULL){
        objects$features     <<- objects$features %>% filter(fname %in% nominals(X))
-       
+
        warnif(is.empty(objects$features), 'No categorical columns found!', wrn_src = name)
        dummies = character(); nbin = character()
        for(cat in objects$features %>% pull(fname)){
@@ -449,13 +503,13 @@ DUMMIFIER = setRefClass('DUMMIFIER', contains = "TRANSFORMER",
          warnif(nduv < 3, 'Feature ' %++% cat %++% ' has less than 3 distinct values and will not be encoded!', wrn_src = name)
          warnif(nduv > config$max_domain, 'Feature ' %++% cat %++% ' has too many distinct values and will not be encoded!', wrn_src = name)
          if((length(uval) > 2) & (length(uval) < config$max_domain)){
-           nbin = c(nbin, cat)              
+           nbin = c(nbin, cat)
            dummies %<>% c(cat %>% paste(uval, sep = '_'))
-         }               
+         }
        }
        objects$features     <<- objects$features %>% filter(fname %in% nbin)
        assert(!is.empty(objects$features), 'No categorical columns for dummification!', err_src = name)
-       
+
        ## todo: take care of remove_first_dummy and remove_most_frequent_dummy arguments
        objects$dummy_columns <<- dummies
        # todo: rename to output_features and add importance(performance)
@@ -480,8 +534,8 @@ GENETIC.BOOSTER.GEOMETRIC = setRefClass('GENETIC.BOOSTER.GEOMETRIC', contains = 
     methods = list(
       initialize = function(...){
         type     <<- 'Geometric Genetic Booster'
-        if(is.empty(name)){name <<- 'GBG' %>% paste0(sample(1000:9999, 1))}
-        
+        if(is.empty(name)){name <<- 'GBG' %>% paste0(sample(10000:99999, 1))}
+
         callSuper(...)
         if(is.null(config$epochs)) {config$epochs <<- 10}
         if(is.null(config$cycle_births)) {config$cycle_births <<- 1000}
@@ -501,20 +555,20 @@ GENETIC.BOOSTER.GEOMETRIC = setRefClass('GENETIC.BOOSTER.GEOMETRIC', contains = 
             correlation = NA,
             safety = 0, stringsAsFactors = F) %>% column2Rownames('fname'))
       },
-      
+
       evaluateFeatures = function(X, y){
         cor_fun = config$metric
         top     = config$cycle_survivors
         columns = colnames(X)
         flist   = objects$model
         ns      = rownames(flist)
-        
+
         keep = is.na(flist$correlation) & (flist$father %in% columns) & (flist$mother %in% columns)
         if(sum(keep) > 0){
           flist$correlation[keep] <- cor_fun(X[, flist$father[keep]]*X[, flist$mother[keep]], y) %>% as.numeric %>% abs
         }
         keep = is.na(flist$correlation) %>% which
-        
+
         if(length(keep) > 0){
           flist$correlation[keep] <- cor_fun(getFeatureValue.multiplicative(flist, ns[keep], X), y)
         }
@@ -522,16 +576,16 @@ GENETIC.BOOSTER.GEOMETRIC = setRefClass('GENETIC.BOOSTER.GEOMETRIC', contains = 
         high_level = max(flist$safety) + 1
         # ord = flist$correlation %>% order(decreasing = T) %>% intersect(which(!duplicated(flist$correlation)))
         ord = flist$correlation %>% order(decreasing = T)
-        
+
         top  = min(top, length(ord) - 1)
-        
+
         flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = colnames(X))
-        
+
         # keep = which(flist$safety == high_level | (is.na(flist$father) & is.na(flist$mother)))
         keep = which(flist$safety == high_level)
         objects$model <<- flist[keep, ]
       },
-      
+
       model.predict = function(X){
         top = objects$model %>% rownames2Column('fname') %>% distinct(correlation, .keep_all = T) %>%
           arrange(desc(correlation)) %>% head(config$final_survivors)
@@ -539,7 +593,7 @@ GENETIC.BOOSTER.GEOMETRIC = setRefClass('GENETIC.BOOSTER.GEOMETRIC', contains = 
         XOUT <- getFeatureValue.multiplicative(objects$model, top$fname, X)
         return(XOUT %>% as.data.frame)
       },
-      
+
 
       model.fit = function(X, y){
           cor_fun = config$metric
@@ -565,8 +619,8 @@ GENETIC.BOOSTER.LOGICAL = setRefClass('GENETIC.BOOSTER.LOGICAL', contains = 'TRA
   initialize = function(...){
     callSuper(...)
     type     <<- 'Logical Genetic Booster'
-    if(is.empty(name)){name <<- 'GBL' %>% paste0(sample(1000:9999, 1))}
-    
+    if(is.empty(name)){name <<- 'GBL' %>% paste0(sample(10000:99999, 1))}
+
     if(is.null(config$metric)){config$metric <<- cross_accuracy}
     if(is.null(config$epochs)) {config$epochs <<- 10}
     if(is.null(config$cycle_births)) {config$cycle_births <<- 1000}
@@ -574,20 +628,20 @@ GENETIC.BOOSTER.LOGICAL = setRefClass('GENETIC.BOOSTER.LOGICAL', contains = 'TRA
     if(is.null(config$final_survivors)) {config$final_survivors <<- 10}
     if(is.null(config$target)) {config$target <<- 0.9}
   },
-  
+
   getFeatureValue = function(fname, dataset){
     if(!fitted) stop(paste('from', fname, 'of type', type, ':', 'Model not fitted!', '\n'))
     getFeatureValue.logical(objects$model, fname, dataset)
   },
-  
+
   model.fit = function(X, y){
     objects$model    <<- genBinFeatBoost.fit(X, y, target = config$target, epochs = config$epochs, cycle_survivors = config$cycle_survivors, final_survivors = config$final_survivors, cycle_births = config$cycle_births, metric = config$metric)
-    objects$features <<- objects$model %>% 
-      rownames2Column('fname') %>% 
-      filter(is.na(father), is.na(mother)) %>% 
+    objects$features <<- objects$model %>%
+      rownames2Column('fname') %>%
+      filter(is.na(father), is.na(mother)) %>%
       select(fname, importance = correlation)
   },
-  
+
   model.predict = function(X){
     top = objects$model %>% rownames2Column('fname') %>% distinct(correlation, .keep_all = T) %>%
       arrange(desc(correlation)) %>% head(config$final_survivors)
@@ -606,7 +660,7 @@ SUPERVISOR = setRefClass('SUPERVISOR', contains = "TRANSFORMER",
     initialize = function(...){
       callSuper(...)
       type     <<- 'Model Supervisor'
-      if(is.empty(name)){name <<- 'SUP' %>% paste0(sample(1000:9999, 1))}
+      if(is.empty(name)){name <<- 'SUP' %>% paste0(sample(10000:99999, 1))}
       config$model_class  <<- config$model_class  %>% verify('character', default = 'SCIKIT.XGB')
       config$model_config <<- config$model_config %>% verify('character', default = list())
       objects$model <<- new(config$model_class, config = config$model_config)
@@ -635,7 +689,7 @@ KMEANS = setRefClass('KMEANS', contains = 'TRANSFORMER', methods = list(
   initialize = function(...){
     callSuper(...)
     type     <<- 'KMeans Clustering Transformer'
-    if(is.empty(name)){name <<- 'KMNS' %>% paste0(sample(1000:9999, 1))}
+    if(is.empty(name)){name <<- 'KMNS' %>% paste0(sample(10000:99999, 1))}
     config$num_clusters <<- config$num_clusters %>% verify(c('numeric', 'integer'), default = 5)
 
   },
@@ -658,7 +712,7 @@ PRCOMP = setRefClass('PRCOMP', contains = 'TRANSFORMER', methods = list(
   initialize = function(...){
     callSuper(...)
     type     <<- 'Principal Component Transformer'
-    if(is.empty(name)){name <<- 'PRC' %>% paste0(sample(1000:9999, 1))}
+    if(is.empty(name)){name <<- 'PRC' %>% paste0(sample(10000:99999, 1))}
     config$num_components <<- config$num_components %>% verify(c('numeric', 'integer'), default = 5)
     config$scale  <<- config$scale  %>% verify('logical', domain = c(F,T), default = T)
     config$center <<- config$center %>% verify('logical', domain = c(F,T), default = T)
@@ -668,7 +722,7 @@ PRCOMP = setRefClass('PRCOMP', contains = 'TRANSFORMER', methods = list(
       objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
       X = X[objects$features$fname]
       objects$model <<- prcomp(X, center = config$center, scale. = config$scale, rank. = config$rank)
-      
+
       # Remove x object to reduce memory allocation. (Not needed for transformation:)
       config$keep_x %<>% verify('logical', lengths = 1, domain = c(T, F), default = F)
       if(!config$keep_x){
@@ -688,20 +742,20 @@ PYLMNN = setRefClass('PYLMNN', contains = "TRANSFORMER", methods = list(
   initialize = function(...){
     callSuper(...)
     type     <<- 'Large Margin Nearest Neighbors'
-    if(is.empty(name)){name <<- 'LMNN' %>% paste0(sample(1000:9999, 1))}
+    if(is.empty(name)){name <<- 'LMNN' %>% paste0(sample(10000:99999, 1))}
     config$num_components <<- config$num_components %>% verify(c('numeric', 'integer'), default = 5) %>% as.integer
     config$num_neighbors  <<- config$neighbors %>% verify(c('numeric', 'integer'), default = 10) %>% as.integer
     config$epochs         <<- config$epochs %>% verify(c('numeric', 'integer'), default = 100) %>% as.integer
     lmnn_module   <-  reticulate::import('pylmnn')
     objects$model <<- lmnn_module$LargeMarginNearestNeighbor(n_neighbors = config$num_neighbors, max_iter = config$epochs, n_components = config$num_components, init = 'pca')
   },
-  
+
   model.fit = function(X, y){
       objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
       X = X[objects$features$fname]
       objects$model$fit(X %>% data.matrix, y)
   },
-  
+
   model.predict = function(X){
     XOUT = objects$model$transform(XF %>% data.matrix) %>% as.data.frame
     colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
@@ -713,18 +767,64 @@ GROUPER = setRefClass('GROUPER', contains = "TRANSFORMER", methods = list(
   initialize = function(...){
     callSuper(...)
     type     <<- 'Categorical Feature Grouper'
-    if(is.empty(name)){name <<- 'GRP' %>% paste0(sample(1000:9999, 1))}
+    if(is.empty(name)){name <<- 'GRP' %>% paste0(sample(10000:99999, 1))}
     #config$num_components <<- config$num_components %>% verify(c('numeric', 'integer'), default = 5) %>% as.integer
   },
-  
+
   model.fit = function(X, y){
       objects$features <<- objects$features %>% filter(fclass %in% c('character','factor','logical', 'integer'))
       X = X[objects$features$fname]
       assert(ncol(X) > 0, 'No nominal features found!')
       objects$model <<- fit_map_new(X, y, objects$features$fname)
   },
-  
+
   model.predict = function(X){
     predict_map(X, objects$model) %>% as.data.frame %>% {colnames(.)<-NULL;.}
   }
+))
+
+
+
+
+
+SFS = setRefClass('SFS', contains = 'TRANSFORMER', methods = list(
+  initialize = function(...){
+    callSuper(...)
+    type     <<- 'Stepwise Feature Selector'
+    if(is.empty(name)){name <<- 'SFS' %>% paste0(sample(10000:99999, 1))}
+    config$model_class  <<- config$model_class %>% verify('character', default = 'CLS.SCIKIT.XGB')
+    config$model_config <<- config$model_config %>% verify('list', default = list())
+  },
+
+  model.fit = function(X, y){
+    objects$model = new(config$model_class, config = config$model_config)
+    objects$model$fit(X, y)
+    objects$features = objects$model$objects$features %>% filter(importance > 0) %>% arrange(desc(importance))
+
+    # Bild best model with best predictor:
+    fetbag = c()
+    perf   = -Inf
+
+    cv.set.transformed = config$model_config$cv.set
+    if(!is.null(config$model_config$cv.set) & !is.empty(transformers)){
+      for(i in sequence(length(cv.set.transformed))){cv.set.transformed[[i]]$X %<>% transform}
+    }
+
+    for(ft in objects$features$fname){
+      objects$model <<- new(config$model_class, config$model_config)
+      objects$model$config$cv.set = cv.set.transformed
+
+      new_perf = objects$model$get.performance.cv(X[, c(fetbag, ft), drop = F], y) %>% median
+      if(new_perf > perf){
+        cat('\n', 'New feature added: ', ft, ' New performance: ', new_perf)
+        fetbag = objects$model$objects$features %>% filter(importance > 0) %>% pull(fname)
+        perf   = new_perf
+      }
+    }
+
+    # Train the final model with selected features or just keep selected features?!
+    objects$features <<- objects$features %>% filter(fname %in% fetbag)
+  },
+
+  model.pedict = function(X){X}
 ))

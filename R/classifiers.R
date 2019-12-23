@@ -63,7 +63,7 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
       }
     },
 
-    performance = function(X, y, metric = c('aurc', 'gini', 'precision', 'recall', 'f1', 'sensitivity', 'specificity', 'accuracy', 'lift')){
+    performance = function(X, y, metric = c('aurc', 'gini', 'precision', 'recall', 'f1', 'sensitivity', 'specificity', 'accuracy', 'lift'), ratio = NULL){
       metric = match.arg(metric)
       cutoff_free = metric %in% c('aurc', 'gini', 'lift')
       yp = predict(X, cutoff_free) %>% pull(name %>% paste('out', sep = '_'))
@@ -76,8 +76,8 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
         score = data.frame(y_pred = yp, y_true = y) %>% scorer('y_pred', 'y_true')
         return(score[[metric]])
       }
+      if(is.null(ratio)){ratio = mean(y, na.rm = T)}
       if(metric == 'lift'){
-        ratio = mean(y, na.rm = T)
         cut_q = quantile(yp, prob = 1 - ratio)
         prec  = y[yp > cut_q] %>% mean(na.rm = T)
         return(prec/mean(y))
@@ -95,13 +95,13 @@ CLS.SCIKIT = setRefClass('CLS.SCIKIT', contains = "CLASSIFIER",
          use_python(config$python_address)
        }
      },
-     
+
      model.save = function(path = getwd()){
        callSuper(path)
        joblib = reticulate::import('joblib')
        joblib$dump(objects$model, paste0(path, '/', name, '.joblib'))
      },
-     
+
      model.load = function(path = getwd()){
        callSuper(path)
        fn   = paste0(path, '/', name, '.joblib')
@@ -148,10 +148,6 @@ CLS.FLASSO = setRefClass('CLS.FLASSO', contains = 'CLASSIFIER', methods = list(
   initialize = function(...){
     callSuper(...)
     type              <<- 'Logistic Regression with Fusion Lasso'
-
-    config$lambda1 <<- config$lambda1 %>% verify('numeric', default = 1)
-    config$lambda2 <<- config$lambda2 %>% verify('numeric', default = 1)
-    config$epochs  <<- config$epochs  %>% verify(c('numeric', 'integer'), default = 100)
   },
 
   model.fit = function(X, y){
@@ -161,6 +157,14 @@ CLS.FLASSO = setRefClass('CLS.FLASSO', contains = 'CLASSIFIER', methods = list(
                                              maxSteps = config$epochs, burn = 50, intercept = TRUE, model = "logistic",
                                              eps = 1e-05, eps0 = 1e-08, epsCG = 1e-08)
 
+    # objects$model <<- do.call(HDPenReg::EMfusedlasso, config %>% list.remove(maler_words) %>% list.add(X = X %>% as.matrix, y = y)
+    #                           (X %>% as.matrix, y, lambda1 = config$lambda1, lambda2 = config$lambda2,
+    #                                          maxSteps = config$epochs, burn = 50, intercept = TRUE, model = "logistic",
+    #                                          eps = 1e-05, eps0 = 1e-08, epsCG = 1e-08)
+  },
+
+  model.predict = function(X){
+    X %>% as.matrix %*% objects$model$coefficients %>% as.data.frame
   }
 ))
 
@@ -174,9 +178,9 @@ cls.MLR = setRefClass('CLS.MLR', contains = "CLASSIFIER",
         library(mlr)
         callSuper(...)
         type              <<- 'MLR Classifier'
-        if(is.empty(name)){name <<- 'MLR' %>% paste0(sample(1000:9999, 1))}
+        if(is.empty(name)){name <<- 'MLR' %>% paste0(sample(10000:99999, 1))}
         config$model_type <<- config$model_type %>% verify('character', domain = mlr.classification.models %>% pull(class), default = 'classif.gbm')
-        objects$model     <<- mlr::makeLearner(cl = config$model_type, predict.type = chif(config$predict_probabilities, "prob", "response"))
+        objects$model     <<- mlr::makeLearner(cl = config$model_type, predict.type = chif(config$prøedict_probabilities, "prob", "response"))
       },
 
       model.fit = function(X, y){
@@ -202,7 +206,7 @@ CLS.SCIKIT.LR = setRefClass('CLS.SCIKIT.LR', contains = "CLS.SCIKIT",
         callSuper(...)
         config$sig_level <<- config$sig_level %>% verify('numeric', domain = c(0,1), default = 0.1)
         type             <<- 'Logistic Regression'
-        if(is.empty(name)){name <<- 'SKLR' %>% paste0(sample(1000:9999, 1))}
+        if(is.empty(name)){name <<- 'SKLR' %>% paste0(sample(10000:99999, 1))}
         module_lm = reticulate::import('sklearn.linear_model')
         objects$model <<- do.call(module_lm$LogisticRegression, config %>% list.remove(maler_words))
       },
@@ -224,7 +228,7 @@ CLS.SCIKIT.DT = setRefClass('SCIKIT.DT', contains = "CLS.SCIKIT",
     initialize = function(...){
       callSuper(...)
       type               <<- 'Decision Tree'
-      if(is.empty(name)){name <<- 'SKDT' %>% paste0(sample(1000:9999, 1))}
+      if(is.empty(name)){name <<- 'SKDT' %>% paste0(sample(10000:99999, 1))}
       module_dt = reticulate::import('sklearn.tree')
       objects$model <<- do.call(module_dt$DecisionTreeClassifier, config %>% list.remove(maler_words))
     }
@@ -238,7 +242,7 @@ CLS.SCIKIT.XGB = setRefClass('CLS.SCIKIT.XGB', contains = "CLS.SCIKIT",
       initialize = function(...){
         callSuper(...)
         type               <<- 'Extreme Gradient Boosting'
-        if(is.empty(name)){name <<- 'SKXGB' %>% paste0(sample(1000:9999, 1))}
+        if(is.empty(name)){name <<- 'SKXGB' %>% paste0(sample(10000:99999, 1))}
         module_xgb = reticulate::import('xgboost')
         objects$model     <<- do.call(module_xgb$XGBClassifier, config %>% list.remove(maler_words))
       },
@@ -257,7 +261,7 @@ CLS.SCIKIT.SVM = setRefClass('CLS.SCIKIT.SVM', contains = "CLS.SCIKIT",
                            initialize = function(...){
                              callSuper(...)
                              type               <<- 'Support Vector Machine'
-                             if(is.empty(name)){name <<- 'SKSVM' %>% paste0(sample(1000:9999, 1))}
+                             if(is.empty(name)){name <<- 'SKSVM' %>% paste0(sample(10000:99999, 1))}
                              module_svm = reticulate::import('sklearn.svm')
                              objects$model <<- module_svm$SVC(gamma = 'scale', probability = config$predict_probabilities)
                            }
@@ -272,7 +276,7 @@ CLS.KERAS = setRefClass('KERAS', contains = 'CLASSIFIER',
       type <<- 'Neural Network'
       library(tensorflow)
       library(keras)
-      if(is.empty(name)){name <<- 'KERASNN' %>% paste0(sample(1000:9999, 1))}
+      if(is.empty(name)){name <<- 'KERASNN' %>% paste0(sample(10000:99999, 1))}
       ki = initializer_random_uniform(minval = -0.05, maxval = 0.05, seed = 42)
       kr = regularizer_l2(l = 0.001)
       config$layers <<- config$layers %>%
@@ -361,23 +365,23 @@ CLS.SPARKLYR.GBT = setRefClass('SPARKLYR.GBT', contains = 'CLASSIFIER', methods 
 
 ))
 
-      
- CLS.E1071.NB = setRefClass('CLS.E1071.NB', contains = 'CLS.BIN', methods = list(
+
+ CLS.E1071.NB = setRefClass('CLS.E1071.NB', contains = 'CLASSIFIER', methods = list(
     initialize = function(...){
       callSuper(...)
       type <<- 'Naive Bayes Classifier'
-      if(is.empty(name)){name <<- 'E1071NB' %>% paste0(sample(1000:9999, 1))}
+      if(is.empty(name)){name <<- 'E1071NB' %>% paste0(sample(10000:99999, 1))}
       library(e1071)
     },
-    
+
     model.fit = function(X, y){
       naiveBayes(Y ~ ., data = cbind(X, Y = y)) ->> objects$model
     },
-    
+
     model.predict = function(X){
       stats::predict(objects$model, X) %>% as.data.frame
     }
-    
+
   ))
 
 
@@ -385,16 +389,16 @@ CLS.RPART.DT = setRefClass('CLS.RPART.DT', contains = 'MODEL', methods = list(
     initialize = function(...){
       callSuper(...)
       type <<- 'Decision Tree Classifier'
-      if(is.empty(name)){name <<- 'RPRTDT' %>% paste0(sample(1000:9999, 1))}
+      if(is.empty(name)){name <<- 'RPRTDT' %>% paste0(sample(10000:99999, 1))}
       library(rpart)
     },
-    
+
     model.fit = function(X, y){
       naiveBayes(Y ~ ., data = cbind(X, Y = y)) ->> objects$model
     },
-    
+
     model.predict = function(X){
       stats::predict(objects$model, X) %>% as.data.frame
     }
-    
-  ))  
+
+  ))
