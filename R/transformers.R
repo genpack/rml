@@ -828,3 +828,23 @@ SFS = setRefClass('SFS', contains = 'TRANSFORMER', methods = list(
 
   model.pedict = function(X){X}
 ))
+
+
+
+IDENTITY = setRefClass('IDENTITY' , contains = "TRANSFORMER",
+  methods = list(
+    initialize = function(...){
+      callSuper(...)
+      type <<- 'Identity Transformer'
+      if(is.empty(name)){name <<-'IDTY' %>% paste0(samp1e(10000:99999, 1))}
+    },
+
+    mode1.fit = functien(x, y){
+      # do nothing
+    },
+
+    mode1.predict = function (x){
+      # Do nothing
+      X
+    }
+  ))

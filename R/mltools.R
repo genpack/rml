@@ -17,11 +17,11 @@ rmse = function(y1, y2){
 }
 
 mae = function(y1, y2){
-  (y1 - y2) %>% abs %>% mean(na.rm = T)  
+  (y1 - y2) %>% abs %>% mean(na.rm = T)
 }
 
 medae = function(y1, y2){
-  (y1 - y2) %>% abs %>% median(na.rm = T)  
+  (y1 - y2) %>% abs %>% median(na.rm = T)
 }
 
 #' @export
@@ -74,17 +74,17 @@ int_ordinals = function(X){
 
 
 add_keras_layer_dense = function(model, layer, ...){
-  model %>% layer_dense(units       = layer$units %>% verify(c('numeric', 'integer'), lengths = 1, null_allowed = F) %>% as.integer, 
-              activation  = layer$activation %>% verify('character', lengths = 1, default = 'relu'), 
+  model %>% layer_dense(units       = layer$units %>% verify(c('numeric', 'integer'), lengths = 1, null_allowed = F) %>% as.integer,
+              activation  = layer$activation %>% verify('character', lengths = 1, default = 'relu'),
               use_bias    = layer$use_bias %>% verify('logical', lengths = 1, domain = c(T,F), default = T),
-              kernel_regularizer = layer$kernel_regularizer, 
+              kernel_regularizer = layer$kernel_regularizer,
               bias_regularizer   = layer$kernel_regularizer,
-              activity_regularizer = layer$activity_regularizer, 
+              activity_regularizer = layer$activity_regularizer,
               kernel_constraint = layer$kernel_constraint,
-              bias_constraint = layer$bias_constraint, 
-              batch_input_shape = layer$batch_input_shape, 
-              batch_size = layer$batch_size, 
-              name = layer$name, trainable = layer$trainable, 
+              bias_constraint = layer$bias_constraint,
+              batch_input_shape = layer$batch_input_shape,
+              batch_size = layer$batch_size,
+              name = layer$name, trainable = layer$trainable,
               weights = layer$weights,
               ...)
 }
@@ -105,7 +105,7 @@ ranker = function(X){
 outliers = function(X, sd_threshold = 4){
   if(inherits(X, 'numeric')){X = matrix(X, ncol = 1)}
   out = integer()
-  
+
   for(i in ncol(X)){
     if(inherits(X[,i], 'numeric')){
       mu = mean(X[,i], na.rm = T)
@@ -129,7 +129,7 @@ trim_outliers = function(X, scale = F, center = F, only_numeric = F){
       tbcl = (xsi < -3)
       xh   = mni + 3*sdi + abs(log(X[tbch, i] - mni - 3*sdi))
       xl   = mni - 3*sdi - abs(log(mni - X[tbcl, i] - 3*sdi))
-      
+
       if(isint){
         if(!only_numeric){
           X[tbch, i] = as.integer(xh)
@@ -432,16 +432,16 @@ scorer = function(tbl, prediction_col, actual_col){
 
 #' @export
 #' Computes actual performance scores assuming the test set is down-sampled for class 0, by 'weight' times
-#' The precision is expected to be lower than scorer, but recall remains the same.  
+#' The precision is expected to be lower than scorer, but recall remains the same.
 scorer_downsampled = function(tbl, prediction_col, actual_col, weight = 2){
   tbl %>% rename(x = prediction_col, y = actual_col) %>%
     group_by(x,y) %>% summarise(count = length(x)) -> scores
-  
+
   TP = scores %>% filter(x, y)   %>% pull('count')
   FN = scores %>% filter(!x, y)  %>% pull('count')
   FP = scores %>% filter(x, !y)  %>% pull('count') %>% {weight*.}
   TN = scores %>% filter(!x, !y) %>% pull('count') %>% {weight*.}
-  
+
   prc = TP/(TP + FP)
   rcl = TP/(TP + FN)
   list(
@@ -460,25 +460,25 @@ remove_invariant_features = function(X){
   X[, which(fsds > 1), drop = F]
 }
 
-                     
+
 get_map = function(X, y, source, target){
   mu = mean(y)
   suppressWarnings({X %>% cbind(label = y) %>% group_by_(source) %>% summarise(cnt  = length(label), ratio = mean(label), suml = sum(label)) %>% arrange(ratio) -> tbl})
   nr = tbl %>% pull(ratio) %>% unique %>% length
   elbow(tbl['ratio'], max.num.clusters = nr) -> res
   logpval = c()
-  
+
   for(clust in res$clst){
     nc = max(clust$cluster)
     tbl[, 'cluster'] = clust$cluster
-    
+
     contingency = tbl %>% group_by(cluster) %>% summarise(total = sum(cnt), positive = sum(suml)) %>% mutate(negative = total - positive)
     last_row    = contingency %>% colSums
     observed    = contingency %>% select(positive, negative, cluster) %>% column2Rownames('cluster') %>% as.matrix
     expected    = contingency$total %>% matrix(nrow = nc) %*% last_row[c('positive', 'negative')] %>% {./last_row['total']}
     logpval     %<>%  c(pchisq(sum((observed - expected)^2/expected), df = nc - 1, lower.tail = FALSE, log.p = T))
   }
-  
+
   res$bnc = logpval %>% order %>% first
 
   tbl[, target] = res$clst[[res$bnc]]$cluster
@@ -495,7 +495,7 @@ apply_map = function(X, mapping){
 concat_columns = function(X, sources, target){
   scr = paste0("X %>% mutate(", target, " = paste(", sources %>% paste(collapse = ','), ", sep = '-'))")
   parse(text = scr) %>% eval
-}  
+}
 
 fit_map = function(X, y, cats){
   allmaps  = list()
@@ -513,7 +513,7 @@ fit_map = function(X, y, cats){
     XT    = apply_map(XT, mapi)
     fval  = suppressWarnings({chisq.test(XT %>% pull('M' %>% paste0(iii)), y)})
     fval  = fval$statistic %>% pchisq(df = fval$parameter['df'], lower.tail = F, log.p = T)
-    
+
     if(fval < benchmark){
       allmaps[[col]] = mapi
       X = XT
@@ -522,7 +522,7 @@ fit_map = function(X, y, cats){
     }
   }
   return(allmaps)
-} 
+}
 
 
 get_chisq_scores = function(X, y, cats){
@@ -559,7 +559,7 @@ fit_map_new = function(X, y, cats){
     X2    = apply_map(X2, mapi)
     p1    = get_chisq_scores(X1, y1, 'M' %>% paste0(iii))
     p2    = get_chisq_scores(X2, y2, 'M' %>% paste0(iii))
-    
+
     if((p1 < benchmark) & (p2 < benchmark)){
       allmaps[[col]] = mapi
       X = apply_map(XT, mapi)
@@ -568,7 +568,7 @@ fit_map_new = function(X, y, cats){
     }
   }
   return(allmaps)
-} 
+}
 
 predict_map = function(X, maplist){
   if(inherits(maplist, 'character')){
@@ -588,7 +588,7 @@ predict_map = function(X, maplist){
     }
   }
   return(X %>% pull(target))
-}                     
+}
 
 
 predict_glm_fit <- function(glmfit, newmatrix, addintercept=TRUE){
@@ -600,49 +600,49 @@ predict_glm_fit <- function(glmfit, newmatrix, addintercept=TRUE){
 }
 
 
-# First all the raw data are read from csv file and then 
-# all combinations of figures are 
-# function evaluate is modified. It gets the raw data and a list of column numbers as input 
+# First all the raw data are read from csv file and then
+# all combinations of figures are
+# function evaluate is modified. It gets the raw data and a list of column numbers as input
 
 # File: init.R must be in the working directory
 
 evaluate <- function (D, tt_ratio = 0.7, yfun = function(x){x}, yfun.inv = yfun) {
   if(!inherits(D, 'matrix')) D %<>% as.matrix
-     
+
   N = dim(D)[1]
   m = dim(D)[2]
-  
+
   prt = D %>% partition(tt_ratio)
-  
+
   X = prt$part1[, 1:(m - 1)]
   y = prt$part1[, m] %>% yfun
-  
+
   Xt = prt$part2[, 1:(m - 1)]
   yt = prt$part2[, m] %>% yfun
-  
+
   # X = scale(X, center = FALSE)
   # sorting the predictors based on R squared in a linear regression with single regressor
   # Number of predictors: m-1
-  
+
   ter = c()
   bstmdl = NULL
-  
+
   CC  = cor(x = X, y = y, method = "pearson") %>% na2zero %>% abs
   index = order(CC, decreasing=TRUE)
   CC = CC[index]
   index = index[CC > 0.1]
   if(is.empty(index)){return(NULL)}
-  
+
   X   = X[,index]
   Xt  = Xt[,index]
-  
+
   # Construct the initial model using the best predictor
   A  = X[,1]
   At = Xt[,1, drop = F]
-  
+
   fig.index = index[1]
   # Set zero as the initial value of r adjusted
-  
+
   # reg = glm.fit(x = A, y = y)
   reg = glm(y ~ A)
   rss = sum(reg$residuals^2)
@@ -650,7 +650,7 @@ evaluate <- function (D, tt_ratio = 0.7, yfun = function(x){x}, yfun.inv = yfun)
   # prediction accuracy with test data:
   prd = reg %>% predict_glm_fit(At, addintercept = !(ncol(At) %>% equals(reg$coefficients %>% length)))
   pss = sum(((prd[,1] %>% yfun.inv) - (yt %>% yfun.inv))^2)
-  
+
   for (i in sequence(index %>% length) %-% 1){
     # Add predictor to the model
     A_new  = cbind(A, X[,i])
@@ -660,14 +660,14 @@ evaluate <- function (D, tt_ratio = 0.7, yfun = function(x){x}, yfun.inv = yfun)
     # Run the regression
     # reg     = try(glm.fit(y = y, x = A_new), silent = T)
     reg     = try(glm(y ~ A_new), silent = T)
-    
+
     if(!inherits(reg, 'try-error')){
       prd_new = reg %>% predict_glm_fit(At_new)
       pss_new = sum(((prd_new[,1] %>% yfun.inv) - (yt %>% yfun.inv))^2)
       # If successful, replace it with the new model
       permit = pss_new < pss
       if(is.na(permit)){permit = F}
-      
+
       if(permit){
         sum.reg = summary(reg)
         dftest  = nrow(At_new) - dfr
@@ -680,10 +680,10 @@ evaluate <- function (D, tt_ratio = 0.7, yfun = function(x){x}, yfun.inv = yfun)
         pvls    = sum.reg$coefficients[-1, "Pr(>|t|)"]
         det     = det(t(A_new) %*% A_new)
         permit  = !equals(det, 0) & (sum(pvls > 0.05, na.rm = T) %>% equals(0)) & (pvl < 0.05) & (pvlt < 0.05)
-        
+
         if(is.na(permit)){permit = F}
       }
-      
+
       if (permit){
         cat("Det            = ", det, "\n")
         cat("Test Error     = ", ter_new, "\n")
@@ -701,7 +701,7 @@ evaluate <- function (D, tt_ratio = 0.7, yfun = function(x){x}, yfun.inv = yfun)
       }
     }
   }
-  
+
   output = list(sig.feature.values = A, sig.feature.indexes = fig.index, sig.feature.names = fig.names,test.error = ter, model = bstmdl)
   return(output)
 }
@@ -730,8 +730,24 @@ model_size = function(model){
     t_size$objects = t_size$objects + slist$objects
     t_size$transformers = t_size$transformers + slist$transformers
   }
-  list(config  = object.size(model$config), 
+  list(config  = object.size(model$config),
        objects = object.size(model$objects),
        transformers = object.size(model$transformers) + t_size$config + t_size$objects + t_size$transformers)
 }
 
+#converts given categorical con urns to integer
+int_columns = function(x, cats){
+  X %<>% as.data.frame
+  for(i in intersect(cats, colnames(x))){
+    X[, i] <- X[, i] %>% as.integer
+  }
+  return(x)
+}
+
+# converts all c9l urns to numeric
+numerize_columns = function(x){
+  X %<>% as.data.frame
+  for(i in colnames(x))
+    X[,i] <- as.numeric(x[,i])
+  return(x)
+}
