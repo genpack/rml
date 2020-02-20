@@ -10,7 +10,7 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
       config$threshold_determination <<- config$threshold_determination %>%
         verify('character', lengths = 1, domain = c('set_as_threshold', 'maximum_f1', 'maximum_chi','target_precision', 'target_recall', 'ratio_quantile'), default = 'maximum_f1')
       if(is.null(config$metric)){
-        config$metric <<- chif(config$predict_probabilities, function(y_pred, y_test) {data.frame(prob = y_pred, actual = y_test) %>% optSplit.f1('prob', 'actual')->aa;aa$f1}, function(y1, y2) mean(xor(y1, y2), na.rm = T))
+        config$metric <<- chif(config$predict_probabilities, 'gini', 'f1')
       }
       config$return_logit <<- config$return_logit %>% verify('logical', domain = c(T,F), default = F)
     },
@@ -63,25 +63,12 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
       }
     },
 
-    performance = function(X, y, metric = c('aurc', 'gini', 'precision', 'recall', 'f1', 'sensitivity', 'specificity', 'accuracy', 'lift'), ratio = NULL){
+    performance = function(X, y, metric = c('gini', 'aurc', 'precision', 'recall', 'f1', 'sensitivity', 'specificity', 'accuracy', 'lift'), ratio = NULL){
       metric = match.arg(metric)
       cutoff_free = metric %in% c('aurc', 'gini', 'lift')
       yp = predict(X, cutoff_free) %>% pull(name %>% paste('out', sep = '_'))
-      if(metric %in% c('aurc', 'gini')){
-        aurc = AUC::auc(AUC::roc(yp, y %>% as.factor))
-        if(metric == 'aurc') return(aurc) else return(2*aurc - 1)
-      }
-      if(metric %in% c('precision', 'recall', 'f1', 'accuracy', 'sensitivity', 'specificity', 'fp', 'fn', 'tp', 'tn')){
-        if(metric == 'sensitivity') metric = 'recall'
-        score = data.frame(y_pred = yp, y_true = y) %>% scorer('y_pred', 'y_true')
-        return(score[[metric]])
-      }
-      if(is.null(ratio)){ratio = mean(y, na.rm = T)}
-      if(metric == 'lift'){
-        cut_q = quantile(yp, prob = 1 - ratio)
-        prec  = y[yp > cut_q] %>% mean(na.rm = T)
-        return(prec/mean(y))
-      }
+
+      correlation(yp, y, metric = metric, lift_ratio = ratio)
     }
   )
 )
@@ -131,7 +118,7 @@ CLS.SCIKIT = setRefClass('CLS.SCIKIT', contains = "CLASSIFIER",
    )
 )
 
-CLS.SCIKIT.KNN = setRefClass('SCIKIT.KNN', contains = "CLS.SCIKIT",
+CLS.SCIKIT.KNN = setRefClass('CLS.SCIKIT.KNN', contains = "CLS.SCIKIT",
   methods = list(
     initialize = function(...){
       callSuper(...)
@@ -180,7 +167,7 @@ cls.MLR = setRefClass('CLS.MLR', contains = "CLASSIFIER",
         type              <<- 'MLR Classifier'
         if(is.empty(name)){name <<- 'MLR' %>% paste0(sample(10000:99999, 1))}
         config$model_type <<- config$model_type %>% verify('character', domain = mlr.classification.models %>% pull(class), default = 'classif.gbm')
-        objects$model     <<- mlr::makeLearner(cl = config$model_type, predict.type = chif(config$prøedict_probabilities, "prob", "response"))
+        objects$model     <<- mlr::makeLearner(cl = config$model_type, predict.type = chif(config$predict_probabilities, "prob", "response"))
       },
 
       model.fit = function(X, y){
@@ -223,7 +210,7 @@ CLS.SCIKIT.LR = setRefClass('CLS.SCIKIT.LR', contains = "CLS.SCIKIT",
 # A simple logistic regression classifier from scikit python package:
 # It extracts only numeric features, does no dummification for categorical columns.
 #' @export SCIKIT.DT
-CLS.SCIKIT.DT = setRefClass('SCIKIT.DT', contains = "CLS.SCIKIT",
+CLS.SCIKIT.DT = setRefClass('SCIKIT.SCIKIT.DT', contains = "CLS.SCIKIT",
   methods = list(
     initialize = function(...){
       callSuper(...)

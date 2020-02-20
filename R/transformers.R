@@ -9,9 +9,9 @@ TRANSFORMER = setRefClass('TRANSFORMER', contains = "MODEL", methods = list(
       if(ncol(XOUT) == nrow(objects$features)){
         colnames(XOUT) <- name %>% paste(objects$features$fname, sep = '_')
       } else if (ncol(XOUT) == 1){
-        colnames(XOUT) <- name %>% paste('out', sep = '_')
+        colnames(XOUT) <- name
       } else{
-        colnames(XOUT) <- name %>% paste('out', sequence(ncol(XOUT)), sep = '_')
+        colnames(XOUT) <- name %>% paste(sequence(ncol(XOUT)), sep = '_')
       }
     } else {
       colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
@@ -250,8 +250,8 @@ ENCODER.JAMESSTEIN = setRefClass(
 
 
 # Replaces categorical features with class ratios associated with each category
-#' @export SEGMENTER.RATIO
-SEGMENTER.RATIO = setRefClass('SEGMENTER.RATIO', contains = 'TRANSFORMER',
+#' @export ENCODER.TARGET
+ENCODER.TARGET = setRefClass('ENCODER.TARGET', contains = 'TRANSFORMER',
    methods = list(
      initialize = function(...){
        callSuper(...)
@@ -283,8 +283,8 @@ SEGMENTER.RATIO = setRefClass('SEGMENTER.RATIO', contains = 'TRANSFORMER',
    )
 )
 
-#' @export SEGMENTER.MODEL
-SEGMENTER.MODEL = setRefClass('SEGMENTER.MODEL', contains = 'TRANSFORMER',
+#' @export ENCODER.MODEL
+ENCODER.MODEL = setRefClass('ENCODER.MODEL', contains = 'TRANSFORMER',
   methods = list(
     initialize = function(...){
       callSuper(...)
@@ -293,6 +293,7 @@ SEGMENTER.MODEL = setRefClass('SEGMENTER.MODEL', contains = 'TRANSFORMER',
       config$model_config <<- config$model_config %>% verify('list', default = list(predict_probabilities = T))
       config$min_rows     <<- config$min_rows %>% verify(c('numeric', 'integer'), lengths = 1, default = 100)
       if(is.empty(name)){name <<- 'SEGMOD' %>% paste0(sample(10000:99999, 1))}
+      objects$model <<- list()
     },
 
     model.fit = function(X, y){
@@ -303,8 +304,10 @@ SEGMENTER.MODEL = setRefClass('SEGMENTER.MODEL', contains = 'TRANSFORMER',
         }
         assert(!is.empty(objects$categoricals), 'No descrete features found!')
 
-        objects$model <<- list()
-        objects$model[['__global__']] <<- new(config$model_class, config = config$model_config)
+        if(is.null(objects$model[['__global__']])){
+          objects$model[['__global__']] <<- new(config$model_class, config = config$model_config)
+        }
+
         objects$model[['__global__']]$fit(X, y)
         for(col in objects$categoricals){
           objects$model[[col]] <<- list()
@@ -333,7 +336,7 @@ SEGMENTER.MODEL = setRefClass('SEGMENTER.MODEL', contains = 'TRANSFORMER',
           dot$value = mdl$predict(dot)[,1]
           dot[c('__rowid__', 'value')]
         }
-        cn = 'value' %>% {names(.) <- name %>% paste(col, sep = '_');.}
+        cn = 'value' %>% {names(.) <- col;.}
         df = X['__rowid__'] %>%
           left_join(X %>% group_by_(col) %>% do({bibi(.)}), by = '__rowid__') %>% select(value) %>% spark.rename(cn)
 
@@ -346,9 +349,9 @@ SEGMENTER.MODEL = setRefClass('SEGMENTER.MODEL', contains = 'TRANSFORMER',
 
 
 
-SEGMENTER.MODEL.BOOSTER =
-  setRefClass('SEGMENTER.MODEL.BOOSTER',
-              contains = 'SEGMENTER.MODEL',
+ENCODER.MODEL.BOOSTER =
+  setRefClass('ENCODER.MODEL.BOOSTER',
+              contains = 'ENCODER.MODEL',
 
               methods = list(
                           model.fit = function(X, y){
@@ -381,14 +384,12 @@ SEGMENTER.MODEL.BOOSTER =
                         )
 )
 
-GENERATOR.INVERTER = setRefClass('GENERATOR.INVERTER', contains = 'TRANSFORMER', methods = list())
-GENERATOR.GEOPOLY = setRefClass('GENERATOR.GEOPOLY', contains = 'TRANSFORMER', methods = list())
-GENERATOR.PARABOLIC = setRefClass('GENERATOR.PARABOLIC', contains = 'TRANSFORMER', methods = list())
-GENERATOR.QUADRATIC = setRefClass('GENERATOR.QUADRATIC', contains = 'TRANSFORMER', methods = list(
+INVERTER = setRefClass('INVERTER', contains = 'TRANSFORMER', methods = list(
   initialize = function(...){
     callSuper(...)
-    type     <<- 'Quadratic Feature Generator'
-    if(is.empty(name)){name <<- 'QFG' %>% paste0(sample(10000:99999, 1))}
+    type     <<- 'Inverter Transformer'
+    if(is.empty(name)){name <<- 'INV' %>% paste0(sample(10000:99999, 1))}
+    config$trim <<- config$trim %>% verify('numeric', lengths = 1, default = 10000)
   },
 
   model.fit = function(X, y = NULL){
@@ -397,30 +398,82 @@ GENERATOR.QUADRATIC = setRefClass('GENERATOR.QUADRATIC', contains = 'TRANSFORMER
 
   model.predict = function(X){
     out = X[, c()]
-    for(i in colnames(X)){
-      for(j in colnames(X)){
-        out[, paste(i, j, sep = '_X_')] <- X[,i]*X[,j]
-      }
+    for(i in objects$features$fname){
+      col = 1.0/X[, i]
+      maxtrim = max(col[col <   config$trim])
+      mintrim = min(col[col > - config$trim])
+
+      out[, i] <- ifelse(col > config$trim, maxtrim, ifelse(col < - config$trim, mintrim, col))
+    }
+    return(out)
+  }
+
+))
+GEOPOLY = setRefClass('GEOPOLY', contains = 'TRANSFORMER', methods = list())
+MULTIPLIER.BINARY = setRefClass('MULTIPLIER.BINARY', contains = 'TRANSFORMER', methods = list(
+  initialize = function(...){
+    callSuper(...)
+    type     <<- 'Binary Multiplier'
+    if(is.empty(name)){name <<- 'BMUL' %>% paste0(sample(10000:99999, 1))}
+  },
+
+  model.fit = function(X, y = NULL){
+    objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+    actions = NULL
+    for(ft in objects$features$fname){
+      actions %<>% rbind(data.frame(father = ft, mother = objects$features$fname %-% actions$father))
+    }
+    objects$actions <<- actions
+  },
+
+  model.predict = function(X){
+    out = X[, c()]
+    for(i in 1:nrow(objects$actions)){
+      out[, paste(objects$actions$father[i], objects$actions$mother[i], sep = '_X_')] <- X[, objects$actions$father[i]]*X[, objects$actions$mother[i]]
     }
     return(out)
   }
 ))
 
-GENERATOR.POLYNOMIAL = setRefClass('GENERATOR.POLYNOMIAL', contains = 'TRANSFORMER', methods = list(
+MULTIPLIER.BINARY.COMP = setRefClass('MULTIPLIER.BINARY.COMP', contains = 'MULTIPLIER.BINARY', methods = list(
   initialize = function(...){
     callSuper(...)
-    type     <<- 'Polynomial Generator'
+    type     <<- 'Binary Multiplier Components'
+    if(is.empty(name)){name <<- 'BMC' %>% paste0(sample(10000:99999, 1))}
+    config$num_components <<- config$num_components %>% verify(c('numeric', 'integer'), default = 5)
+    config$model_class  <<- config$model_class  %>% verify('character', default = 'SCIKIT.XGB')
+    config$model_config <<- config$model_config %>% verify('character', default = list())
+  },
+
+  model.fit = function(X, y){
+    callSuper(X)
+    objects$model <<- new(config$model_class, config = config$model_config)
+    feature_subset_scorer(objects$model, predict(X), y) -> scores
+    objects$features <<- scores %>% rownames2Column('fname') %>%
+      select(fname, importance = score) %>% filter(importance > 0) %>% arrange(desc(importance)) %>% head(config$num_components)
+  },
+
+  model.predict = function(X){
+    X
+  }
+
+))
+
+POLYNOMIAL = setRefClass('POLYNOMIAL', contains = 'TRANSFORMER', methods = list(
+  initialize = function(...){
+    callSuper(...)
+    type     <<- 'Polynomial Feature Transformer'
     if(is.empty(name)){name <<- 'PLYG' %>% paste0(sample(10000:99999, 1))}
 
     # Sigma{k = 1}{n_terms} (gain*x + intercept)^k
     config$apply_abs <<- config$apply_abs %>% verify('logical', default = F)
     config$intercept <<- config$intercept %>% verify('numeric', default = 0)
-    config$gain      <<- config$gain %>% verify('numeric', default = 0)
+    config$gain      <<- config$gain %>% verify('numeric', default = 1)
     config$n_terms   <<- config$n_terms %>% verify('numeric', default = 3) %>% as.integer
   },
 
   model.fit = function(X, y = NULL){
-    object$features <<- object$features %>% filter(fclass %in% c('numeric', 'integer'))
+    objects$features <<- object$features %>% filter(fclass %in% c('numeric', 'integer'))
   },
 
   model.predict = function(X){
@@ -538,26 +591,53 @@ GENETIC.BOOSTER.GEOMETRIC = setRefClass('GENETIC.BOOSTER.GEOMETRIC', contains = 
 
         callSuper(...)
         if(is.null(config$epochs)) {config$epochs <<- 10}
+        if(is.null(config$max_fails)) {config$max_fails <<- 2}
         if(is.null(config$cycle_births)) {config$cycle_births <<- 1000}
         if(is.null(config$cycle_survivors)) {config$cycle_survivors <<- 100}
-        if(is.null(config$final_survivors)) {config$final_survivors <<- 1}
-        if(is.null(config$metric)){config$metric <<- cor}
+        if(is.null(config$final_survivors)) {config$final_survivors <<- 5}
+        if(is.null(config$metric)){config$metric <<- 'gini'}
+      },
+
+      root_parents = function(fn){
+        originals = rownames(objects$model)[is.na(objects$model$father) | is.na(objects$model$mother)]
+        if(is.null(objects$root_parents)) {objects$root_parents <<- list()}
+        if(!is.null(objects$root_parents[[fn]])){rp = objects$root_parents[[fn]]} else {
+          if(fn %in% originals){
+            rp = fn
+          } else {
+            rp = c()
+            if(objects$model[fn, 'father'] %in% originals){rp = c(rp, objects$model[fn, 'father'])} else {rp = c(rp, root_parents(fn = objects$model[fn, 'father']))}
+            if(objects$model[fn, 'mother'] %in% originals){rp = c(rp, objects$model[fn, 'mother'])} else {rp = c(rp, root_parents(fn = objects$model[fn, 'mother']))}
+          }
+          objects$root_parents[[fn]] <<- rp
+        }
+        return(objects$root_parents[[fn]])
       },
 
       # nf features are born by random parents:
-      createFeatures = function(flist, prefix = 'F'){
-        features = rownames(flist)
-        flist %>% rbind(
+      createFeatures = function(prefix = 'F'){
+        features  = rownames(objects$model)
+
+        objects$model <<- objects$model %>% rbind(
           data.frame(
-            fname  = prefix %>% paste0(nrow(flist) + sequence(config$cycle_births)),
+            fname  = prefix %>% paste0(nrow(objects$model) + sequence(config$cycle_births)),
             father = features %>% sample(config$cycle_births, replace = T),
             mother = features %>% sample(config$cycle_births, replace = T),
             correlation = NA,
-            safety = 0, stringsAsFactors = F) %>% column2Rownames('fname'))
+            safety = 0, rps = as.character(NA), stringsAsFactors = F) %>%
+            mutate(parents = paste(ifelse(father <= mother, father, mother), ifelse(mother <= father, father, mother))) %>%
+            distinct(parents, .keep_all = T) %>% select(-parents) %>%
+            column2Rownames('fname'))
+        for(fn in rownames(objects$model)){
+          if(is.na(objects$model[[fn, 'rps']])){
+            objects$model[[fn, 'rps']] <<- root_parents(fn) %>% sort %>% paste(collapse = ',')
+          }
+        }
+        objects$model <<- objects$model[!duplicated(objects$model$rps),]
+        objects$root_parents <<- objects$root_parents %>% list.extract(rownames(objects$model))
       },
 
       evaluateFeatures = function(X, y){
-        cor_fun = config$metric
         top     = config$cycle_survivors
         columns = colnames(X)
         flist   = objects$model
@@ -565,13 +645,17 @@ GENETIC.BOOSTER.GEOMETRIC = setRefClass('GENETIC.BOOSTER.GEOMETRIC', contains = 
 
         keep = is.na(flist$correlation) & (flist$father %in% columns) & (flist$mother %in% columns)
         if(sum(keep) > 0){
-          flist$correlation[keep] <- cor_fun(X[, flist$father[keep]]*X[, flist$mother[keep]], y) %>% as.numeric %>% abs
+          flist$correlation[keep] <- correlation(X[, flist$father[keep]]*X[, flist$mother[keep]], y, metric = config$metric) %>% as.numeric %>% abs
         }
         keep = is.na(flist$correlation) %>% which
 
         if(length(keep) > 0){
-          flist$correlation[keep] <- cor_fun(getFeatureValue.multiplicative(flist, ns[keep], X), y)
+          flist$correlation[keep] <- correlation(getFeatureValue.multiplicative(flist, ns[keep], X), y, metric = config$metric)
         }
+
+        # wna = flist$correlation %>% is.na
+        # wdp = flist$correlation %>% duplicated
+        # flist = flist[wna | !wdp, ]
 
         high_level = max(flist$safety) + 1
         # ord = flist$correlation %>% order(decreasing = T) %>% intersect(which(!duplicated(flist$correlation)))
@@ -594,21 +678,24 @@ GENETIC.BOOSTER.GEOMETRIC = setRefClass('GENETIC.BOOSTER.GEOMETRIC', contains = 
         return(XOUT %>% as.data.frame)
       },
 
-
       model.fit = function(X, y){
-          cor_fun = config$metric
           objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
           X = X[objects$features$fname]
-          objects$model <<- data.frame(fname = objects$features$fname, father = NA, mother = NA, correlation = cor_fun(X, y) %>% as.numeric %>% abs, safety = 0) %>% column2Rownames('fname')
+          objects$model <<- data.frame(fname = objects$features$fname, father = as.character(NA), mother = as.character(NA), correlation = correlation(X, y, metric = config$metric), safety = 0, rps = as.character(NA), stringsAsFactors = F) %>% column2Rownames('fname')
           objects$fdata <<- X[objects$features$fname]
 
-          i = 0
-          while(i < config$epochs){
+          i = 0;j = 0;prev_best = -Inf
+          while((i < config$epochs) & (j < config$max_fails)){
             i = i + 1
-            objects$model <<- createFeatures(objects$model)
+            createFeatures()
             evaluateFeatures(X = X[objects$features$fname], y = y)
-
-            cat('Iteration:', i, ': Best Correlation = ', max(objects$model$correlation), ' nrow(flist) = ', nrow(objects$model), '\n')
+            best = max(objects$model$correlation)
+            cat('Iteration:', i, ': Best Correlation = ', best, ' population = ', nrow(objects$model), '\n')
+            if(best > prev_best){
+              prev_best = best
+            } else {
+              j = j + 1
+            }
           }
       }
     )
@@ -621,11 +708,12 @@ GENETIC.BOOSTER.LOGICAL = setRefClass('GENETIC.BOOSTER.LOGICAL', contains = 'TRA
     type     <<- 'Logical Genetic Booster'
     if(is.empty(name)){name <<- 'GBL' %>% paste0(sample(10000:99999, 1))}
 
-    if(is.null(config$metric)){config$metric <<- cross_accuracy}
+    if(is.null(config$metric)){config$metric <<- 'f1'}
     if(is.null(config$epochs)) {config$epochs <<- 10}
+    if(is.null(config$max_fails)) {config$max_fails <<- 2}
     if(is.null(config$cycle_births)) {config$cycle_births <<- 1000}
     if(is.null(config$cycle_survivors)) {config$cycle_survivors <<- 100}
-    if(is.null(config$final_survivors)) {config$final_survivors <<- 10}
+    if(is.null(config$final_survivors)) {config$final_survivors <<- 5}
     if(is.null(config$target)) {config$target <<- 0.9}
   },
 
@@ -635,7 +723,7 @@ GENETIC.BOOSTER.LOGICAL = setRefClass('GENETIC.BOOSTER.LOGICAL', contains = 'TRA
   },
 
   model.fit = function(X, y){
-    objects$model    <<- genBinFeatBoost.fit(X, y, target = config$target, epochs = config$epochs, cycle_survivors = config$cycle_survivors, final_survivors = config$final_survivors, cycle_births = config$cycle_births, metric = config$metric)
+    objects$model    <<- genBinFeatBoost.fit(X, y, target = config$target, epochs = config$epochs, max_fails = config$max_fails, cycle_survivors = config$cycle_survivors, final_survivors = config$final_survivors, cycle_births = config$cycle_births, metric = config$metric)
     objects$features <<- objects$model %>%
       rownames2Column('fname') %>%
       filter(is.na(father), is.na(mother)) %>%
@@ -757,8 +845,7 @@ PYLMNN = setRefClass('PYLMNN', contains = "TRANSFORMER", methods = list(
   },
 
   model.predict = function(X){
-    XOUT = objects$model$transform(XF %>% data.matrix) %>% as.data.frame
-    colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
+    XOUT = objects$model$transform(X %>% data.matrix) %>% as.data.frame
     return(XOUT)
   }
 ))
@@ -783,10 +870,6 @@ GROUPER = setRefClass('GROUPER', contains = "TRANSFORMER", methods = list(
   }
 ))
 
-
-
-
-
 SFS = setRefClass('SFS', contains = 'TRANSFORMER', methods = list(
   initialize = function(...){
     callSuper(...)
@@ -794,31 +877,42 @@ SFS = setRefClass('SFS', contains = 'TRANSFORMER', methods = list(
     if(is.empty(name)){name <<- 'SFS' %>% paste0(sample(10000:99999, 1))}
     config$model_class  <<- config$model_class %>% verify('character', default = 'CLS.SCIKIT.XGB')
     config$model_config <<- config$model_config %>% verify('list', default = list())
+    config$return_features <<- config$return_features %>% verify('logical', lengths = 1, domain = c(T,F), default = T)
   },
 
   model.fit = function(X, y){
-    objects$model = new(config$model_class, config = config$model_config)
-    objects$model$fit(X, y)
-    objects$features = objects$model$objects$features %>% filter(importance > 0) %>% arrange(desc(importance))
-
-    # Bild best model with best predictor:
-    fetbag = c()
-    perf   = -Inf
-
     cv.set.transformed = config$model_config$cv.set
     if(!is.null(config$model_config$cv.set) & !is.empty(transformers)){
       for(i in sequence(length(cv.set.transformed))){cv.set.transformed[[i]]$X %<>% transform}
     }
 
-    for(ft in objects$features$fname){
-      objects$model <<- new(config$model_class, config$model_config)
-      objects$model$config$cv.set = cv.set.transformed
+    if(is.null(config$feature_order)){
+      mdl <- new(config$model_class, config = config$model_config)
+      mdl$config$cv.set = cv.set.transformed
 
-      new_perf = objects$model$get.performance.cv(X[, c(fetbag, ft), drop = F], y) %>% median
+      feature_subset_scorer(mdl, X, y) -> scores
+      objects$features <<- scores %>% rownames2Column('fname') %>%
+        filter(score > 0) %>% arrange(desc(score)) %>% mutate(fname = as.character(fname)) %>% select(fname)
+    } else {
+      objects$features <<- data.frame(fname = config$feature_order, stringsAsFactors = F)
+    }
+
+    # Bild best model with best predictor:
+    fetbag = c()
+    perf   = -Inf
+
+    for(ft in objects$features$fname){
+      mdl = new(config$model_class, config = config$model_config)
+      mdl$config$cv.set = cv.set.transformed
+
+      new_perf = mdl$get.performance.cv(X[, c(fetbag, ft), drop = F], y) %>% median
       if(new_perf > perf){
         cat('\n', 'New feature added: ', ft, ' New performance: ', new_perf)
-        fetbag = objects$model$objects$features %>% filter(importance > 0) %>% pull(fname)
+        fetbag = mdl$objects$features %>% filter(importance > 0) %>% pull(fname)
         perf   = new_perf
+        if(!config$return_features){
+          objects$model <<- mdl$copy()
+        }
       }
     }
 
@@ -826,7 +920,11 @@ SFS = setRefClass('SFS', contains = 'TRANSFORMER', methods = list(
     objects$features <<- objects$features %>% filter(fname %in% fetbag)
   },
 
-  model.pedict = function(X){X}
+  model.pedict = function(X){
+    if(config$return_features) {return(X)} else {
+      return(objects$model$predict(X))
+    }
+  }
 ))
 
 
@@ -836,14 +934,14 @@ IDENTITY = setRefClass('IDENTITY' , contains = "TRANSFORMER",
     initialize = function(...){
       callSuper(...)
       type <<- 'Identity Transformer'
-      if(is.empty(name)){name <<-'IDTY' %>% paste0(samp1e(10000:99999, 1))}
+      if(is.empty(name)){name <<-'IDTY' %>% paste0(sample(10000:99999, 1))}
     },
 
-    mode1.fit = functien(x, y){
+    model.fit = function(X, y){
       # do nothing
     },
 
-    mode1.predict = function (x){
+    model.predict = function (X){
       # Do nothing
       X
     }

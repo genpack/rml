@@ -9,7 +9,8 @@ createFeatures.multiplicative = function(flist, nf, prefix = 'Feat'){
       father = features %>% sample(nf, replace = T),
       mother = features %>% sample(nf, replace = T),
       correlation = NA,
-      safety = 0, stringsAsFactors = F) %>% column2Rownames('name'))
+      safety = 0, stringsAsFactors = F) %>% distinct(father, mother, .keep_all = T) %>%
+      column2Rownames('name'))
 }
 
 createFeatures.logical = function(flist, nf, prefix = 'Feat', actions = c('AND', 'OR', 'XOR')){
@@ -21,7 +22,8 @@ createFeatures.logical = function(flist, nf, prefix = 'Feat', actions = c('AND',
       mother  = features %>% sample(nf, replace = T),
       action  = actions %>% sample(nf, replace = T),
       correlation = NA,
-      safety = 0, stringsAsFactors = F) %>% column2Rownames('name'))
+      safety = 0, stringsAsFactors = F) %>% distinct(father, mother, action, .keep_all = T) %>%
+      column2Rownames('name'))
 }
 # immunes a subset of features to the highest safety level
 immune = function(flist, features, level, columns){
@@ -33,6 +35,7 @@ immune = function(flist, features, level, columns){
   }
   return(flist)
 }
+
 
 
 getFeatureValue.logical = function(flist, name, dataset){
@@ -53,7 +56,6 @@ getFeatureValue.logical = function(flist, name, dataset){
     return(switch(flist[name, 'action'], 'AND' = {father & mother}, 'OR' = {father | mother}, 'XOR' = {xor(father, mother)}))
   } else {stop('Feature name is not in the list!')}
 }
-
 
 getFeatureValue.multiplicative = function(flist, name, dataset){
   if(length(name) > 1){
@@ -136,18 +138,23 @@ evaluateFeatures.logical = function(flist, X, y, top = 100, cor_fun = cross_accu
 }
 
 # Optimal Genetic Binary Feature Combiner
-genBinFeatBoost.fit = function(X, y, target = 0.9, epochs = 10, cycle_survivors = 500, cycle_births = 2000, final_survivors = 5, metric = cross_enthropy){
+genBinFeatBoost.fit = function(X, y, target = 0.9, epochs = 10, max_fail = 2, cycle_survivors = 500, cycle_births = 2000, final_survivors = 5, metric = cross_enthropy){
   columns = colnames(X)
   flist   = data.frame(name = columns, father = NA, mother = NA, action = NA, correlation = metric(X[, columns], y) %>% as.numeric %>% abs, safety = 0) %>% column2Rownames('name')
   flist   = flist[!is.na(flist$correlation),]
   # nf features are born by random parents:
-  i = 0
-  while((i < epochs) & (max(flist$correlation) < target)){
+  i = 0; j = 0; prev_best = -Inf
+  while((i < epochs) & (max(flist$correlation) < target) & (j < max_fail)){
     i = i + 1
     flist = createFeatures.logical(flist, cycle_births)
     flist %<>% evaluateFeatures.logical(X, y, cor_fun = metric, top = chif(i == epochs, final_survivors, cycle_survivors))
-
-    cat('Iteration: ', i, ': Best Correlation = ', max(flist$correlation), ' nrow(flist) = ', nrow(flist), '\n')
+    best = max(flist$correlation)
+    cat('Iteration: ', i, ': Best Correlation = ', best, ' population = ', nrow(flist), '\n')
+    if(best > prev_best){
+      prev_best = best
+    } else {
+      j = j + 1
+    }
   }
 
   return(flist)
@@ -218,24 +225,20 @@ GENETIC = setRefClass(
       }
     }
 
-
-
   ))
 
 
 ########## GENERIC GENETIC ##############
-transtypes = c(IDENTITY = 3, NORMALIZER = 2, DUMMIFIER = 1, GROUPER = 0.2, ENCODER.JAMESSTEIN = 1, OPTBINNER = 1, ENCODER.CATBOOST = 1, ENCODER.HELMERT = 1,
-              SMBINNING = 1, LOGGER = 1, KMEANS = 1, PRCOMP = 1, CLS.SCIKIT.XGB = 1, CLS.SCIKIT.KNN = 0.2, CLS.SCIKIT.LR = 1, CLS.SCIKIT.SVM = 0.2)
 
-createFeatures = function(flist, nf, prefix = 'FEAT', X, y){
+createFeatures = function(flist, nf, types, prefix = 'FEAT', X, y){
   features = names(flist)
   lenflist = length(flist)
   for(i in sequence(nf)){
-    fname   = prefix %>% paste(lenflist + i)
+    fname   = prefix %>% paste(lenflist + i, sep = '_')
     parents = features %>% sample(5, replace = F)
-    feature_parents = parent %^% colnames(X)
+    feature_parents = parents %^% colnames(X)
     trans_parents   = parents %-% feature_parents
-    translist       = flist %>% list.extract(trans_parents)
+    translist       = flist %>% list.extract(trans_parents) %>% list.pull('model', do_unlist = F)
 
     if(!is.empty(feature_parents)){
       idt = IDENTITY(features.include = feature_parents)
@@ -247,32 +250,75 @@ createFeatures = function(flist, nf, prefix = 'FEAT', X, y){
     res       = try(model$fit(X, y), silent = T)
     if(!inherits(res, 'try-error')){
       flist[[fname]] <- list(
-        name = fname,
+        name    = fname,
         parents = parents,
         action  = transname,
-        performance = NA,
+        model   = model,
+        correlation = NA,
         safety = 0
       )
     }
   }
+  return(flist)
 }
 
-getFeatureValue = function(flist, name, X){
-  if(length(name) > 1){
+getFeatureValue = function(flist, fnames, X){
+  if(length(fnames) > 1){
     out = NULL
-    for(nm in name){
-      out = cbind(out, getFeatureValue.multiplicative(flist, nm, X))
+    for(nm in fnames){
+      out = cbind(out, getFeatureValue(flist, nm, X))
     }
-    names(out) <- name
+    names(out) <- fnames
     return(out)
   }
 
-  if(name %in% colnames(X)){return(X[, name])}
-  if(name %in% names(flist)){
-    return(flist[[name]]$model$predict(X))
+  if(fnames %in% colnames(X)){return(X[, fnames])}
+  if(fnames %in% names(flist)){
+    res = try(flist[[fnames]]$model$predict(X), silent = T)
+    if(inherits(res, 'try-error')) res = numeric(nrow(X)) %>% as.data.frame
+    return(res)
   } else {
     stop('feature name not in the list!')
   }
+}
+
+getFeatureCorrelations = function(flist, X, y, metric = 'pearson_correlation'){
+  ns   = names(flist)
+  keep = c()
+  for(item in flist){
+    keep %<>% c(is.na(item$correlation))
+  }
+  for(i in which(keep)){
+    flist[[i]]$correlation <- correlation(getFeatureValue(flist, ns[i], X), y, metric = metric) %>% max
+  }
+  return(flist)
+}
+
+reduceFeatures = function(flist, X, y, metric = 'pearson_correlation', top = 100){
+  ns   = names(flist)
+  flist %<>% getFeatureCorrelations(X, y, metric)
+
+  high_level = max(flist %>% list.pull('safety')) + 1
+  ord = flist %>% list.pull('correlation') %>% order(decreasing = T)
+
+  top  = min(top, length(ord) - 1)
+
+  flist %<>% immuneFeatures(ns[ord[sequence(top)]], level = high_level, columns = colnames(X))
+
+  keep = which(flist %>% list.pull('safety') == high_level)
+  return(flist %>% list.extract(ns[keep]))
+}
+
+immuneFeatures = function(flist, features, level, columns){
+  for(ft in features){
+    flist[[ft]]$safety = level
+  }
+
+  have_parents = which(!(features %in% columns))
+  if(length(have_parents) > 0){
+    flist %<>% immuneFeatures(flist %>% list.extract(features[have_parents]) %>% list.pull('parents') %>% unique, level, columns)
+  }
+  return(flist)
 }
 
 
@@ -291,11 +337,440 @@ createFeatures.supervisor = function(flist, nf, prefix = 'Feat'){
 }
 
 
+########### GREEDY GENETIC ####################
+default_templates = list(
+  xgb1 =list(class = 'CLS.SCIKIT.XGB', weight = 0.20, n_num = c(30:60, 40:80), n_cat = c(0:10, 5:15),    n_jobs = as.integer(7), return_logit = c(T, T, F)),
+  lr1 = list(class = 'CLS.SCIKIT.LR' , weight = 0.20, n_num = c(20:60)       , n_cat = c(0:10),           penalty = 'l1', return_logit = c(T, T, T, F), transformers = "NORMALIZER()"),
+  svm1 = list(class = 'CLS.SCIKIT.SVM', weight = 0.05, n_num = c(5:20)        , n_cat = c(0:10)))
+
+create_transformer = function(X, y, types = default_templates, name = NULL){
+  colnames(X) %>% sapply(function(i) X[,i] %>% class) -> features
+  num_features = names(features)[features == 'numeric']
+  cat_features = names(features)[features == 'integer']
+
+  types %>% list.pull('weight') %>% {names(.) <- types %>% length %>% sequence;.} -> weights
+
+  sn  = pick(weights) %>% as.integer
+  types[[sn]]$n_num = ifelse(types[[sn]]$n_num > length(num_features), length(num_features), types[[sn]]$n_num)
+  types[[sn]]$n_cat = ifelse(types[[sn]]$n_cat > length(cat_features), length(cat_features), types[[sn]]$n_cat)
+  nnf = types[[sn]]$n_num %>% sample(1)
+  ncf = types[[sn]]$n_cat %>% sample(1)
+
+  tr  = try(types[[sn]]$class %>% new(features.include = c(num_features %>% sample(nnf), cat_features %>% sample(ncf))), silent = T)
+  if(inherits(tr, 'try-error')) {
+    cat( '\n', as.character(tr), '\n')
+    return(NULL)
+  }
+  if(!is.null(name)) tr$name = name
+  configs = names(types[[sn]]) %-% c('class', 'weight', 'n_num', 'n_cat', 'transformers')
+  for(cfg in configs){
+    if(length(types[[sn]][[cfg]]) == 1){
+      tr$config[[cfg]] <- types[[sn]][[cfg]]
+    } else {
+      tr$config[[cfg]] <- types[[sn]][[cfg]] %>% sample(1)
+    }
+  }
+  if(!is.null(types[[sn]][['transformers']])){
+    for(scr in types[[sn]][['transformers']]){
+      sub_tr = try(parse(text = scr) %>% eval, silent = T)
+      if(inherits(sub_tr, 'try-error')){
+        cat( '\n Sub_transformer failed: ', as.character(sub_tr), '\n')
+      } else {
+        tr$transformers[[sub_tr$name]] <- sub_tr
+      }
+    }
+  }
+
+  res = try(tr$fit(X, y), silent = T)
+  if(inherits(res, 'try-error')) {
+    cat( '\n', as.character(res), '\n')
+    return(NULL)
+  }
+
+  return(tr)
+}
+
+addTransformer = function(model, transformer, X_train, y_train, X_val, y_val, benchmark = NULL){
+  if(is.null(benchmark)){
+    model$fit(X_train, y_train)
+    benchmark = model$performance(X_val, y_val, 'gini')
+  }
+  if(length(model$transformers) == 0){
+    idt = IDENTITY(name = 'I', features.include = model$config$features.include, features.exclude = model$config$features.exclude)
+    model$transformers[['I']]   <- idt
+  }
+  model$transformers[[transformer$name]] <- transformer
+  model$reset(reset_transformers = F)
+  res = try(model$fit(X_train, y_train), silent = T)
+  if(!inherits(res, 'try-error')){
+    new_perf = model$performance(X_val, y_val, metric = 'gini')
+    if(new_perf <= benchmark){
+      cat('\n', 'Transformer ', transformer$name, ' Failed!', '\n')
+      model$transformers[[transformer$name]] <- NULL
+      model$reset(reset_transformers = F)
+    } else {
+      cat('\n', 'Transformer ', transformer$name, ' successfully improved performance to: ', new_perf, '\n')
+      return(new_perf)
+    }
+  } else {
+    cat('\n', res %>% as.character, '\n')
+    model$transformers[[transformer$name]] <- NULL
+    model$reset(reset_transformers = F)
+  }
+}
+
+join_features = function(father, mother, X_train, y_train, X_val, y_val, benchmark = NULL){
+  if(is.null(benchmark)){
+    model$fit(X_train, y_train)
+    benchmark = model$performance(X_val, y_val, 'gini')
+  }
+  if(length(model$transformers) == 0){
+    idt = IDENTITY(name = 'I', features.include = model$config$features.include, features.exclude = model$config$features.exclude)
+    model$transformers[['I']]   <- idt
+  }
+  model$transformers[[transformer$name]] <- transformer
+  model$reset(reset_transformers = F)
+  res = try(model$fit(X_train, y_train), silent = T)
+  if(!inherits(res, 'try-error')){
+    new_perf = model$performance(X_val, y_val, metric = 'gini')
+    if(new_perf <= benchmark){
+      cat('\n', 'Transformer ', transformer$name, ' Failed!', '\n')
+      model$transformers[[transformer$name]] <- NULL
+      model$reset(reset_transformers = F)
+    } else {
+      cat('\n', 'Transformer ', transformer$name, ' successfully improved performance to: ', new_perf, '\n')
+      return(new_perf)
+    }
+  } else {
+    cat('\n', res %>% as.character, '\n')
+    model$transformers[[transformer$name]] <- NULL
+    model$reset(reset_transformers = F)
+  }
+}
 
 
 
 
+########### EXPERT GENETIC ####################
+classifiers   =  c("CLS.SCIKIT.XGB", "CLS.SCIKIT.LR", "CLS.SCIKIT.SVM", "CLS.SCIKIT.KNN", "CLS.SCIKIT.DT")
+encoders      =  c("ENCODER.HELMERT", "ENCODER.CATBOOST", "ENCODER.JAMESSTEIN", "ENCODER.TARGET", "ENCODER.MODEL")
+binners       =  c('OPTBINNER', 'SMBINNING')
+
+models_pass   = c("DUMMIFIER", "NORMALIZER", classifiers, encoders)
+encoders_pass = c('integer', 'GROUPER', 'KMEANS', 'SKMEANS')
+binners_pass  = c('integer', 'numeric', classifiers, encoders)
+free_numerics = c('integer', 'numeric')
+bound_numerics = c("NORMALIZER", "SCALER", classifiers, encoders)
+
+
+default_expert_templates = list(
+  list(class = 'CLS.SCIKIT.XGB', weight = 0.2, n_jobs = as.integer(7), return_logit = c(T, T, F), max_depth = 3:15, min_child_weight = 1:5, n_estimators = 50*(1:6)),
+  list(class = 'CLS.SCIKIT.LR' , weight = 0.1, penalty = c(rep('l1',5), 'l2'), return_logit = c(T, T, T, F), pass = models_pass),
+  list(class = 'CLS.SCIKIT.SVM', weight = 0.05, pass = models_pass, max_train = 5000:10000),
+  list(class = 'CLS.SCIKIT.KNN', weight = 0.05, pass = models_pass, max_train = 5000:10000),
+  list(class = 'SCALER', weight = 0.02, pass = 'numeric'),
+  list(class = 'NORMALIZER', weight = 0.05, pass = 'numeric'),
+  list(class = 'OPTBINNER', weight = 0.02, pass = binners_pass),
+  list(class = 'ENCODER.JAMESSTEIN', weight = 0.01, pass = encoders_pass),
+  list(class = 'ENCODER.CATBOOST', weight = 0.01, pass = encoders_pass),
+  list(class = 'ENCODER.JAMESSTEIN', weight = 0.01, pass = encoders_pass),
+  list(class = 'ENCODER.TARGET', weight = 0.01, pass = encoders_pass),
+  list(class = 'ENCODER.MODEL', weight = 0.01, pass = encoders_pass, model_class = classifiers),
+  list(class = 'ENCODER.MODEL', weight = 0.01, pass = encoders_pass, model_class = classifiers),
+  list(class = 'INVERTER', weight = 0.01, pass = 'NORMALIZER', trim = 100),
+  list(class = 'MULTIPLIER.BINARY', weight = 0.01, pass = models_pass %-% 'DUMMIFIER'),
+  list(class = 'MULTIPLIER.BINARY.COMP', weight = 0.01, pass = models_pass %-% 'DUMMIFIER', model_class = classifiers, num_components = 5:25),
+  list(class = 'POLYNOMIAL', weight = 0.01, pass = bound_numerics, n_terms = 2:16),
+  list(class = 'LOGGER', weight = 0.01, pass = c('NORMALIZER', 'numeric', classifiers), intercept = 0.1*(0:100)),
+  list(class = 'DUMMIFIER', weight = 0.01, pass = encoders_pass),
+  list(class = 'GENETIC.BOOSTER.GEOMETRIC', weight = 0.01, pass = free_numerics, n_survivors = 2, max_fail = 2:3),
+  list(class = 'GENETIC.BOOSTER.LOGICAL', weight = 0.01, pass = c('OPTBINNER', 'DUMMIFIER')),
+  list(class = 'KMEANS', weight = 0.01, pass = c(free_numerics, bound_numerics)),
+  list(class = 'PYLMNN', weight = 0.01, pass = c(free_numerics, bound_numerics), max_train = 5000:10000),
+  list(class = 'PRCOMP', weight = 0.01, pass = free_numerics, num_components = 5:30))
+
+names(default_expert_templates) <- default_expert_templates %>% list.pull('class') %>% unname
+
+read_exlist = function(path){
+  exl = list()
+  for(fn in list.files(path)){
+    exl[[fn]] <- load_model(fn, path)
+  }
+  return(exl)
+}
+
+create_experts_from_dataset = function(dataset){
+  cls = colnames(dataset) %>% sapply(function(i) dataset[,i] %>% class) %>% unname
+  list(exlog = data.frame(exname = colnames(dataset), father = as.character(NA), mother = as.character(NA), action = as.character(NA), class = cls, correlation = as.numeric(NA), safety = 0, stringsAsFactors = F) %>%
+    column2Rownames('exname'), exlist = list())
+}
+
+develop_exlog_from_exlist = function(exlog, exlist){
+  exnames = exlist %>% list.pull('name') %>% unname
+  exclass = exlist %>% lapply(function(x) class(x)) %>% unlist %>% unname
+
+  data.frame(exname = exnames, father = as.character(NA), mother = as.character(NA), action = as.character(NA), class = exclass, correlation = as.numeric(NA), safety = 0, stringsAsFactors = F) %>%
+    column2Rownames('exname') %>% rbind(exlog)
+}
 
 
 
+grow_exlog    = function(exlog, ne, prefix = 'EX', template_set = default_expert_templates, action_set = c('<<==>>', '<<==', '==>>')){
+  originals = rownames(exlog)[exlog$class %in% c('numeric', 'integer')]
+  features = rownames(exlog)
+  exlog %>% rbind(
+    data.frame(
+      name   = prefix %>% paste0(nrow(exlog) + sequence(ne)),
+      father = features %>% sample(ne, replace = T),
+      mother = features %>% sample(ne, replace = T),
+      action = action_set %>% sample(ne, replace = T),
+      class  = template_set %>% list.pull('class') %>% sample(ne, replace = T),
+      correlation = NA,
+      safety = 0, stringsAsFactors = F) %>%
+      column2Rownames('name'))
+      # {.$action[.$father %in% originals] <- '<<==>>';.}) %>%
+      # {.$class[which(.$action == '<<==')] <- .[.$father[which(.$action == '<<==')], 'class'];.}
+}
+
+# Example (for test):
+# testlog = data.frame(exname = LETTERS, father = NA, mother = NA, action = NA, class = c('numeric', 'integer') %>% sample(size = 26, replace = T), correlation = NA, safety = 0, stringsAsFactors = F) %>%
+#   column2Rownames('exname')
+# testlog %>% grow_exlog(200) %>% View
+# exlog %>%
+consistent_exlog = function(exlog){
+  exnames = rownames(exlog)
+  tbd     = which(!exlog$father %in% c(exnames, NA)) %U% which(!exlog$mother %in% c(exnames, NA))
+  while(length(tbd) > 0){
+    exlog   = exlog[- tbd, ]
+    exnames = rownames(exlog)
+    tbd     = which(!exlog$father %in% c(exnames, NA)) %U% which(!exlog$mother %in% c(exnames, NA))
+  }
+  return(exlog)
+}
+
+# Removes infeasible experts
+correct_exlog = function(exlog, template_set = default_expert_templates){
+  # expert_classes = exlog %>% rownames2Column('exname') %>% distince()
+  exlog_copy <- exlog %>% rownames2Column('exname')
+  originals  <- exlog_copy$exname[is.na(exlog_copy$father) | is.na(exlog_copy$mother)]
+
+  exlog_copy %<>%
+    left_join(exlog_copy %>% select(exname, class) %>% rename(father = exname, father_class = class), by = 'father') %>%
+    left_join(exlog_copy %>% select(exname, class) %>% rename(mother = exname, mother_class = class), by = 'mother') %>%
+    mutate(class = as.character(class), mother_class = as.character(mother_class), father_class = as.character(father_class))
+
+  exlog_copy %<>%
+    filter(!is.na(father) & !is.na(mother)) %>%
+    filter(!father_class %in% c('numeric', 'integer') | action != '<<==') %>%
+    filter(!mother_class %in% c('numeric', 'integer') | action != '==>>')
+
+  keep = rep(TRUE, nrow(exlog_copy))
+  for(i in sequence(nrow(exlog_copy))){
+    if(!is.null(template_set[[exlog_copy$class[i]]]$pass)){
+      keep[i] = (exlog_copy$father_class[i] %in% template_set[[exlog_copy$class[i]]]$pass) & (exlog_copy$mother_class[i] %in% template_set[[exlog_copy$class[i]]]$pass)
+    }
+  }
+
+  exlog_copy = exlog_copy[keep, ]
+
+  exnames = originals %U% exlog_copy$exname
+  exlog   = exlog[exnames, ] %>% consistent_exlog
+
+  exlog[which(exlog$action == '<<=='), 'class'] <- exlog[exlog[which(exlog$action == '<<=='), 'father'], 'class']
+  exlog[which(exlog$action == '==>>'), 'class'] <- exlog[exlog[which(exlog$action == '==>>'), 'mother'], 'class']
+
+  return(exlog)
+}
+
+grow_experts = function(experts, n_births = 100, n_target = 20, prefix = 'EX', template_set = default_expert_templates, action_set = c('<<==>>', '<<==', '==>>')){
+  nexp = nrow(experts$exlog)
+  while (nrow(experts$exlog) < n_target + nexp){
+    experts$exlog %<>% grow_exlog(n_births, prefix, template_set, action_set) %>%
+      correct_exlog(template_set = template_set)
+  }
+  experts$exlog = experts$exlog[sequence(nexp + n_target),] %>% correct_exlog(template_set = template_set)
+  experts %>% build_experts(template_set = template_set)
+}
+
+build_expert_from_template = function(exname = NULL, template){
+  tr  = try(template$class %>% new, silent = T)
+  if(inherits(tr, 'try-error')){
+    cat('\n', 'Building expert ', tr, ' failed!', '\n',  as.character(tr), '\n')
+    return(NULL)
+  }
+  if(!is.null(exname)) tr$name = exname
+  configs = names(template) %-% c('class', 'weight', 'n_num', 'n_cat', 'transformers', 'pass')
+  for(cfg in configs){
+    if(length(template[[cfg]]) == 1){
+      tr$config[[cfg]] <- template[[cfg]]
+    } else {
+      tr$config[[cfg]] <- template[[cfg]] %>% sample(1)
+    }
+  }
+  return(tr)
+}
+
+build_experts = function(experts, template_set){
+
+  originals = rownames(experts$exlog)[experts$exlog$class %in% c('numeric', 'integer')]
+  exnames   = rownames(experts$exlog) %-% names(experts$exlist) %-% originals
+  for(i in exnames){
+    cat('Building expert: ', i, ' ... ')
+
+    tr = build_expert_from_template(exname = i, template = template_set[[experts$exlog[i, 'class']]])
+
+    root_father = experts$exlog[i,'father'] %in% originals
+    root_mother = experts$exlog[i,'mother'] %in% originals
+
+    if(root_father & root_mother){
+      if(experts$exlog[i, 'action'] == '<<==>>'){
+        expert_transformer = list(IDENTITY(features.include = c(experts$exlog[i,'father'], experts$exlog[i,'mother']) %>% unique))}
+      else {stop('Impossible! Check expert generator engine.')}}
+    else if(root_father){
+      if(experts$exlog[i, 'action'] == '<<==>>'){
+        expert_transformer = list(IDENTITY(features.include = c(experts$exlog[i,'father'])), experts$exlist[[experts$exlog[i,'mother']]])}
+      else if (experts$exlog[i, 'action'] == '==>>'){
+        expert_transformer = experts$exlist[[experts$exlog[i,'mother']]]$transformers
+        j = 0; permit = F
+        while(j < length(expert_transformer) & !permit){
+          j = j + 1
+          if(expert_transformer[[j]]$type == 'Identity Transformer'){
+            expert_transformer[[j]] = expert_transformer[[j]]$copy()
+            expert_transformer[[j]]$config$features.include %<>% c(experts$exlog[i,'father'])
+            expert_transformer[[j]]$reset()
+            permit = T
+          }
+        }
+        if(!permit){
+          expert_transformer[[length(expert_transformer) + 1]] <- IDENTITY(features.include = c(experts$exlog[i,'father']))
+        }}
+      else {stop('Impossible! Check expert generator engine.')}}
+    else if(root_mother){
+      if(experts$exlog[i, 'action'] == '<<==>>'){
+        expert_transformer = list(IDENTITY(features.include = c(experts$exlog[i,'mother'])), experts$exlist[[experts$exlog[i,'father']]])}
+      else if (experts$exlog[i, 'action'] == '<<=='){
+        expert_transformer = experts$exlist[[experts$exlog[i,'father']]]$transformers
+        j = 0; permit = F
+        while(j < length(expert_transformer) & !permit){
+          j = j + 1
+          if(expert_transformer[[j]]$type == 'Identity Transformer'){
+            expert_transformer[[j]] = expert_transformer[[j]]$copy()
+            expert_transformer[[j]]$config$features.include %<>% c(experts$exlog[i,'mother'])
+            expert_transformer[[j]]$reset()
+            permit = T
+          }
+        }
+        if(!permit){
+          expert_transformer[[length(expert_transformer) + 1]] <- IDENTITY(features.include = c(experts$exlog[i,'mother']))
+        }}
+      else {stop('Impossible! Check expert generator engine.')}}
+    else{
+      if(experts$exlog[i, 'action'] == '<<==>>'){
+        expert_transformer = list(experts$exlist[[experts$exlog[i,'father']]], experts$exlist[[experts$exlog[i,'mother']]])
+      } else if (experts$exlog[i, 'action'] == '==>>'){
+        export_transformer = experts$exlist[[experts$exlog[i,'mother']]]$transformers
+        export_transformer[[length(export_transformer) + 1]] <- experts$exlist[[experts$exlog[i,'father']]]
+      } else if (experts$exlog[i, 'action'] == '<<=='){
+        export_transformer = experts$exlist[[experts$exlog[i,'father']]]$transformers
+        export_transformer[[length(export_transformer) + 1]] <- experts$exlist[[experts$exlog[i,'mother']]]
+      } else {stop('Impossible! Check expert generator engine.')}
+    }
+
+    tr$transformers     <- expert_transformer
+    experts$exlist[[i]] <- tr
+    cat('Done!', '\n')
+  }
+  return(experts)
+}
+
+train_experts = function(experts, X, y){
+  for(i in names(experts$exlist)){
+    cat('Training expert: ', i, ' ...')
+    res = try(experts$exlist[[i]]$fit(X, y), silent = T)
+    cat('DONE!', '\n')
+    if(inherits(res, 'try-error')){
+      cat('\n', 'Expert ', i, ' training failed!', '\n', res %>% as.character, '\n')
+    }
+  }
+  ftbd = c()
+  for(i in names(experts$exlist)){
+    if(!experts$exlist[[i]]$fitted){
+      experts$exlist[[i]] <- NULL
+      ftbd = c(ftbd, i)
+    }
+  }
+  tbd = rownames(experts$exlog) %in% ftbd
+  experts$exlog = experts$exlog[!tbd,]
+
+  return(experts)
+}
+
+get_expert_value = function(exlist, exnames, dataset){
+  if(length(exnames) > 1){
+    out = NULL
+    for(nm in exnames){
+      out = cbind(out, get_expert_value(exlist, nm, dataset))
+    }
+    names(out) <- exnames
+    return(out)
+  }
+
+  if(exnames %in% colnames(dataset)){return(dataset[, exnames])}
+  if(exnames %in% names(exlist)){
+    res = try(exlist[[exnames]]$predict(dataset), silent = T)
+    if(inherits(res, 'try-error')) {
+      cat('\n', exnames, ' prediction failed!', '\n', res %>% as.character)
+      res = numeric(nrow(dataset)) %>% as.data.frame}
+    return(res)
+  } else {
+    stop('feature name not in the list!')
+  }
+}
+
+get_expert_correlations = function(experts, X, y, metric = 'gini'){
+  exnames   = rownames(experts$exlog)
+  originals = rownames(experts$exlog)[experts$exlog$class %in% c('numeric', 'integer')]
+  assert((exnames %-% originals) %==% names(experts$exlist))
+  tbc  = is.na(experts$exlog$correlation)
+  for(i in which(tbc)){
+    experts$exlog[i, 'correlation'] <- correlation(get_expert_value(experts$exlist, exnames[i], X), y, metric = metric) %>% max
+  }
+  return(experts)
+}
+
+reduce_experts = function(experts, X, y, metric = 'gini', top = 10){
+  exnames   = rownames(experts$exlog)
+  originals = rownames(experts$exlog)[experts$exlog$class %in% c('numeric', 'integer')]
+  assert((exnames %-% originals) %==% names(experts$exlist))
+  experts %<>% get_expert_correlations(X, y, metric)
+
+  experts$exlog$father_score = experts$exlog[experts$exlog$father, 'correlation']
+  experts$exlog$mother_score = experts$exlog[experts$exlog$mother, 'correlation']
+  experts$exlog$parent_score = ifelse(experts$exlog$father_score > experts$exlog$mother_score, experts$exlog$father_score, experts$exlog$mother_score)
+  experts$exlog$parent_score[is.na(experts$exlog$parent_score)] <- -Inf
+  experts$exlog = experts$exlog[experts$exlog$correlation > experts$exlog$parent_score, colnames(experts$exlog) %-% c('father_score', 'mother_score', 'parent_score')] %>%
+    consistent_exlog
+
+  exnames    = rownames(experts$exlog)
+  high_level = max(experts$exlog %>% pull('safety')) + 1
+  ord = experts$exlog %>% pull('correlation') %>% order(decreasing = T)
+
+  top  = min(top, length(ord) - 1)
+
+  experts %<>% immune_experts(exnames[ord[sequence(top)]], level = high_level)
+  experts$exlog = experts$exlog[experts$exlog$safety == high_level,] %>% consistent_exlog
+  experts$exlist %<>% list.extract(rownames(experts$exlog))
+  return(experts)
+}
+
+immune_experts = function(experts, exnames, level){
+  originals = rownames(experts$exlog)[which(experts$exlog$class %in% c('numeric', 'integer'))]
+  experts$exlog[exnames, 'safety'] <- level
+
+  have_parents = which(!(exnames %in% originals))
+  if(length(have_parents) > 0){
+    experts %<>% immune_experts(experts$exlog[exnames[have_parents], 'father'] %U% experts$exlog[exnames[have_parents], 'mother'] %-% NA, level)
+  }
+  return(experts)
+}
 

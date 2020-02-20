@@ -153,7 +153,43 @@ na2median = function(X){
   return(X)
 }
 
+correlation = function(x, y, metric = 'pearson_correlation', threshold = NULL, lift_ratio = NULL){
+  if(metric == 'pearson_correlation'){
+    return(cor(x, y))
+  }
 
+  ncl = ncol(x)
+  if(!is.null(ncl)){
+    crl = numeric()
+    x %<>% as.data.frame
+    for(col in sequence(ncl)){
+      crl = c(crl, correlation(x[,col] %>% as.numeric, y, metric = metric, threshold = threshold, lift_ratio = lift_ratio))
+    }
+    return(crl)
+  }
+
+  x %<>% vect.map
+  if(!is.null(threshold)) x = as.numeric(x > threshold)
+
+  if(metric %in% c('aurc', 'gini')){
+    aurc = AUC::auc(AUC::roc(x, y %>% as.factor))
+    if(metric == 'aurc') return(aurc) else return(2*aurc - 1)
+  }
+
+  if(metric %in% c('precision', 'recall', 'f1', 'accuracy', 'sensitivity', 'specificity', 'fp', 'fn', 'tp', 'tn')){
+    if(metric == 'sensitivity') metric = 'recall'
+    score = data.frame(y_pred = x, y_true = y) %>% scorer('y_pred', 'y_true')
+    return(score[[metric]])
+  }
+
+  if(is.null(lift_ratio)){lift_ratio = mean(y, na.rm = T)}
+  if(metric == 'lift'){
+    cut_q = quantile(x, prob = 1 - lift_ratio)
+    prec  = y[x > cut_q] %>% mean(na.rm = T)
+    return(prec/mean(y))
+  }
+  stop('Unknown metric' %>% paste(metric))
+}
 
 # Groups features based on count of their unique values
 #' @export
@@ -606,7 +642,8 @@ predict_glm_fit <- function(glmfit, newmatrix, addintercept=TRUE){
 
 # File: init.R must be in the working directory
 
-evaluate <- function (D, tt_ratio = 0.7, yfun = function(x){x}, yfun.inv = yfun) {
+# previously called evaluate
+sfs.regression <- function (D, tt_ratio = 0.7, yfun = function(x){x}, yfun.inv = yfun) {
   if(!inherits(D, 'matrix')) D %<>% as.matrix
 
   N = dim(D)[1]
@@ -735,7 +772,7 @@ model_size = function(model){
        transformers = object.size(model$transformers) + t_size$config + t_size$objects + t_size$transformers)
 }
 
-#converts given categorical con urns to integer
+#converts given categorical columns to integer
 int_columns = function(x, cats){
   X %<>% as.data.frame
   for(i in intersect(cats, colnames(x))){
@@ -750,4 +787,37 @@ numerize_columns = function(x){
   for(i in colnames(x))
     X[,i] <- as.numeric(x[,i])
   return(x)
+}
+
+# todo: make it parallel
+feature_subset_scorer = function(model, X, y, subset_size = 600){
+  features = data.frame(fname = colnames(X), model_number = NA, importance = NA, performance = NA, score = NA, stringsAsFactors = F) %>% column2Rownames('fname')
+  nf       = nrow(features); cnt = 0
+  tempfeat = rownames(features)
+  while(nf > 0){
+    cnt      = cnt + 1
+    sfet     = tempfeat %>% sample(min(nf, subset_size))
+    tempfeat = tempfeat %-% sfet
+    nf       = length(tempfeat)
+
+    perf = model$get.performance.cv(X[sfet], y)
+
+    features[model$objects$features$fname, 'importance']   <- model$objects$features$importance
+    features[model$objects$features$fname, 'model_number'] <- cnt
+    features[model$objects$features$fname, 'performance']  <- perf
+    features[model$objects$features$fname, 'score']        <- perf*vect.normalise(model$objects$features$importance)
+
+    cat('\n Features scored: ', ' Performance: ', perf, ' Remaining: ', nf)
+  }
+
+  return(features)
+}
+
+
+transformer_types = function(model){
+  mdlns = model$type
+  for(tr in model$transformers){
+    mdlns = c(mdlns, transformer_names(tr))
+  }
+  return(mdlns %>% unique)
 }

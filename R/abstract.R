@@ -53,8 +53,17 @@ MODEL = setRefClass('MODEL',
         for (transformer in transformers) transformer$reset(reset_transformers = T)
       }
     },
-    get.feature.names    = function(){character()},
-    get.feature.weights  = function(){},
+
+    get.features         = function(include_transformers = T){
+      fet = objects$features$fname
+      if(include_transformers){
+        for(tr in transformers){
+          fet = c(fet, tr$get.features())
+        }
+      }
+      return(fet)
+    },
+
     predict              = function(X){
       if(!fitted) stop(paste('from', name, 'of type', type, ':', 'Model not fitted!', '\n'))
       if(inherits(X, 'matrix')){X %<>% as.data.frame}
@@ -145,6 +154,8 @@ MODEL = setRefClass('MODEL',
         if(!is.null(config$features.include)){X = X %>% spark.select(config$features.include %^% colnames(X))}
         if(!is.null(config$features.exclude)){X = X %>% spark.select(colnames(X) %-% config$features.exclude)}
         X = transform(X, y)
+        if(!is.null(config$features.include.at)){X = X %>% spark.select(config$features.include.at %^% colnames(X))}
+        if(!is.null(config$features.exclude.at)){X = X %>% spark.select(colnames(X) %-% config$features.exclude.at)}
         if(config$remove_invariant_features) X %<>% remove_invariant_features
         objects$features <<- colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
         if(is.empty(objects$features)){fit.distribution(X, y)}
