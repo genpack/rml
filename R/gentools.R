@@ -668,11 +668,11 @@ build_experts = function(experts, template_set){
       if(experts$exlog[i, 'action'] == '<<==>>'){
         expert_transformer = list(experts$exlist[[experts$exlog[i,'father']]], experts$exlist[[experts$exlog[i,'mother']]])
       } else if (experts$exlog[i, 'action'] == '==>>'){
-        export_transformer = experts$exlist[[experts$exlog[i,'mother']]]$transformers
-        export_transformer[[length(export_transformer) + 1]] <- experts$exlist[[experts$exlog[i,'father']]]
+        expert_transformer = experts$exlist[[experts$exlog[i,'mother']]]$transformers
+        expert_transformer[[length(expert_transformer) + 1]] <- experts$exlist[[experts$exlog[i,'father']]]
       } else if (experts$exlog[i, 'action'] == '<<=='){
-        export_transformer = experts$exlist[[experts$exlog[i,'father']]]$transformers
-        export_transformer[[length(export_transformer) + 1]] <- experts$exlist[[experts$exlog[i,'mother']]]
+        expert_transformer = experts$exlist[[experts$exlog[i,'father']]]$transformers
+        expert_transformer[[length(expert_transformer) + 1]] <- experts$exlist[[experts$exlog[i,'mother']]]
       } else {stop('Impossible! Check expert generator engine.')}
     }
 
@@ -772,5 +772,34 @@ immune_experts = function(experts, exnames, level){
     experts %<>% immune_experts(experts$exlog[exnames[have_parents], 'father'] %U% experts$exlog[exnames[have_parents], 'mother'] %-% NA, level)
   }
   return(experts)
+}
+
+save_experts = function(experts, path = getwd()){
+  experts$exlog %>% write.csv(path %>% paste('exlog.csv', sep = '/'), row.names = F)
+  for(fn in names(experts$exlist) %-% list.files(path)){
+    save_model(experts$exlist[[fn]], path)
+  }
+}
+
+load_experts = function(experts, path = getwd()){
+  experts = list(exlog = data.frame(), exlist = list())
+  experts$exlog <- read.csv(path %>% paste('exlog.csv', sep = '/'), as.is = T)
+  for(fn in list.files(path) %^% rownames(experts$exlog)){
+    experts$exlist[[fn]] <- load_model(fn, path)
+  }
+  for(fn in list.files(path) %-% names(exlist)){
+    unlink(path %>% paste(fn, spe = '/'), recursive=TRUE)
+  }
+  return(experts)
+}
+
+########### FUNCTIONAL GENETIC ####################
+default_two_inputs = list(
+  mul2, add2, lincomb2
+)
+
+default_one_inputs = list(pwr, log, exp, inv)
+grow_functions = function(n_births = 100, n_target = 20, prefix = 'FN'){
+
 }
 

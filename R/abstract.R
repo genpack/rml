@@ -5,7 +5,7 @@ maler_words = c('keep_columns', 'keep_features', 'max_train',
                 'cv.ntrain', 'cv.ntest', 'cv.test_ratio','cv.train_ratio', 'cv.split_method', 'cv.performance_metric', 'cv.reset_transformer', 'cv.restore_model',
                 'sfs.enabled', 'rfe.enabled', 'rfe.importance_threshold', 'remove_invariant_features', 'sig_level', 'predict_probabilities',
                 'decision_threshold', 'threshold_determination', 'metric', 'return_logit', 'transformers', 'fitted',
-                'segmentation_features', 'features.include', 'cv.set')
+                'segmentation_features', 'features.include', 'features.include.at', 'features.exclude', 'features.exclude.at', 'cv.set')
 
 
 #' @export MODEL
@@ -49,6 +49,7 @@ MODEL = setRefClass('MODEL',
     reset                = function(reset_transformers = T){
       fitted <<- FALSE
       objects$features <<- NULL
+      objects$saved_pred <<- NULL
       if (reset_transformers & !is.empty(transformers)){
         for (transformer in transformers) transformer$reset(reset_transformers = T)
       }
@@ -64,11 +65,29 @@ MODEL = setRefClass('MODEL',
       return(fet)
     },
 
+    canuse_saved_prediction = function(X){
+      permit = F
+      if(!is.null(objects$saved_pred)){
+        X      = X[numerics(X)]
+        permit = identical(colSums(X), objects$saved_pred$CSUMS)
+        permit = permit & identical(rowSums(X), objects$saved_pred$RSUMS)
+        permit = permit & identical(X[objects$saved_pred$RNDM, ], objects$saved_pred$XSAMP)
+      }
+      return(permit)
+    },
+
+    keep_prediction = function(X, Y){
+      X    = X[numerics(X)]
+      rnd  = sequence(nrow(X)) %>% sample(size = ncol(X))
+      objects$saved_pred <<- list(CSUMS = colSums(X), RSUMS = rowSums(X), XOUT = Y, RNDM = rnd, XSAMP = X[rnd,])
+    },
+
     predict              = function(X){
       if(!fitted) stop(paste('from', name, 'of type', type, ':', 'Model not fitted!', '\n'))
       if(inherits(X, 'matrix')){X %<>% as.data.frame}
       X = transform(X)
     },
+
     treat                = function(out, fet, org){
       if(!is.null(config$pass_columns)) org = org[config$pass_columns]
       if(!is.null(config$filter_columns)) org = org[colnames(org) %-% config$filter_columns]
@@ -151,11 +170,11 @@ MODEL = setRefClass('MODEL',
           ww = c(w1, w2) %>% sample(length(w1) + length(w2))
           X = X[ww,]; y = y[ww]
         }
-        if(!is.null(config$features.include)){X = X %>% spark.select(config$features.include %^% colnames(X))}
-        if(!is.null(config$features.exclude)){X = X %>% spark.select(colnames(X) %-% config$features.exclude)}
+        if(!is.null(config[['features.include']])){X = X %>% spark.select(config$features.include %^% colnames(X))}
+        if(!is.null(config[['features.exclude']])){X = X %>% spark.select(colnames(X) %-% config$features.exclude)}
         X = transform(X, y)
-        if(!is.null(config$features.include.at)){X = X %>% spark.select(config$features.include.at %^% colnames(X))}
-        if(!is.null(config$features.exclude.at)){X = X %>% spark.select(colnames(X) %-% config$features.exclude.at)}
+        if(!is.null(config[['features.include.at']])){X = X %>% spark.select(config$features.include.at %^% colnames(X))}
+        if(!is.null(config[['features.exclude.at']])){X = X %>% spark.select(colnames(X) %-% config$features.exclude.at)}
         if(config$remove_invariant_features) X %<>% remove_invariant_features
         objects$features <<- colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
         if(is.empty(objects$features)){fit.distribution(X, y)}

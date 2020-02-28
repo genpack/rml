@@ -4,7 +4,12 @@ TRANSFORMER = setRefClass('TRANSFORMER', contains = "MODEL", methods = list(
   predict = function(X){
     XORG = callSuper(X) %>% as.data.frame
     XFET = XORG[objects$features$fname]
-    XOUT = .self$model.predict(XFET)
+    if(canuse_saved_prediction(XFET)){
+      XOUT = objects$saved_pred$XOUT
+    } else {
+      XOUT = .self$model.predict(XFET)
+      keep_prediction(XFET, XOUT)
+    }
     if(is.null(colnames(XOUT))){
       if(ncol(XOUT) == nrow(objects$features)){
         colnames(XOUT) <- name %>% paste(objects$features$fname, sep = '_')
@@ -39,7 +44,7 @@ SMBINNING = setRefClass('SMBINNING', contains = "TRANSFORMER",
 
       model.fit = function(X, y){
           library(smbinning)
-          objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+          objects$features <<- objects$features %>% filter(fclass == 'numeric')
           X = X[objects$features$fname]
 
           objects$model <<- list()
@@ -150,7 +155,7 @@ OPTBINNER = setRefClass('OPTBINNER', contains = "TRANSFORMER", methods = list(
   },
 
   model.fit = function(X, y){
-      objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+      objects$features <<- objects$features %>% filter(fclass == 'numeric')
       X = X[objects$features$fname]
       if(length(objects$features$fname) > 0){
         ds = cbind(X, Y = y)
@@ -473,7 +478,7 @@ POLYNOMIAL = setRefClass('POLYNOMIAL', contains = 'TRANSFORMER', methods = list(
   },
 
   model.fit = function(X, y = NULL){
-    objects$features <<- object$features %>% filter(fclass %in% c('numeric', 'integer'))
+    objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
   },
 
   model.predict = function(X){
@@ -855,18 +860,19 @@ GROUPER = setRefClass('GROUPER', contains = "TRANSFORMER", methods = list(
     callSuper(...)
     type     <<- 'Categorical Feature Grouper'
     if(is.empty(name)){name <<- 'GRP' %>% paste0(sample(10000:99999, 1))}
+    config$encoding <<- config$encoding %>% verify('character', domain =c('target_ratio', 'flasso'), default = 'target_ratio')
     #config$num_components <<- config$num_components %>% verify(c('numeric', 'integer'), default = 5) %>% as.integer
   },
 
   model.fit = function(X, y){
-      objects$features <<- objects$features %>% filter(fclass %in% c('character','factor','logical', 'integer'))
+      objects$features <<- objects$features %>% filter(fclass %in% c('character','factor','logical','integer'))
       X = X[objects$features$fname]
       assert(ncol(X) > 0, 'No nominal features found!')
-      objects$model <<- fit_map_new(X, y, objects$features$fname)
+      objects$model <<- fit_map_new(X, y, objects$features$fname, encoding = config$encoding)
   },
 
   model.predict = function(X){
-    predict_map(X, objects$model) %>% as.data.frame %>% {colnames(.)<-NULL;.}
+    predict_map(X, objects$model) %>% as.data.frame %>% {colnames(.) <- NULL;.}
   }
 ))
 

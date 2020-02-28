@@ -488,8 +488,6 @@ scorer_downsampled = function(tbl, prediction_col, actual_col, weight = 2){
   )
 }
 
-
-
 #' @export
 remove_invariant_features = function(X){
   fsds = X %>% apply(2, function(x) length(unique(x)))
@@ -497,9 +495,19 @@ remove_invariant_features = function(X){
 }
 
 
-get_map = function(X, y, source, target){
+get_map = function(X, y, source, target, encoding = 'target_ratio'){
   mu = mean(y)
-  suppressWarnings({X %>% cbind(label = y) %>% group_by_(source) %>% summarise(cnt  = length(label), ratio = mean(label), suml = sum(label)) %>% arrange(ratio) -> tbl})
+  if(encoding == 'target_ratio'){
+    suppressWarnings({X %>% cbind(label = y) %>% group_by_(source) %>% summarise(cnt  = length(label), ratio = mean(label), suml = sum(label)) %>% arrange(ratio) -> tbl})
+  } else if (encoding == 'flasso'){
+    fl = CLS.FLASSO(lambda1 = 5, lambda2 = 1, transformers = DUMMIFIER(name = 'D', features.include = source))
+    fl$fit(X, y)
+    fl$objects$features$fname %>%
+      gsub(pattern = paste0('D_', source, '_'), replacement = '') %>%
+      data.frame(fl$objects$model$coefficient) %>%
+      {names(.) <- c(source, 'ratio');.} -> tbl
+  } else stop('Unknown encoding ', encoding)
+
   nr = tbl %>% pull(ratio) %>% unique %>% length
   elbow(tbl['ratio'], max.num.clusters = nr) -> res
   logpval = c()
@@ -533,11 +541,11 @@ concat_columns = function(X, sources, target){
   parse(text = scr) %>% eval
 }
 
-fit_map = function(X, y, cats){
+fit_map = function(X, y, cats, encoding = 'target_ratio'){
   allmaps  = list()
   scores   = get_chisq_scores(X, y, cats)
   cats     = cats[order(scores)]
-  map_base = get_map(X, y, source = cats[1], target = 'M0')
+  map_base = get_map(X, y, source = cats[1], target = 'M0', encoding = encoding)
   X = apply_map(X, map_base)
   allmaps[[cats[1]]] <- map_base
   columns = cats[-1]
@@ -545,7 +553,7 @@ fit_map = function(X, y, cats){
   for(i in sequence(length(columns))){
     col   = columns[i]
     XT    = concat_columns(X, sources = c('M' %>% paste0(iii - 1), col), target = 'C' %>% paste0(iii))
-    mapi  = get_map(XT, y, source = 'C' %>% paste0(iii), target = 'M' %>% paste0(iii))
+    mapi  = get_map(XT, y, source = 'C' %>% paste0(iii), target = 'M' %>% paste0(iii), encoding = encoding)
     XT    = apply_map(XT, mapi)
     fval  = suppressWarnings({chisq.test(XT %>% pull('M' %>% paste0(iii)), y)})
     fval  = fval$statistic %>% pchisq(df = fval$parameter['df'], lower.tail = F, log.p = T)
@@ -576,11 +584,11 @@ get_chisq_scores = function(X, y, cats){
   return(scores)
 }
 
-fit_map_new = function(X, y, cats){
+fit_map_new = function(X, y, cats, encoding = 'target_ratio'){
   allmaps  = list()
   scores   = get_chisq_scores(X, y, cats)
   cats     = cats[order(scores)]
-  map_base = get_map(X, y, source = cats[1], target = 'M0')
+  map_base = get_map(X, y, source = cats[1], target = 'M0', encoding = encoding)
   X = apply_map(X, map_base)
   allmaps[[cats[1]]] <- map_base
   columns = cats[-1]
@@ -590,7 +598,7 @@ fit_map_new = function(X, y, cats){
     ind1  = XT %>% nrow %>% sequence %>% sample(floor(0.5*nrow(XT)))
     ind2  = XT %>% nrow %>% sequence %>% setdiff(ind1)
     X1    = XT[ind1,]; X2 = XT[ind2,]; y1 = y[ind1]; y2 = y[ind2]
-    mapi  = get_map(X1, y1, source = 'C' %>% paste0(iii), target = 'M' %>% paste0(iii))
+    mapi  = get_map(X1, y1, source = 'C' %>% paste0(iii), target = 'M' %>% paste0(iii), encoding = encoding)
     X1    = apply_map(X1, mapi)
     X2    = apply_map(X2, mapi)
     p1    = get_chisq_scores(X1, y1, 'M' %>% paste0(iii))
