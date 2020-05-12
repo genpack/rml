@@ -241,7 +241,7 @@ createFeatures = function(flist, nf, types, prefix = 'FEAT', X, y){
     translist       = flist %>% list.extract(trans_parents) %>% list.pull('model', do_unlist = F)
 
     if(!is.empty(feature_parents)){
-      idt = IDENTITY(features.include = feature_parents)
+      idt = MAP.MALER.IDT(features.include = feature_parents)
       translist[[idt$name]] <- idt
     }
 
@@ -340,7 +340,7 @@ createFeatures.supervisor = function(flist, nf, prefix = 'Feat'){
 ########### GREEDY GENETIC ####################
 default_templates = list(
   xgb1 =list(class = 'CLS.SCIKIT.XGB', weight = 0.20, n_num = c(30:60, 40:80), n_cat = c(0:10, 5:15),    n_jobs = as.integer(7), return_logit = c(T, T, F)),
-  lr1 = list(class = 'CLS.SCIKIT.LR' , weight = 0.20, n_num = c(20:60)       , n_cat = c(0:10),           penalty = 'l1', return_logit = c(T, T, T, F), transformers = "NORMALIZER()"),
+  lr1 = list(class = 'CLS.SCIKIT.LR' , weight = 0.20, n_num = c(20:60)       , n_cat = c(0:10),           penalty = 'l1', return_logit = c(T, T, T, F), transformers = "MAP.MALER.MMS()"),
   svm1 = list(class = 'CLS.SCIKIT.SVM', weight = 0.05, n_num = c(5:20)        , n_cat = c(0:10)))
 
 create_transformer = function(X, y, types = default_templates, name = NULL){
@@ -396,7 +396,7 @@ addTransformer = function(model, transformer, X_train, y_train, X_val, y_val, be
     benchmark = model$performance(X_val, y_val, 'gini')
   }
   if(length(model$transformers) == 0){
-    idt = IDENTITY(name = 'I', features.include = model$config$features.include, features.exclude = model$config$features.exclude)
+    idt = MAP.MALER.IDT(name = 'I', features.include = model$config$features.include, features.exclude = model$config$features.exclude)
     model$transformers[['I']]   <- idt
   }
   model$transformers[[transformer$name]] <- transformer
@@ -425,7 +425,7 @@ join_features = function(father, mother, X_train, y_train, X_val, y_val, benchma
     benchmark = model$performance(X_val, y_val, 'gini')
   }
   if(length(model$transformers) == 0){
-    idt = IDENTITY(name = 'I', features.include = model$config$features.include, features.exclude = model$config$features.exclude)
+    idt = MAP.MALER.IDT(name = 'I', features.include = model$config$features.include, features.exclude = model$config$features.exclude)
     model$transformers[['I']]   <- idt
   }
   model$transformers[[transformer$name]] <- transformer
@@ -456,38 +456,54 @@ classifiers   =  c("CLS.SCIKIT.XGB", "CLS.SCIKIT.LR", "CLS.SCIKIT.SVM", "CLS.SCI
 encoders      =  c("ENCODER.HELMERT", "ENCODER.CATBOOST", "ENCODER.JAMESSTEIN", "ENCODER.TARGET", "ENCODER.MODEL")
 binners       =  c('OPTBINNER', 'SMBINNING')
 
-models_pass   = c("DUMMIFIER", "NORMALIZER", classifiers, encoders)
-encoders_pass = c('integer', 'GROUPER', 'KMEANS', 'SKMEANS')
+models_pass   = c("DUMMIFIER", "MAP.MALER.MMS", "numeric", classifiers, encoders)
+encoders_pass = c('integer', 'GROUPER', 'BIN.KMEANS.KMC', 'SKMEANS')
 binners_pass  = c('integer', 'numeric', classifiers, encoders)
 free_numerics = c('integer', 'numeric')
-bound_numerics = c("NORMALIZER", "SCALER", classifiers, encoders)
+bound_numerics = c("MAP.MALER.MMS", "SCALER", classifiers, encoders, 'numeric')
 
 
 default_expert_templates = list(
-  list(class = 'CLS.SCIKIT.XGB', weight = 0.2, n_jobs = as.integer(7), return_logit = c(T, T, F), max_depth = 3:15, min_child_weight = 1:5, n_estimators = 50*(1:6)),
-  list(class = 'CLS.SCIKIT.LR' , weight = 0.1, penalty = c(rep('l1',5), 'l2'), return_logit = c(T, T, T, F), pass = models_pass),
-  list(class = 'CLS.SCIKIT.SVM', weight = 0.05, pass = models_pass, max_train = 5000:10000),
-  list(class = 'CLS.SCIKIT.KNN', weight = 0.05, pass = models_pass, max_train = 5000:10000),
-  list(class = 'SCALER', weight = 0.02, pass = 'numeric'),
-  list(class = 'NORMALIZER', weight = 0.05, pass = 'numeric'),
-  list(class = 'OPTBINNER', weight = 0.02, pass = binners_pass),
-  list(class = 'ENCODER.JAMESSTEIN', weight = 0.01, pass = encoders_pass),
-  list(class = 'ENCODER.CATBOOST', weight = 0.01, pass = encoders_pass),
-  list(class = 'ENCODER.JAMESSTEIN', weight = 0.01, pass = encoders_pass),
-  list(class = 'ENCODER.TARGET', weight = 0.01, pass = encoders_pass),
-  list(class = 'ENCODER.MODEL', weight = 0.01, pass = encoders_pass, model_class = classifiers),
-  list(class = 'ENCODER.MODEL', weight = 0.01, pass = encoders_pass, model_class = classifiers),
-  list(class = 'INVERTER', weight = 0.01, pass = 'NORMALIZER', trim = 100),
-  list(class = 'MULTIPLIER.BINARY', weight = 0.01, pass = models_pass %-% 'DUMMIFIER'),
-  list(class = 'MULTIPLIER.BINARY.COMP', weight = 0.01, pass = models_pass %-% 'DUMMIFIER', model_class = classifiers, num_components = 5:25),
-  list(class = 'POLYNOMIAL', weight = 0.01, pass = bound_numerics, n_terms = 2:16),
-  list(class = 'LOGGER', weight = 0.01, pass = c('NORMALIZER', 'numeric', classifiers), intercept = 0.1*(0:100)),
-  list(class = 'DUMMIFIER', weight = 0.01, pass = encoders_pass),
-  list(class = 'GENETIC.BOOSTER.GEOMETRIC', weight = 0.01, pass = free_numerics, n_survivors = 2, max_fail = 2:3),
-  list(class = 'GENETIC.BOOSTER.LOGICAL', weight = 0.01, pass = c('OPTBINNER', 'DUMMIFIER')),
-  list(class = 'KMEANS', weight = 0.01, pass = c(free_numerics, bound_numerics)),
-  list(class = 'PYLMNN', weight = 0.01, pass = c(free_numerics, bound_numerics), max_train = 5000:10000),
-  list(class = 'PRCOMP', weight = 0.01, pass = free_numerics, num_components = 5:30))
+  list(class = 'CLS.SCIKIT.XGB', weight = 0.1, n_jobs = as.integer(7), return_logit = c(T, T, F), max_depth = 3:15, min_child_weight = 1:5, n_estimators = 50*(1:6), feature_transformer = 'MAP.MALER.IDT'),
+  list(class = 'CLS.SCIKIT.LR' , weight = 0.05, penalty = c(rep('l1',5), 'l2'), return_logit = c(T, T, T, F), pass = models_pass, feature_transformer = 'MAP.MALER.MMS'),
+  list(class = 'CLS.SCIKIT.SVM', weight = 0.05, pass = models_pass, max_train = 5000:10000, return_logit = c(T, T, F), feature_transformer = 'SCALER'),
+  list(class = 'CLS.SCIKIT.KNN', weight = 0.05, pass = models_pass, max_train = 5000:10000, return_logit = c(T, T, F), feature_transformer = 'MAP.MALER.MMS'),
+  list(class = 'CLS.SCIKIT.DT', weight = 0.05, pass = models_pass, return_logit = c(T, T, F), feature_transformer = 'MAP.MALER.IDT'),
+  list(class = 'CLS.FLASSO', weight = 0.05, pass = models_pass, lambda1 = 0.1*(0:50), lambda2 = 0.1*(0:50), return_logit = c(T, T, F), feature_transformer = 'MAP.MALER.MMS'),
+  list(class = 'CLS.SPARKLYR.GBT', weight = 0.05, pass = models_pass, return_logit = c(T, T, F),
+       max_iter  = 20:50, max_depth = 2:20, subsampling_rate = 0.1*(1:10),
+       max_bins  = c(16, 32, 64, 128), min_info_gain = 0,
+       step_size = c(0.001*(1:10), 0.01*(1:10), 0.1*(1:10)), feature_transformer = 'MAP.MALER.IDT'),
+  list(class = 'CLS.MLR', weight = 0.05, pass = models_pass,
+       model_type = mlr.classification.models$class, feature_transformer = 'MAP.MALER.IDT'),
+  list(class = 'CLS.KERAS.DNN', weight = 0.05, pass = models_pass, return_logit = c(T, T, F),
+       num_layers = 1:5,
+       first_layer_nodes = 1:1024,
+       layer_nodes_ratio = 0.1*(1:20),
+       layers_activation = c('relu', 'linear'),
+       layers_dropout = 0.01*(1:75),
+       initializer_seed = 1:100000,
+       kernel_regularization_penalty_l1 = c(rep(0, 20), 0.001*(1:1000)),
+       kernel_regularization_penalty_l2 = c(rep(0, 20), 0.001*(1:1000)),
+       learning_rate = 0.0001*(1:1000),
+       optimizer = c('adadelta', 'adagrad', 'adam', 'adamax', 'nadam', 'rmsprop', 'sgd'),
+       feature_transformer = 'MAP.MALER.MMS'),
+  # list(class = 'SCALER', weight = 0.01, pass = 'numeric'),
+  # list(class = 'MAP.MALER.MMS', weight = 0.05, pass = 'numeric'),
+  list(class = 'BIN.MALER.OBB', weight = 0.02, pass = binners_pass, feature_transformer = 'MAP.MALER.MMS'),
+  list(class = 'ENC.CATEGORY_ENCODERS.JSTN', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
+  list(class = 'ENC.CATEGORY_ENCODERS.CATB', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
+  list(class = 'ENC.CATEGORY_ENCODERS.HLMRT', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
+  list(class = 'ENC.MALER.TE', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
+  list(class = 'FNT.MALER.INV', weight = 0.01, pass = 'numeric', trim = 100, feature_transformer = 'MAP.MALER.MMS'),
+  list(class = 'FET.MALER.D2MUL', weight = 0.01, pass = setdiff(models_pass, 'DUMMIFIER'), feature_transformer = 'MAP.MALER.MMS'),
+  list(class = 'FNT.MALER.LOG', weight = 0.01, pass = c('MAP.MALER.MMS', 'numeric', classifiers), intercept = 0.1*(0:100), feature_transformer = 'MAP.MALER.MMS'),
+  list(class = 'ENC.FASTDUMMIES.OHE', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
+  list(class = 'FET.MALER.MGB', weight = 0.01, pass = free_numerics, n_survivors = 2, max_fail = 2:3, feature_transformer = 'MAP.MALER.MMS'),
+  list(class = 'GENETIC.BOOSTER.LOGICAL', weight = 0.01, pass = c('OPTBINNER', 'DUMMIFIER'), feature_transformer = 'MAP.MALER.IDT'),
+  list(class = 'BIN.KMEANS.KMC', weight = 0.01, pass = c(free_numerics, bound_numerics), feature_transformer = 'MAP.MALER.MMS'),
+  list(class = 'MAP.PYLMNN.LMNN', weight = 0.01, pass = c(free_numerics, bound_numerics), max_train = 5000:10000, feature_transformer = 'MAP.MALER.MMS'),
+  list(class = 'MAP.STATS.PCA', weight = 0.01, pass = free_numerics, num_components = 5:30, feature_transformer = 'MAP.MALER.MMS'))
 
 names(default_expert_templates) <- default_expert_templates %>% list.pull('class') %>% unname
 
@@ -517,10 +533,14 @@ develop_exlog_from_exlist = function(exlog, exlist){
 
 grow_exlog    = function(exlog, ne, prefix = 'EX', template_set = default_expert_templates, action_set = c('<<==>>', '<<==', '==>>')){
   originals = rownames(exlog)[exlog$class %in% c('numeric', 'integer')]
-  features = rownames(exlog)
+  features  = rownames(exlog)
+  exnames   = features %>% charFilter(prefix %++% '_', match_case = T)
+  if(is.empty(exnames)){start_nn = 0} else {
+    start_nn  =  exnames %>% stringr::str_remove(prefix %++% '_') %>% as.integer %>% max
+  }
   exlog %>% rbind(
     data.frame(
-      name   = prefix %>% paste0(nrow(exlog) + sequence(ne)),
+      name   = prefix %>% paste(start_nn + sequence(ne), sep = '_'),
       father = features %>% sample(ne, replace = T),
       mother = features %>% sample(ne, replace = T),
       action = action_set %>% sample(ne, replace = T),
@@ -624,11 +644,11 @@ build_experts = function(experts, template_set){
 
     if(root_father & root_mother){
       if(experts$exlog[i, 'action'] == '<<==>>'){
-        expert_transformer = list(IDENTITY(features.include = c(experts$exlog[i,'father'], experts$exlog[i,'mother']) %>% unique))}
+        expert_transformer = list(new(template_set[[experts$exlog[i, 'class']]]$feature_transformer, features.include = c(experts$exlog[i,'father'], experts$exlog[i,'mother']) %>% unique))}
       else {stop('Impossible! Check expert generator engine.')}}
     else if(root_father){
       if(experts$exlog[i, 'action'] == '<<==>>'){
-        expert_transformer = list(IDENTITY(features.include = c(experts$exlog[i,'father'])), experts$exlist[[experts$exlog[i,'mother']]])}
+        expert_transformer = list(new(template_set[[experts$exlog[i, 'class']]]$feature_transformer, features.include = c(experts$exlog[i,'father'])), experts$exlist[[experts$exlog[i,'mother']]])}
       else if (experts$exlog[i, 'action'] == '==>>'){
         expert_transformer = experts$exlist[[experts$exlog[i,'mother']]]$transformers
         j = 0; permit = F
@@ -642,12 +662,12 @@ build_experts = function(experts, template_set){
           }
         }
         if(!permit){
-          expert_transformer[[length(expert_transformer) + 1]] <- IDENTITY(features.include = c(experts$exlog[i,'father']))
+          expert_transformer[[length(expert_transformer) + 1]] <- new(template_set[[experts$exlog[i, 'class']]]$feature_transformer, features.include = c(experts$exlog[i,'father']))
         }}
       else {stop('Impossible! Check expert generator engine.')}}
     else if(root_mother){
       if(experts$exlog[i, 'action'] == '<<==>>'){
-        expert_transformer = list(IDENTITY(features.include = c(experts$exlog[i,'mother'])), experts$exlist[[experts$exlog[i,'father']]])}
+        expert_transformer = list(new(template_set[[experts$exlog[i, 'class']]]$feature_transformer, features.include = c(experts$exlog[i,'mother'])), experts$exlist[[experts$exlog[i,'father']]])}
       else if (experts$exlog[i, 'action'] == '<<=='){
         expert_transformer = experts$exlist[[experts$exlog[i,'father']]]$transformers
         j = 0; permit = F
@@ -661,7 +681,7 @@ build_experts = function(experts, template_set){
           }
         }
         if(!permit){
-          expert_transformer[[length(expert_transformer) + 1]] <- IDENTITY(features.include = c(experts$exlog[i,'mother']))
+          expert_transformer[[length(expert_transformer) + 1]] <- new(template_set[[experts$exlog[i, 'class']]]$feature_transformer, features.include = c(experts$exlog[i,'mother']))
         }}
       else {stop('Impossible! Check expert generator engine.')}}
     else{
@@ -708,20 +728,23 @@ train_experts = function(experts, X, y){
 get_expert_value = function(exlist, exnames, dataset){
   if(length(exnames) > 1){
     out = NULL
+    nms = c()
     for(nm in exnames){
-      out = cbind(out, get_expert_value(exlist, nm, dataset))
+      res = try(get_expert_value(exlist, nm, dataset), silent = T)
+      if(inherits(res, 'try-error')) {
+        cat('\n', exnames, ' prediction failed!', '\n', res %>% as.character)
+      } else {
+        out = cbind(out, res)
+        nms = c(nms, nm)
+      }
     }
-    names(out) <- exnames
+    names(out) <- nms
     return(out)
   }
 
   if(exnames %in% colnames(dataset)){return(dataset[, exnames])}
   if(exnames %in% names(exlist)){
-    res = try(exlist[[exnames]]$predict(dataset), silent = T)
-    if(inherits(res, 'try-error')) {
-      cat('\n', exnames, ' prediction failed!', '\n', res %>% as.character)
-      res = numeric(nrow(dataset)) %>% as.data.frame}
-    return(res)
+    return(exlist[[exnames]]$predict(dataset))
   } else {
     stop('feature name not in the list!')
   }
@@ -733,7 +756,10 @@ get_expert_correlations = function(experts, X, y, metric = 'gini'){
   assert((exnames %-% originals) %==% names(experts$exlist))
   tbc  = is.na(experts$exlog$correlation)
   for(i in which(tbc)){
-    experts$exlog[i, 'correlation'] <- correlation(get_expert_value(experts$exlist, exnames[i], X), y, metric = metric) %>% max
+    val = try(get_expert_value(experts$exlist, exnames[i], X), silent = T)
+    if(!inherits(val, 'try-error')){
+      experts$exlog[i, 'correlation'] <- correlation(val, y, metric = metric) %>% max
+    }
   }
   return(experts)
 }
@@ -742,7 +768,10 @@ reduce_experts = function(experts, X, y, metric = 'gini', top = 10){
   exnames   = rownames(experts$exlog)
   originals = rownames(experts$exlog)[experts$exlog$class %in% c('numeric', 'integer')]
   assert((exnames %-% originals) %==% names(experts$exlist))
+
   experts %<>% get_expert_correlations(X, y, metric)
+  experts$exlog = experts$exlog[!is.na(experts$exlog$correlation),]
+  experts$exlist %<>% list.extract(rownames(experts$exlog))
 
   experts$exlog$father_score = experts$exlog[experts$exlog$father, 'correlation']
   experts$exlog$mother_score = experts$exlog[experts$exlog$mother, 'correlation']
@@ -794,12 +823,287 @@ load_experts = function(experts, path = getwd()){
 }
 
 ########### FUNCTIONAL GENETIC ####################
-default_two_inputs = list(
-  mul2, add2, lincomb2
-)
+default_function_set = c(mul2, lincomb2, hyperbola2, binbin2, hyperpoly_d1, binbin)
+for(i in 2:5){
+  default_function_set = c(default_function_set, build_lincomb(i))
+  default_function_set = c(default_function_set, build_binbin(i))
+  default_function_set = c(default_function_set, build_poly(i, 2))
+  default_function_set = c(default_function_set, build_poly(i, 3))
+}
+pick_from_list = function(lst){
+  lst[[lst %>% length %>% sequence %>% sample(size = 1)]]
+}
 
-default_one_inputs = list(pwr, log, exp, inv)
-grow_functions = function(n_births = 100, n_target = 20, prefix = 'FN'){
+grow_funlist = function(funlist = NULL, n_births = 100, features = NULL, function_set = default_function_set, prefix = 'FN'){
+  if(is.empty(funlist)){
+    assert(!is.empty(features), 'Both funlist and features are empty!')
+    funlist = features %>% as.list; names(funlist) <- features}
+  funcnames = names(funlist) %>% charFilter(prefix)
+  if(is.empty(funcnames)){start_nn = 0} else {
+    start_nn  = funcnames %>% stringr::str_remove(prefix %++% '_') %>% as.integer %>% max
+  }
+  for(i in sequence(n_births)){
+    model = pick_from_list(function_set)$deep_copy()
+    model$name <- prefix %>% paste(i + start_nn, sep = '_')
+    for(j in names(model$inputs)){
+      inp_object = funlist[[names(funlist) %>% sample(1)]]
+      if(!inherits(inp_object, 'FUNCTION')){
+        model$inputs[[j]] <- inp_object
+      } else {
+        model$inputs[[j]] <- inp_object$deep_copy()
+        model$inputs[[j]]$name = inp_object$name %>% paste0(c(letters, LETTERS) %>% sample(1))
+      }
+    }
+    funlist[[model$name]] <- model
+  }
+  return(funlist)
+}
 
+reset_funlist = function(funlist){
+  for(fn in funlist){
+    if(inherits(fn, 'FUNCTION')) {fn$reset()}
+  }
+}
+
+evaluate_funlist = function(funlist, X, y, metric = logloss_sum){
+  loss_value = numeric()
+  ofun       = metric$copy()
+  ofun$inputs$y <- y
+
+  funset = names(funlist)
+  if(is.null(funset)){funset = sequence(length(funlist))}
+  for(fn in funset){
+    ofun$inputs$x  <- funlist[[fn]]
+    ofun$reset()
+    loss_value[fn] <- ofun$get.output.agg(data = X)
+  }
+  return(loss_value)
+}
+
+# computes the output of each function and removes functions when
+# any value in any of their inputs are not in the domain: returns NA, Inf or -Inf
+# clean_funlist = function(funlist){
+#   for(fn in funlist){
+#     if(inherits(fn, 'FUNCTION')){
+#
+#     }
+#   }
+# }
+
+
+boost_funlist_parallel = function(funlist, X, y, metric = logloss_sum, n_jobs = 8, ...){
+
+
+  library(doParallel)
+  cl = makeCluster(n_jobs)
+  registerDoParallel(cl)
+  warnif(getDoParWorkers() < n_jobs, 'Parallel run is not working. It may take too long!')
+
+  boostlist = funlist %>% lapply(function(ff) {out = inherits(ff, 'FUNCTION'); if(out) out = length(ff$list.parameters()) > 0; out}) %>% unlist %>% which %>% names
+  bflist    = foreach(fn = boostlist, .combine = c, .packages = c('magrittr', 'dplyr'), .errorhandling = 'stop') %dopar% {
+    source('~/Documents/software/R/projects/funchain/funclass.R')
+    source('~/Documents/software/R/projects/funchain/funlib.R')
+    source('~/Documents/software/R/projects/funchain/funlib2.R')
+    source('~/Documents/software/R/projects/funchain/builders.R')
+    source('~/Documents/software/R/projects/funchain/solvers.R')
+    source('~/Documents/software/R/packages/gener/R/gener.R')
+    source('~/Documents/software/R/packages/maler/R/mltools.R')
+
+    ofun          <- metric$copy()
+    ofun$inputs$y <- y
+    ofun$inputs$x <- funlist[[fn]]
+    ofun$reset()
+
+    prm = funlist[[fn]]$list.parameters()
+    keep = ofun$get.param(prm); fval = ofun$get.output.agg(data = X)
+
+    if(ofun$inputs$x$type %>% substr(1,13) == 'binary binner'){
+      sel = prm %>% sample(min(2, length(prm)))
+      res = try(minimize.ccd(ofun, parameters = sel, data = X, silent = silent), silent = T)
+      ofun$reset();if(ofun$get.output.agg(data = X) > fval) ofun$set.param(keep) else {keep = ofun$get.param(prm); fval = ofun$get.output.agg(data = X)}
+
+      sel = prm %>% sample(min(2, length(prm)))
+      res = try(minimize.walk(ofun, parameters = sel, data = X, silent = silent), silent = T)
+      ofun$reset();if(ofun$get.output.agg(data = X) > fval) ofun$set.param(keep) else {keep = ofun$get.param(prm); fval = ofun$get.output.agg(data = X)}
+    }
+
+    sel     = prm %>% sample(min(16, length(prm)))
+    stepdir = ofun$get.gradients.agg(wrt = sel, data = X) %>% unlist %>% vect.normalize %>% {-1.0*.}
+    success = try(step_forward(ofun, parameters = sel, direction = stepdir, data = X, silent = F, ...), silent = T)
+
+    ofun$reset();if(ofun$get.output.agg(data = X) > fval) ofun$set.param(keep) else {keep = ofun$get.param(prm); fval = ofun$get.output.agg(data = X)}
+    ofun$reset()
+    gc()
+    ofun$inputs$x
+  }
+  stopCluster(cl)
+  gc()
+  names(bflist) = boostlist
+  for(fn in boostlist){
+    funlist[[fn]] <- bflist[[fn]]
+  }
+  return(funlist)
+}
+
+boost_funlist = function(funlist, X, y, metric = logloss_sum, silent = F, ...){
+  ofun          = metric$copy()
+  ofun$inputs$y <- y
+
+  funames <- funlist %>% lapply(function(i) inherits(i, 'FUNCTION')) %>% unlist %>% which %>% names
+
+  for(fn in funames){
+    prm = funlist[[fn]]$list.parameters()
+    if(!is.empty(prm)){
+      ofun$reset()
+      ofun$inputs$x <- funlist[[fn]]
+
+      prm = funlist[[fn]]$list.parameters()
+      keep = ofun$get.param(prm); fval = ofun$get.output.agg(data = X)
+      if(!silent){cat('\n', 'Minimizing function ', fn, ' with loss: ', fval, ' ... ')}
+
+
+      if(ofun$inputs$x$type %>% substr(1,13) == 'binary binner'){
+        sel = prm %>% sample(min(2, length(prm)))
+        res = try(minimize.ccd(ofun, parameters = sel, data = X, silent = silent), silent = T)
+        ofun$reset();if(ofun$get.output.agg(data = X) > fval) ofun$set.param(keep) else {keep = ofun$get.param(prm); fval = ofun$get.output.agg(data = X)}
+
+        sel = prm %>% sample(min(2, length(prm)))
+        res = try(minimize.walk(ofun, parameters = sel, data = X, silent = silent), silent = T)
+        ofun$reset();if(ofun$get.output.agg(data = X) > fval) ofun$set.param(keep) else {keep = ofun$get.param(prm); fval = ofun$get.output.agg(data = X)}
+      }
+
+      sel     = prm %>% sample(min(16, length(prm)))
+      stepdir = ofun$get.gradients.agg(wrt = sel, data = X) %>% unlist %>% vect.normalize %>% {-1.0*.}
+      success = try(step_forward(ofun, parameters = sel, direction = stepdir, data = X, silent = silent, ...), silent = T)
+
+      ofun$reset();if(ofun$get.output.agg(data = X) > fval) ofun$set.param(keep) else {keep = ofun$get.param(prm); fval = ofun$get.output.agg(data = X)}
+    }
+  }
+}
+
+clean_funlist = function(funlist, X, y, metric = loss_sse){
+  err = funlist %>% evaluate_funlist(X, y, metric = metric)
+  funlist %>% list.remove(names(err)[which(is.na(err))])
+}
+
+get_function_correlations = function(funlist, X, ...){
+  corl = numeric()
+  for(fn in names(funlist)){
+    if(inherits(funlist[[fn]], 'character')){
+      x = X[, fn]
+    } else if (inherits(funlist[[fn]], 'FUNCTION')){
+      x = funlist[[fn]]$get.output(data = X)
+    } else {stop('Unexpected element found in the list.')}
+    corl[fn] <- correlation(x, ...)
+  }
+  return(corl)
+}
+
+reduce_funlist = function(funlist, X, y, top = 50, metric = logloss_sum){
+  classes   = funlist %>% lapply(function(item) class(item)[1]) %>% unlist
+  features  = names(classes)[which(classes == 'character')]
+  functions = names(classes)[which(classes == 'FUNCTION')]
+
+  errors = funlist %>% list.extract(functions) %>% evaluate_funlist(X, y, metric = metric)
+  funlist %>% list.extract(
+    names(errors)[order(errors)[min(length(errors), top) %>% sequence]]) %<==>%
+    (funlist %>% list.extract(features))
+}
+
+# save_funlist = function(funlist, path = getwd()){
+#   for(i in )
+#   dataset = funlist
+# }
+
+train_funlist = function(flist = NULL, champions = list(), X_train, y_train, X_test, y_test,
+                         depth = 5, iters = 3, trials = 5, n_births = 20, n_survivors = 10, silent = T,
+                         loss_function = loss_sse_gb, function_set = default_function_set){
+  best_train = Inf
+  best_test  = Inf
+  features   = colnames(X_train)
+  assert(features %<% colnames(X_test), 'columns of X_train must be subset of X_test!')
+
+  for(jj in sequence(depth)){
+    # Build loss functions:
+    loss_train = loss_function$deep_copy()
+    loss_train$inputs$y = y_train
+    loss_train$inputs$x = 0
+    loss_train$inputs$z = 0
+    for(ch in champions){
+      if(inherits(ch, 'FUNCTION')){
+        ch$reset()
+        loss_train$inputs$z = loss_train$inputs$z + ch$get.output(data = X_train)
+      } else {
+        loss_train$inputs$z = loss_train$inputs$z + X_train[, ch]
+      }
+    }
+    loss_train$reset()
+    best_train = loss_train$get.output.agg(data = X_train)
+    ##
+    loss_test = loss_function$deep_copy()
+    loss_test$inputs$y = y_test
+    loss_test$inputs$x = 0
+    loss_test$inputs$z = 0
+    for(ch in champions){
+      if(inherits(ch, 'FUNCTION')){
+        ch$reset()
+        loss_test$inputs$z = loss_test$inputs$z + ch$get.output(data = X_test)
+      } else {
+        loss_test$inputs$z = loss_test$inputs$z + X_test[, ch]
+      }
+    }
+    loss_test$reset()
+    best_test = loss_test$get.output.agg(data = X_test)
+
+    # Reset champions:
+    reset_funlist(champions)
+
+    # Run loop
+    cnt = 0; success = F; chance = T; enough = F
+    while(!enough | (!success & chance)){
+      grow_funlist(flist, features = features, n_births = n_births, function_set = function_set) -> flist
+      # boost_funlist(flist, X = X_train, y = y_train, metric = loss_train, silent = silent)
+      flist = boost_funlist_parallel(flist, X = X_train, y = y_train, metric = loss_train)
+      flist %<>% clean_funlist(X = X_train, y = y_train, metric = loss_train)
+      evaluate_funlist(flist, X = X_train, y = y_train, metric = loss_train) -> err_train
+      reset_funlist(flist)
+      evaluate_funlist(flist, X = X_test, y = y_test, metric = loss_test) -> err_test
+      reset_funlist(flist)
+
+      err_train = err_train[!is.na(err_train)]
+      err_test  = err_test[!is.na(err_test)]
+      err_test  = err_test[err_test < best_test - 0.01]
+      err_train = err_train[err_train < best_train - 0.01]
+      selected  = names(err_test) %^% names(err_train)
+      err_test  = err_test[selected]
+      err_train = err_train[selected]
+      cat('\n', 'best_train: ', best_train, ' min err_train: ', min(err_train), ' min err_test: ', min(err_test), 'selected: ', length(selected))
+      if(length(selected) > 0){
+        if(cnt > 0){success = T}
+        err_train %<>% sort
+        top = min(n_survivors, length(selected))
+        flist %<>% list.extract(err_train[sequence(top)] %>% names %>% union(features))
+        champions_name = names(err_train)[1]
+        best_train     = err_train[1]
+        best_test      = err_test[champions_name]
+        cat('\n', 'iter ', cnt, ' --> Success: Best Test: ', best_test, ' Best Train: ', best_train)
+      } else {
+        cat('\n', 'iter ', cnt, ' --> Failed')
+      }
+
+      cnt = cnt + 1; chance = cnt < trials; enough = cnt > iters
+    }
+
+    # Find the champion:
+    if(champions_name %in% features){
+      champions[[length(champions) + 1]] = champions_name
+    } else if(champions_name %in% names(flist)){
+      lnch = length(champions) + 1
+      champions[[lnch]] = flist[[champions_name]]$deep_copy()
+      champions[[lnch]]$name = paste0('C', lnch) %>% paste(flist[[champions_name]]$name, sep = '_')
+    } else stop('Unknown Champion!')
+
+  }
+  return(champions)
 }
 

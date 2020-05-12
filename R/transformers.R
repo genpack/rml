@@ -1,45 +1,95 @@
 
-TRANSFORMER = setRefClass('TRANSFORMER', contains = "MODEL", methods = list(
+# TRANSFORMER = setRefClass('TRANSFORMER', contains = "MODEL", methods = list(
+#
+#
+#   # predict = function(X){
+#   #   if(is.null(colnames(XOUT))){
+#   #     if(ncol(XOUT) == nrow(objects$features)){
+#   #       colnames(XOUT) <- name %>% paste(objects$features$fname, sep = '_')
+#   #     } else if (ncol(XOUT) == 1){
+#   #       colnames(XOUT) <- name
+#   #     } else{
+#   #       colnames(XOUT) <- name %>% paste(sequence(ncol(XOUT)), sep = '_')
+#   #     }
+#   #   } else {
+#   #     colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
+#   #   }
+#   #
+#   #   treat(XOUT, XFET, XORG)
+#   # }
+#
+# ))
 
-  predict = function(X){
-    XORG = callSuper(X) %>% as.data.frame
-    XFET = XORG[objects$features$fname]
-    if(canuse_saved_prediction(XFET)){
-      XOUT = objects$saved_pred$XOUT
-    } else {
-      XOUT = .self$model.predict(XFET)
-      keep_prediction(XFET, XOUT)
-    }
-    if(is.null(colnames(XOUT))){
-      if(ncol(XOUT) == nrow(objects$features)){
-        colnames(XOUT) <- name %>% paste(objects$features$fname, sep = '_')
-      } else if (ncol(XOUT) == 1){
-        colnames(XOUT) <- name
-      } else{
-        colnames(XOUT) <- name %>% paste(sequence(ncol(XOUT)), sep = '_')
-      }
-    } else {
-      colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
-    }
 
-    treat(XOUT, XFET, XORG)
-  }
+## Legend for transformers
 
-))
+# CLS: Classifiers
+  # XGB: XGBoost
+  # LR:  Logistic Regression
+  # DT:  Decision Tree
+  # KNN: K Nearest Neighbours
+  # DNN: Deep Neural Net
+  # SVM: Support Vector Machine
+  # NB: Naive Bayes
+  # GBM: Gradient Boost Model
+
+
+# REG: Regressors
+  # LM: Linear Model (Linear Regrtession)
+  # RT: Regression Tree
+  # XGB: XGBoost
+  # DNN: Deep Neural Net
+
+# FET: Feature Engineering Transformers (Booster):
+#   D2MUL: Degree 2 Multiplier
+#   D2MULC: Degree 2 Multiplier with Feature Selector
+#
+# FNT: Function transformer
+#   INV: Inverser
+#   LOG: Logarithm
+#   POLY: Polynomial
+#
+# ENC: Encoders:
+#   OHE: One Hot Encoder
+#   TE: Target Encoder
+#   HLMRT: Helmert Encoder
+#   CATB: Catboost Encoder
+#   JSTN: James Stein Encoder
+#
+# BIN: Binner Transformers:
+#   OBB: Optimla Binary Binner
+#   OB: Optimal Binner
+#   KM: KMeans Clustering
+#   SKM: Spherical KMeans Clustering
+#   HCL: Hierarchical Clustering
+#
+# MAP: One to one mappers:
+#   IDT: Identity Transformer
+#   RNK: ranker
+#   QT: Quantile Transformer
+#   MMS: MinMaxScaler (Normalizer)
+#   ZFS: Z Factor Scaler
+#   PCA: Principal Component Analysis Mapper
+#   NRM: Normalizer
+
 # This model, finds all numeric features in X and uses smbinning R package to optimally bin them to categorical columns and returns the table with additional features
 # original features are NOT maintained in the output table
 # This model is using stupid package smbinning. It only divides to 5 buckets, so it's not really optimal binning but better than nothing!
 # Also, make sure there is no '.' character in column labels because the package author has problem with dots!!!!!!
-#' @export SMBINNING
-SMBINNING = setRefClass('SMBINNING', contains = "TRANSFORMER",
+# previously SMBINNING
+#' @export BIN.SMBINNING.OB
+BIN.SMBINNING.OB = setRefClass('BIN.SMBINNING.OB', contains = "MODEL",
     methods = list(
       initialize = function(...){
         callSuper(...)
         # refer to help page for package smbinning (?smbinning::smbinning)
         config$percentageOfRecords <<- config$percentageOfRecords %>% verify('numeric', domain = c(0, 0.5), default = '0.05')
-        config$suffix              <<- config$suffix %>% verify('character', default = 'BIN')
-        type                       <<- 'Optimal Binner'
-        if(is.empty(name)){name <<- 'SMBIN' %>% paste0(sample(10000:99999, 1))}
+        config$suffix <<- config$suffix %>% verify('character', default = 'BIN')
+        type          <<- 'Binner'
+        description   <<- 'Optimal Binner'
+        package       <<- 'smbinning'
+        package_language <<- 'R'
+        if(is.empty(name)){name <<- 'SMB' %>% paste0(sample(10000:99999, 1))}
       },
 
       model.fit = function(X, y){
@@ -98,14 +148,18 @@ SMBINNING = setRefClass('SMBINNING', contains = "TRANSFORMER",
     )
 )
 
-#' @export NORMALIZER
-NORMALIZER = setRefClass('NORMALIZER', contains = 'TRANSFORMER',
+# previously NORMALIZER
+#' @export MAP.MALER.MMS
+MAP.MALER.MMS = setRefClass('MAP.MALER.MMS', contains = 'MODEL',
   methods = list(
     initialize = function(...){
       callSuper(...)
-      config$suffix <<- config$suffix %>% verify('character', default = 'NRM')
-      type          <<- 'Normalizer'
-      if(is.empty(name)){name <<- 'NRMR' %>% paste0(sample(10000:99999, 1))}
+      type             <<- 'Mapper'
+      description      <<- 'MinMax Scaler'
+      package          <<- 'maler'
+      package_language <<- 'R'
+      config$suffix    <<- config$suffix %>% verify('character', default = 'NRM')
+      if(is.empty(name)){name <<- 'MMS' %>% paste0(sample(10000:99999, 1))}
     },
 
     model.fit = function(X, y = NULL){
@@ -121,13 +175,18 @@ NORMALIZER = setRefClass('NORMALIZER', contains = 'TRANSFORMER',
     }
   ))
 
-#' @export SCALER
-SCALER = setRefClass('SCALER', contains = "TRANSFORMER", methods = list(
+# previously SCALER
+#' @export MAP.MALER.ZFS
+MAP.MALER.ZFS = setRefClass('MAP.MALER.ZFS', contains = "MODEL", methods = list(
   initialize = function(...){
     callSuper(...)
-    config$suffix              <<- config$suffix %>% verify('character', default = 'SCALED')
-    type                       <<- 'ZFactor Scaler'
-    if(is.empty(name)){name <<- 'SCLR' %>% paste0(sample(10000:99999, 1))}
+    type             <<- 'Mapper'
+    description      <<- 'ZFactor Standard Scaler'
+    package          <<- 'maler'
+    package_language <<- 'R'
+
+    config$suffix    <<- config$suffix %>% verify('character', default = 'SCALED')
+    if(is.empty(name)){name <<- 'ZFS' %>% paste0(sample(10000:99999, 1))}
   },
 
   model.fit = function(X, y = NULL){
@@ -143,15 +202,19 @@ SCALER = setRefClass('SCALER', contains = "TRANSFORMER", methods = list(
   }
 ))
 
-#' @export OPTBINNER
-OPTBINNER = setRefClass('OPTBINNER', contains = "TRANSFORMER", methods = list(
+#' @export BIN.MALER.OBB
+BIN.MALER.OBB = setRefClass('BIN.MALER.OBB', contains = "MODEL", methods = list(
   initialize = function(...){
     callSuper(...)
+    type             <<- 'Binner'
+    description      <<- 'Optimal Binary Binner'
+    package          <<- 'maler'
+    package_language <<- 'R'
+
     # refer to help page for package smbinning (?smbinning::smbinning)
-    config$suffix              <<- config$suffix %>% verify('character', default = 'BIN')
-    config$basis               <<- config$basis %>% verify('character', domain = c('f1', 'chi'), default = 'chi')
-    type                       <<- 'Optimal Binner'
-    if(is.empty(name)){name <<- 'OBIN' %>% paste0(sample(10000:99999, 1))}
+    config$suffix    <<- config$suffix %>% verify('character', default = 'BIN')
+    config$basis     <<- config$basis %>% verify('character', domain = c('f1', 'chi'), default = 'chi')
+    if(is.empty(name)){name <<- 'OBB' %>% paste0(sample(10000:99999, 1))}
   },
 
   model.fit = function(X, y){
@@ -172,14 +235,18 @@ OPTBINNER = setRefClass('OPTBINNER', contains = "TRANSFORMER", methods = list(
   }
 ))
 
-ENCODER.HELMERT = setRefClass(
-  'ENCODER.HELMERT',
-  contains = 'TRANSFORMER',
+ENC.CATEGORY_ENCODERS.HLMRT = setRefClass(
+  'ENC.CATEGORY_ENCODERS.HLMRT',
+  contains = 'MODEL',
   methods = list(
     initialize = function(...){
       callSuper(...)
-      type     <<- 'Helmert Categorical Encoder'
-      if(is.empty(name)){name <<- 'HLMRTENC' %>% paste0(sample(10000:99999, 1))}
+      type             <<- 'Encoder'
+      description      <<- 'Helmert Encoder'
+      package          <<- 'category_encoders'
+      package_language <<- 'Python'
+
+      if(is.empty(name)){name <<- 'HLMRT' %>% paste0(sample(10000:99999, 1))}
     },
 
     model.fit = function(X, y){
@@ -199,14 +266,229 @@ ENCODER.HELMERT = setRefClass(
     }
   ))
 
-ENCODER.CATBOOST = setRefClass(
-  'ENCODER.CATBOOST',
-  contains = 'TRANSFORMER',
+MAP.SCIKIT.QT = setRefClass(
+  'MAP.SCIKIT.QT',
+  contains = 'MODEL',
   methods = list(
     initialize = function(...){
       callSuper(...)
-      type     <<- 'CatBoost Categorical Encoder'
-      if(is.empty(name)){name <<- 'CTBSTENC' %>% paste0(sample(10000:99999, 1))}
+      type             <<- 'Mapper'
+      description      <<- 'Quantile'
+      package          <<- 'sklearn'
+      package_language <<- 'Python'
+
+      if(is.empty(name)){name <<- 'QT' %>% paste0(sample(10000:99999, 1))}
+    },
+
+    model.fit = function(X, y){
+      if(!fitted){
+        objects$features <<- objects$features %>% filter(fname %in% c('numeric', 'integer'))
+        X = X[objects$features$fname]
+
+        module = reticulate::import('sklearn.preprocessing')
+        objects$model <<- do.call(module$QuantileTransformer, config %>% list.remove(maler_words))
+        objects$model$fit(X, y)
+      }
+    },
+
+    model.predict = function(X){
+      objects$model$transform(X)
+    }
+  ))
+
+BIN.SCIKIT.KMC = setRefClass(
+  'BIN.SCIKIT.KMC',
+  contains = 'MODEL',
+  methods = list(
+    initialize = function(...){
+      callSuper(...)
+      type             <<- 'Binner'
+      description      <<- 'KMeans Clustering'
+      package          <<- 'sklearn'
+      package_language <<- 'Python'
+
+      if(is.empty(name)){name <<- 'KMC' %>% paste0(sample(10000:99999, 1))}
+      config$n_clusters <<- config$n_clusters %>% verify(c('integer', 'numeric'), lengths = 1, domain = c(1,1000), default = 3)
+    },
+
+    model.fit = function(X, y){
+      if(!fitted){
+        objects$features <<- objects$features %>% filter(fname %in% c('numeric', 'integer'))
+        X = X[objects$features$fname]
+
+        module = reticulate::import('sklearn.cluster')
+        objects$model <<- do.call(module$k_means, config %>% list.remove(maler_words))
+        objects$model$fit(X, y)
+      }
+    },
+
+    model.predict = function(X){
+      objects$model$transform(X)
+    }
+  ))
+
+FET.SCIKIT.MFG = setRefClass(
+  'MAP.SCIKIT.NRM',
+  contains = 'MODEL',
+  methods = list(
+    initialize = function(...){
+      callSuper(...)
+      type             <<- 'Feature Generator'
+      description      <<- 'Multiplicative Feature Generator'
+      package          <<- 'sklearn'
+      package_language <<- 'Python'
+
+      if(is.empty(name)){name <<- 'MFG' %>% paste0(sample(10000:99999, 1))}
+    },
+
+    model.fit = function(X, y){
+      if(!fitted){
+        objects$features <<- objects$features %>% filter(fname %in% c('numeric', 'integer'))
+        X = X[objects$features$fname]
+
+        module = reticulate::import('sklearn.preprocessing')
+        objects$model <<- do.call(PolynomialFeatures, config %>% list.remove(maler_words))
+        objects$model$fit(X, y)
+      }
+    },
+
+    model.predict = function(X){
+      objects$model$transform(X)
+    }
+  ))
+
+MAP.SCIKIT.NRM = setRefClass(
+  'MAP.SCIKIT.NRM',
+  contains = 'MODEL',
+  methods = list(
+    initialize = function(...){
+      callSuper(...)
+      type             <<- 'Mapper'
+      description      <<- 'Normalizer'
+      package          <<- 'sklearn'
+      package_language <<- 'Python'
+
+      if(is.empty(name)){name <<- 'NRM' %>% paste0(sample(10000:99999, 1))}
+    },
+
+    model.fit = function(X, y){
+      if(!fitted){
+        objects$features <<- objects$features %>% filter(fname %in% c('numeric', 'integer'))
+        X = X[objects$features$fname]
+
+        module = reticulate::import('sklearn.preprocessing')
+        objects$model <<- do.call(module$Normalizer, config %>% list.remove(maler_words))
+        objects$model$fit(X, y)
+      }
+    },
+
+    model.predict = function(X){
+      objects$model$transform(X)
+    }
+  ))
+
+
+ENC.SCIKIT.OHE = setRefClass(
+  'ENC.SCIKIT.OHE',
+  contains = 'MODEL',
+  methods = list(
+    initialize = function(...){
+      callSuper(...)
+      type             <<- 'Encoder'
+      description      <<- 'One-Hot Encoder'
+      package          <<- 'sklearn'
+      package_language <<- 'Python'
+      type     <<-
+      if(is.empty(name)){name <<- 'OHE' %>% paste0(sample(10000:99999, 1))}
+    },
+
+    model.fit = function(X, y){
+      if(!fitted){
+        objects$features <<- objects$features %>% filter(fname %in% nominals(X))
+        X = X[objects$features$fname]
+
+        module = reticulate::import('sklearn.preprocessing')
+        objects$model <<- do.call(module$OneHotEncoder, config %>% list.remove(maler_words))
+        objects$model$fit(X, y)
+      }
+    },
+
+    model.predict = function(X){
+      objects$model$transform(X)
+    }
+  ))
+
+MAP.SCIKIT.ZFS = setRefClass(
+  'MAP.SCIKIT.ZFS',
+  contains = 'MODEL',
+  methods = list(
+    initialize = function(...){
+      callSuper(...)
+      type             <<- 'Mapper'
+      description      <<- 'Z-Factor Standard Scaler'
+      package          <<- 'sklearn'
+      package_language <<- 'Python'
+      if(is.empty(name)){name <<- 'ZFS' %>% paste0(sample(10000:99999, 1))}
+    },
+
+    model.fit = function(X, y){
+      if(!fitted){
+        objects$features <<- objects$features %>% filter(fname %in% c('numeric', 'integer'))
+        X = X[objects$features$fname]
+
+        module = reticulate::import('sklearn.preprocessing')
+        objects$model <<- do.call(module$StandardScaler, config %>% list.remove(maler_words))
+        objects$model$fit(X, y)
+      }
+    },
+
+    model.predict = function(X){
+      objects$model$transform(X)
+    }
+  ))
+
+MAP.SCIKIT.MMS = setRefClass(
+  'MAP.SCIKIT.MMS',
+  contains = 'MODEL',
+  methods = list(
+    initialize = function(...){
+      callSuper(...)
+      type             <<- 'Mapper'
+      description      <<- 'MinMax Scaler'
+      package          <<- 'sklearn'
+      package_language <<- 'Python'
+      if(is.empty(name)){name <<- 'MMS' %>% paste0(sample(10000:99999, 1))}
+    },
+
+    model.fit = function(X, y){
+      if(!fitted){
+        objects$features <<- objects$features %>% filter(fname %in% c('numeric', 'integer'))
+        X = X[objects$features$fname]
+
+        module = reticulate::import('sklearn.preprocessing')
+        objects$model <<- do.call(module$MinMaxScaler, config %>% list.remove(maler_words))
+        objects$model$fit(X, y)
+      }
+    },
+
+    model.predict = function(X){
+      objects$model$transform(X)
+    }
+  ))
+
+
+ENC.CATEGORY_ENCODERS.CATB = setRefClass(
+  'ENC.CATEGORY_ENCODERS.CATB',
+  contains = 'MODEL',
+  methods = list(
+    initialize = function(...){
+      callSuper(...)
+      type             <<- 'Encoder'
+      description      <<- 'CatBoost Encoder'
+      package          <<- 'category_encoders'
+      package_language <<- 'Python'
+
+      if(is.empty(name)){name <<- 'CATB' %>% paste0(sample(10000:99999, 1))}
     },
 
     model.fit = function(X, y){
@@ -226,13 +508,17 @@ ENCODER.CATBOOST = setRefClass(
     }
   ))
 
-ENCODER.JAMESSTEIN = setRefClass(
-  'ENCODER.JAMESSTEIN',
-  contains = 'TRANSFORMER',
+ENC.CATEGORY_ENCODERS.JSTN = setRefClass(
+  'ENC.CATEGORY_ENCODERS.JSTN',
+  contains = 'MODEL',
   methods = list(
     initialize = function(...){
       callSuper(...)
-      type     <<- 'James Stein Categorical Target Encoder'
+      type             <<- 'Encoder'
+      description      <<- 'James Stein Encoder'
+      package          <<- 'category_encoders'
+      package_language <<- 'Python'
+
       if(is.empty(name)){name <<- 'JSTNENC' %>% paste0(sample(10000:99999, 1))}
     },
 
@@ -255,21 +541,24 @@ ENCODER.JAMESSTEIN = setRefClass(
 
 
 # Replaces categorical features with class ratios associated with each category
-#' @export ENCODER.TARGET
-ENCODER.TARGET = setRefClass('ENCODER.TARGET', contains = 'TRANSFORMER',
+#' @export ENC.MALER.TE
+ENC.MALER.TE = setRefClass('ENCODER.TARGET', contains = 'MODEL',
    methods = list(
      initialize = function(...){
        callSuper(...)
-       # type     <<- 'Class-Ratio Categorical Target Encoder'
-       type     <<- 'Class-Ratio Segmenter (Target Encoder)'
-       if(is.empty(name)){name <<- 'SMR' %>% paste0(sample(10000:99999, 1))}
+       type             <<- 'Encoder'
+       description      <<- 'Target Encoder'
+       package          <<- 'maler'
+       package_language <<- 'R'
 
+       if(is.empty(name)){name <<- 'TE' %>% paste0(sample(10000:99999, 1))}
      },
 
      model.fit = function(X, y){
        if(!fitted){
          objects$features <<- objects$features %>% filter(fname %in% nominals(X))
          X = X[objects$features$fname]
+         stopifnot(ncol(X) > 0, 'No categorical feature for encoding')
          objects$model <<- list()
          for(col in colnames(X)){
            objects$model[[col]] <<- cbind(X, label = y) %>% group_by_(col) %>% summarise(ratio = mean(label))
@@ -288,16 +577,21 @@ ENCODER.TARGET = setRefClass('ENCODER.TARGET', contains = 'TRANSFORMER',
    )
 )
 
-#' @export ENCODER.MODEL
-ENCODER.MODEL = setRefClass('ENCODER.MODEL', contains = 'TRANSFORMER',
+# Todo: does not save joblib for Python segment models
+#' @export ENC.MALER.ME
+ENC.MALER.ME = setRefClass('ENC.MALER.ME', contains = 'MODEL',
   methods = list(
     initialize = function(...){
       callSuper(...)
-      type     <<- 'Model Segmenter'
+      type             <<- 'Encoder'
+      description      <<- 'Model Encoder'
+      package          <<- 'maler'
+      package_language <<- 'R'
+
       config$model_class  <<- config$model_class %>% verify('character', default = 'CLS.SCIKIT.XGB')
       config$model_config <<- config$model_config %>% verify('list', default = list(predict_probabilities = T))
       config$min_rows     <<- config$min_rows %>% verify(c('numeric', 'integer'), lengths = 1, default = 100)
-      if(is.empty(name)){name <<- 'SEGMOD' %>% paste0(sample(10000:99999, 1))}
+      if(is.empty(name)){name <<- 'ME' %>% paste0(sample(10000:99999, 1))}
       objects$model <<- list()
     },
 
@@ -352,11 +646,11 @@ ENCODER.MODEL = setRefClass('ENCODER.MODEL', contains = 'TRANSFORMER',
     }
   ))
 
-
-
-ENCODER.MODEL.BOOSTER =
-  setRefClass('ENCODER.MODEL.BOOSTER',
-              contains = 'ENCODER.MODEL',
+# previously: SEGMENTER.MODEL.BOOSTER
+# Model Encoder Booster
+ENC.MALER.MEB =
+  setRefClass('ENC.MALER.MEB',
+              contains = 'ENC.MALER.ME',
 
               methods = list(
                           model.fit = function(X, y){
@@ -389,10 +683,14 @@ ENCODER.MODEL.BOOSTER =
                         )
 )
 
-INVERTER = setRefClass('INVERTER', contains = 'TRANSFORMER', methods = list(
+FNT.MALER.INV = setRefClass('FNT.MALER.INV', contains = 'MODEL', methods = list(
   initialize = function(...){
     callSuper(...)
-    type     <<- 'Inverter Transformer'
+    type             <<- 'Function Transformer'
+    description      <<- 'Geometric'
+    package          <<- 'maler'
+    package_language <<- 'R'
+
     if(is.empty(name)){name <<- 'INV' %>% paste0(sample(10000:99999, 1))}
     config$trim <<- config$trim %>% verify('numeric', lengths = 1, default = 10000)
   },
@@ -414,12 +712,16 @@ INVERTER = setRefClass('INVERTER', contains = 'TRANSFORMER', methods = list(
   }
 
 ))
-GEOPOLY = setRefClass('GEOPOLY', contains = 'TRANSFORMER', methods = list())
-MULTIPLIER.BINARY = setRefClass('MULTIPLIER.BINARY', contains = 'TRANSFORMER', methods = list(
+
+# previously : MULTIPLIER.BINARY
+FET.MALER.D2MUL = setRefClass('FET.MALER.D2MUL', contains = 'MODEL', methods = list(
   initialize = function(...){
     callSuper(...)
-    type     <<- 'Binary Multiplier'
-    if(is.empty(name)){name <<- 'BMUL' %>% paste0(sample(10000:99999, 1))}
+    type             <<- 'Feature Generator'
+    description      <<- 'Degree 2 Multiplier'
+    package          <<- 'maler'
+    package_language <<- 'R'
+    if(is.empty(name)){name <<- 'D2MUL' %>% paste0(sample(10000:99999, 1))}
   },
 
   model.fit = function(X, y = NULL){
@@ -440,11 +742,16 @@ MULTIPLIER.BINARY = setRefClass('MULTIPLIER.BINARY', contains = 'TRANSFORMER', m
   }
 ))
 
-MULTIPLIER.BINARY.COMP = setRefClass('MULTIPLIER.BINARY.COMP', contains = 'MULTIPLIER.BINARY', methods = list(
+# previously : MULTIPLIER.BINARY.COMP
+FET.MALER.D2MULC = setRefClass('FET.MALER.D2MULC', contains = 'FET.MALER.D2MUL', methods = list(
   initialize = function(...){
     callSuper(...)
-    type     <<- 'Binary Multiplier Components'
-    if(is.empty(name)){name <<- 'BMC' %>% paste0(sample(10000:99999, 1))}
+    type             <<- 'Feature Generator'
+    description      <<- 'Degree 2 Multiplier Components'
+    package          <<- 'maler'
+    package_language <<- 'R'
+
+    if(is.empty(name)){name <<- 'D2MC' %>% paste0(sample(10000:99999, 1))}
     config$num_components <<- config$num_components %>% verify(c('numeric', 'integer'), default = 5)
     config$model_class  <<- config$model_class  %>% verify('character', default = 'SCIKIT.XGB')
     config$model_config <<- config$model_config %>% verify('character', default = list())
@@ -464,11 +771,14 @@ MULTIPLIER.BINARY.COMP = setRefClass('MULTIPLIER.BINARY.COMP', contains = 'MULTI
 
 ))
 
-POLYNOMIAL = setRefClass('POLYNOMIAL', contains = 'TRANSFORMER', methods = list(
+FNT.MALER.POLY = setRefClass('FNT.MALER.POLY', contains = 'MODEL', methods = list(
   initialize = function(...){
     callSuper(...)
-    type     <<- 'Polynomial Feature Transformer'
-    if(is.empty(name)){name <<- 'PLYG' %>% paste0(sample(10000:99999, 1))}
+    type             <<- 'Function Transformer'
+    description      <<- 'Polynomial'
+    package          <<- 'maler'
+    package_language <<- 'R'
+    if(is.empty(name)){name <<- 'PLY' %>% paste0(sample(10000:99999, 1))}
 
     # Sigma{k = 1}{n_terms} (gain*x + intercept)^k
     config$apply_abs <<- config$apply_abs %>% verify('logical', default = F)
@@ -501,11 +811,14 @@ POLYNOMIAL = setRefClass('POLYNOMIAL', contains = 'TRANSFORMER', methods = list(
 
 
 #' @export CATCONCATER
-CATCONCATER = setRefClass('CATCONCATER', contains = "TRANSFORMER",
+CATCONCATER = setRefClass('CATCONCATER', contains = "MODEL",
    methods = list(
      initialize = function(...){
        callSuper(...)
-       type     <<- 'Categorical Features Concater'
+       type             <<- 'Feature Generator'
+       description      <<- 'Categorical Features Concater'
+       package          <<- 'maler'
+       package_language <<- 'R'
        if(is.empty(name)){name <<- 'CATCON' %>% paste0(sample(10000:99999, 1))}
      },
 
@@ -520,10 +833,13 @@ CATCONCATER = setRefClass('CATCONCATER', contains = "TRANSFORMER",
 )
 
 
-LOGGER = setRefClass('LOGGER', contains = "TRANSFORMER", methods = list(
+FNT.MALER.LOG = setRefClass('FNT.MALER.LOG', contains = "MODEL", methods = list(
   initialize = function(...){
     callSuper(...)
-    type     <<- 'Logger Transformer'
+    type             <<- 'Function Transformer'
+    description      <<- 'Logarythm'
+    package          <<- 'maler'
+    package_language <<- 'R'
     if(is.empty(name)){name <<- 'LOG' %>% paste0(sample(10000:99999, 1))}
     config$apply_abs <<- config$apply_abs %>% verify(c('logical'), default = T)
     config$intercept <<- config$intercept %>% verify(c('numeric'), default = 1)
@@ -540,12 +856,40 @@ LOGGER = setRefClass('LOGGER', contains = "TRANSFORMER", methods = list(
   }
 ))
 
-#' @export DUMMIFIER
-DUMMIFIER = setRefClass('DUMMIFIER', contains = "TRANSFORMER",
+FNT.MALER.LOGIT = setRefClass('FNT.MALER.LOGIT', contains = "MODEL", methods = list(
+  initialize = function(...){
+    callSuper(...)
+    type             <<- 'Function Transformer'
+    description      <<- 'Logit'
+    package          <<- 'maler'
+    package_language <<- 'R'
+    if(is.empty(name)){name <<- 'LGT' %>% paste0(sample(10000:99999, 1))}
+    config$apply_mms <<- config$apply_mms %>% verify(c('logical'), default = T)
+  },
+
+  model.fit = function(X, y){
+    objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+  },
+
+  model.predict = function(X){
+    X = as.matrix(X)
+    if(config$apply_mms){X = X %>% apply(2, vect.normalise)}
+    X[X < .Machine$double.eps] <- .Machine$double.eps
+    X[X > 1.0 - .Machine$double.eps] <- 1.0 - .Machine$double.eps
+    XOUT = log(X/(1 - X))
+    return(XOUT %>% as.data.frame)
+  }
+))
+
+#' @export ENC.FASTDUMMIES.OHE
+ENC.FASTDUMMIES.OHE = setRefClass('ENC.FASTDUMMIES.OHE', contains = "MODEL",
    methods = list(
      initialize = function(...){
        callSuper(...)
-       type     <<- 'Categorical Feature Dummifier'
+       type             <<- 'Encoder'
+       description      <<- 'One Hot Encoder'
+       package          <<- 'fastDummies'
+       package_language <<- 'R'
        if(is.empty(name)){name <<- 'DMFR' %>% paste0(sample(10000:99999, 1))}
        config$max_domain <<- config$max_domain %>% verify(c('numeric', 'integer'), default = 25) %>% as.integer
      },
@@ -587,12 +931,17 @@ DUMMIFIER = setRefClass('DUMMIFIER', contains = "TRANSFORMER",
    )
 )
 
-#' @export GENETIC.BOOSTER.GEOMETRIC
-GENETIC.BOOSTER.GEOMETRIC = setRefClass('GENETIC.BOOSTER.GEOMETRIC', contains = 'TRANSFORMER',
+
+# Previously GENETIC.BOOSTER.GEOMETRIC
+#' @export FET.MALER.MGB
+FET.MALER.MGB = setRefClass('FET.MALER.MGB', contains = 'MODEL',
     methods = list(
       initialize = function(...){
-        type     <<- 'Geometric Genetic Booster'
-        if(is.empty(name)){name <<- 'GBG' %>% paste0(sample(10000:99999, 1))}
+        type             <<- 'Feature Generator'
+        description      <<- 'Multiplicative Genetic Booster'
+        package          <<- 'maler'
+        package_language <<- 'R'
+        if(is.empty(name)){name <<- 'MGB' %>% paste0(sample(10000:99999, 1))}
 
         callSuper(...)
         if(is.null(config$epochs)) {config$epochs <<- 10}
@@ -706,11 +1055,16 @@ GENETIC.BOOSTER.GEOMETRIC = setRefClass('GENETIC.BOOSTER.GEOMETRIC', contains = 
     )
 )
 
+# previously GENETIC.BOOSTER.LOGICAL
 #' @export GENETIC.BOOSTER.LOGICAL
-GENETIC.BOOSTER.LOGICAL = setRefClass('GENETIC.BOOSTER.LOGICAL', contains = 'TRANSFORMER', methods = list(
+FET.MALER.LGB = setRefClass('FET.MALER.LGB', contains = 'MODEL', methods = list(
   initialize = function(...){
     callSuper(...)
-    type     <<- 'Logical Genetic Booster'
+    type             <<- 'Feature Generator'
+    description      <<- 'Logical Genetic Booster'
+    package          <<- 'maler'
+    package_language <<- 'R'
+
     if(is.empty(name)){name <<- 'GBL' %>% paste0(sample(10000:99999, 1))}
 
     if(is.null(config$metric)){config$metric <<- 'f1'}
@@ -747,14 +1101,19 @@ GENETIC.BOOSTER.LOGICAL = setRefClass('GENETIC.BOOSTER.LOGICAL', contains = 'TRA
   }
 ))
 
-#' @export SUPERVISOR
-SUPERVISOR = setRefClass('SUPERVISOR', contains = "TRANSFORMER",
+# previously ENS.MALER.BS
+#' @export ENS.MALER.BS
+ENS.MALER.BS = setRefClass('ENS.MALER.BS', contains = "MODEL",
   methods = list(
     initialize = function(...){
       callSuper(...)
-      type     <<- 'Model Supervisor'
-      if(is.empty(name)){name <<- 'SUP' %>% paste0(sample(10000:99999, 1))}
-      config$model_class  <<- config$model_class  %>% verify('character', default = 'SCIKIT.XGB')
+      type             <<- 'Ensembler'
+      description      <<- 'Binary Supervisor Ensembler'
+      package          <<- 'maler'
+      package_language <<- 'R'
+
+      if(is.empty(name)){name <<- 'BSUP' %>% paste0(sample(10000:99999, 1))}
+      config$model_class  <<- config$model_class  %>% verify('character', default = 'CLS.SCIKIT.XGB')
       config$model_config <<- config$model_config %>% verify('character', default = list())
       objects$model <<- new(config$model_class, config = config$model_config)
     },
@@ -777,12 +1136,17 @@ SUPERVISOR = setRefClass('SUPERVISOR', contains = "TRANSFORMER",
   )
 )
 
-#' @export KMEANS
-KMEANS = setRefClass('KMEANS', contains = 'TRANSFORMER', methods = list(
+# previously KMEANS
+#' @export BIN.KMEANS.KMC
+BIN.KMEANS.KMC = setRefClass('BIN.KMEANS.KMC', contains = 'MODEL', methods = list(
   initialize = function(...){
     callSuper(...)
-    type     <<- 'KMeans Clustering Transformer'
-    if(is.empty(name)){name <<- 'KMNS' %>% paste0(sample(10000:99999, 1))}
+    type             <<- 'Binner'
+    description      <<- 'KMeans Clustering'
+    package          <<- 'maler'
+    package_language <<- 'R'
+    type     <<- ' from package kmeans'
+    if(is.empty(name)){name <<- 'KMC' %>% paste0(sample(10000:99999, 1))}
     config$num_clusters <<- config$num_clusters %>% verify(c('numeric', 'integer'), default = 5)
 
   },
@@ -800,11 +1164,14 @@ KMEANS = setRefClass('KMEANS', contains = 'TRANSFORMER', methods = list(
   }
 ))
 
-#' @export PRCOMP
-PRCOMP = setRefClass('PRCOMP', contains = 'TRANSFORMER', methods = list(
+#' @export MAP.STATS.PCA
+MAP.STATS.PCA = setRefClass('MAP.STATS.PCA', contains = 'MODEL', methods = list(
   initialize = function(...){
     callSuper(...)
-    type     <<- 'Principal Component Transformer'
+    type             <<- 'Mapper'
+    description      <<- 'Principal Component'
+    package          <<- 'stats'
+    package_language <<- 'R'
     if(is.empty(name)){name <<- 'PRC' %>% paste0(sample(10000:99999, 1))}
     config$num_components <<- config$num_components %>% verify(c('numeric', 'integer'), default = 5)
     config$scale  <<- config$scale  %>% verify('logical', domain = c(F,T), default = T)
@@ -831,10 +1198,14 @@ PRCOMP = setRefClass('PRCOMP', contains = 'TRANSFORMER', methods = list(
   }
 ))
 
-PYLMNN = setRefClass('PYLMNN', contains = "TRANSFORMER", methods = list(
+# previously PYLMNN
+MAP.PYLMNN.LMNN = setRefClass('MAP.PYLMNN.LMNN', contains = "MODEL", methods = list(
   initialize = function(...){
     callSuper(...)
-    type     <<- 'Large Margin Nearest Neighbors'
+    type             <<- 'Mapper'
+    description      <<- 'Large Margin Nearest Neighbors'
+    package          <<- 'pylmnn'
+    package_language <<- 'Python'
     if(is.empty(name)){name <<- 'LMNN' %>% paste0(sample(10000:99999, 1))}
     config$num_components <<- config$num_components %>% verify(c('numeric', 'integer'), default = 5) %>% as.integer
     config$num_neighbors  <<- config$neighbors %>% verify(c('numeric', 'integer'), default = 10) %>% as.integer
@@ -855,10 +1226,14 @@ PYLMNN = setRefClass('PYLMNN', contains = "TRANSFORMER", methods = list(
   }
 ))
 
-GROUPER = setRefClass('GROUPER', contains = "TRANSFORMER", methods = list(
+# previously GROUPER
+BIN.MALER.GROUPER = setRefClass('BIN.MALER.GROUPER', contains = "MODEL", methods = list(
   initialize = function(...){
     callSuper(...)
-    type     <<- 'Categorical Feature Grouper'
+    type             <<- 'Binner'
+    description      <<- 'Categorical Feature Grouper'
+    package          <<- 'maler'
+    package_language <<- 'R'
     if(is.empty(name)){name <<- 'GRP' %>% paste0(sample(10000:99999, 1))}
     config$encoding <<- config$encoding %>% verify('character', domain =c('target_ratio', 'flasso'), default = 'target_ratio')
     #config$num_components <<- config$num_components %>% verify(c('numeric', 'integer'), default = 5) %>% as.integer
@@ -876,10 +1251,14 @@ GROUPER = setRefClass('GROUPER', contains = "TRANSFORMER", methods = list(
   }
 ))
 
-SFS = setRefClass('SFS', contains = 'TRANSFORMER', methods = list(
+
+FET.MALER.SFS = setRefClass('FET.MALER.SFS', contains = 'MODEL', methods = list(
   initialize = function(...){
     callSuper(...)
-    type     <<- 'Stepwise Feature Selector'
+    type             <<- 'Feature Generator'
+    description      <<- 'Stepwise Feature Selector'
+    package          <<- 'maler'
+    package_language <<- 'R'
     if(is.empty(name)){name <<- 'SFS' %>% paste0(sample(10000:99999, 1))}
     config$model_class  <<- config$model_class %>% verify('character', default = 'CLS.SCIKIT.XGB')
     config$model_config <<- config$model_config %>% verify('list', default = list())
@@ -934,13 +1313,16 @@ SFS = setRefClass('SFS', contains = 'TRANSFORMER', methods = list(
 ))
 
 
-
-IDENTITY = setRefClass('IDENTITY' , contains = "TRANSFORMER",
+# previously: IDENTITY
+MAP.MALER.IDT = setRefClass('MAP.MALER.IDT' , contains = "MODEL",
   methods = list(
     initialize = function(...){
       callSuper(...)
-      type <<- 'Identity Transformer'
-      if(is.empty(name)){name <<-'IDTY' %>% paste0(sample(10000:99999, 1))}
+      type             <<- 'Mapper'
+      description      <<- 'Identity'
+      package          <<- 'maler'
+      package_language <<- 'R'
+      if(is.empty(name)){name <<-'IDT' %>% paste0(sample(10000:99999, 1))}
     },
 
     model.fit = function(X, y){

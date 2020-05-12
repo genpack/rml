@@ -47,6 +47,21 @@ cross_f1 = function(v1, v2){
   return(a %>% sapply(function(x) max(x, 1-x)))
 }
 
+# converts probabilities to logit
+logit_fwd = function(x) {
+  x    = abs(x)
+  mask = x < .Machine$double.eps
+  x[mask] <- .Machine$double.eps
+  mask = x > 1.0 - .Machine$double.eps
+  x[mask] <- 1.0 - .Machine$double.eps
+  log(x/(1-x))
+}
+
+# convert logit to probabilities
+logit_inv = function(x){
+  e = exp(x)
+  return(1.0 - 1.0/(1 + e))
+}
 
 remove_outliers = function(X, sd_threshold = 3){
   m = ncol(X)
@@ -73,8 +88,8 @@ int_ordinals = function(X){
 }
 
 
-add_keras_layer_dense = function(model, layer, ...){
-  model %>% layer_dense(units       = layer$units %>% verify(c('numeric', 'integer'), lengths = 1, null_allowed = F) %>% as.integer,
+add_keras_layer_dense = function(input_layer, layer, ...){
+  input_layer %<>% layer_dense(units       = layer$units %>% verify(c('numeric', 'integer'), lengths = 1, null_allowed = F) %>% as.integer,
               activation  = layer$activation %>% verify('character', lengths = 1, default = 'relu'),
               use_bias    = layer$use_bias %>% verify('logical', lengths = 1, domain = c(T,F), default = T),
               kernel_regularizer = layer$kernel_regularizer,
@@ -87,7 +102,44 @@ add_keras_layer_dense = function(model, layer, ...){
               name = layer$name, trainable = layer$trainable,
               weights = layer$weights,
               ...)
+  if(!is.null(layer$dropout)){
+    input_layer %<>% layer_dropout(rate = layer$dropout)
+  }
 }
+
+create_keras_layers = function(config){
+  build_regularizer = function(l1, l2){
+    if(l1 == 0){
+      if (l2 == 0){
+        kr = NULL
+      } else {
+        kr = regularizer_l2(l = l2)
+      }
+    } else if (l2 == 0){
+      kr = regularizer_l1(l = l1)
+    } else {
+      kr = regularizer_l1_l2(l1 = l1, l2 = l2)
+    }
+  }
+
+  layers  = list()
+  n_nodes = config$first_layer_nodes
+  j = 0
+
+  for(i in sequence(config$num_layers)){
+    if(n_nodes > 0){
+      j = j + 1
+      layers[[j]] <- list(name = paste('dense', j, sep = '_'), units = n_nodes,
+                          activation = config$layers_activation, dropout = config$layers_dropout,
+                          kernel_initializer   = initializer_random_uniform(minval = config$initializer_minval, maxval = config$initializer_maxval, seed = config$initializer_seed),
+                          kernel_regularizer   = build_regularizer(config$kernel_regularization_penalty_l1, config$kernel_regularization_penalty_l2),
+                          activity_regularizer = build_regularizer(config$activity_regularization_penalty_l1, config$activity_regularization_penalty_l2))
+      n_nodes     <- as.integer(n_nodes*config$layer_nodes_ratio)
+    }
+  }
+  return(layers)
+}
+
 
 ranker = function(X){
   X %<>% as.data.frame
@@ -154,6 +206,8 @@ na2median = function(X){
 }
 
 correlation = function(x, y, metric = 'pearson_correlation', threshold = NULL, lift_ratio = NULL){
+  x = as.numeric(x)
+  y = as.numeric(y)
   if(metric == 'pearson_correlation'){
     return(cor(x, y))
   }
@@ -178,14 +232,18 @@ correlation = function(x, y, metric = 'pearson_correlation', threshold = NULL, l
 
   if(metric %in% c('precision', 'recall', 'f1', 'accuracy', 'sensitivity', 'specificity', 'fp', 'fn', 'tp', 'tn')){
     if(metric == 'sensitivity') metric = 'recall'
-    score = data.frame(y_pred = x, y_true = y) %>% scorer('y_pred', 'y_true')
+    if(unique(x) %==% c(0,1)){
+      score = data.frame(y_pred = x, y_true = y) %>% scorer('y_pred', 'y_true')
+    } else {
+      score = data.frame(y_pred = x, y_true = y) %>% optSplit.f1('y_pred', 'y_true')
+    }
     return(score[[metric]])
   }
 
   if(is.null(lift_ratio)){lift_ratio = mean(y, na.rm = T)}
   if(metric == 'lift'){
     cut_q = quantile(x, prob = 1 - lift_ratio)
-    prec  = y[x > cut_q] %>% mean(na.rm = T)
+    prec  = y[x >= cut_q] %>% mean(na.rm = T)
     return(prec/mean(y))
   }
   stop('Unknown metric' %>% paste(metric))
@@ -351,12 +409,15 @@ optSplitColumns.f1 = function(df, columns = NULL, label_col = 'label', fun = NUL
 
 #' @export
 optSplitColumns.chi = function(df, columns = numerics(df), label_col = 'label', fun = NULL){
+  columns %<>% setdiff(label_col)
   for(i in sequence(length(columns))){
     col = columns[i]
-    res <- df %>% optSplit.chi(num_col = col, cat_col = label_col, fun = fun)
-    res <- c(Column = col, res) %>% as.data.frame
-    if(i == 1){sp = res} else {sp %<>% rbind(res)}
-    print(res)
+    if(length(unique(df[,col])) > 1){
+      res <- df %>% optSplit.chi(num_col = col, cat_col = label_col, fun = fun)
+      res <- c(Column = col, res) %>% as.data.frame
+      if(i == 1){sp = res} else {sp %<>% rbind(res)}
+      print(res)
+    }
   }
   return(sp)
 }
