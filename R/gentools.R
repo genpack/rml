@@ -338,12 +338,12 @@ createFeatures.supervisor = function(flist, nf, prefix = 'Feat'){
 
 
 ########### GREEDY GENETIC ####################
-default_templates = list(
-  xgb1 =list(class = 'CLS.SCIKIT.XGB', weight = 0.20, n_num = c(30:60, 40:80), n_cat = c(0:10, 5:15),    n_jobs = as.integer(7), return_logit = c(T, T, F)),
-  lr1 = list(class = 'CLS.SCIKIT.LR' , weight = 0.20, n_num = c(20:60)       , n_cat = c(0:10),           penalty = 'l1', return_logit = c(T, T, T, F), transformers = "MAP.MALER.MMS()"),
+default_greedy_templates = list(
+  xgb1 = list(class = 'CLS.SCIKIT.XGB', weight = 0.20, n_num = c(30:60, 40:80), n_cat = c(0:10, 5:15),    n_jobs = as.integer(7), return_logit = c(T, T, F)),
+  lr1  = list(class = 'CLS.SCIKIT.LR' , weight = 0.20, n_num = c(20:60)       , n_cat = c(0:10),           penalty = 'l1', return_logit = c(T, T, T, F), transformers = "MAP.MALER.MMS()"),
   svm1 = list(class = 'CLS.SCIKIT.SVM', weight = 0.05, n_num = c(5:20)        , n_cat = c(0:10)))
 
-create_transformer = function(X, y, types = default_templates, name = NULL){
+create_transformer = function(X, y, types = default_greedy_templates, name = NULL){
   colnames(X) %>% sapply(function(i) X[,i] %>% class) -> features
   num_features = names(features)[features == 'numeric']
   cat_features = names(features)[features == 'integer']
@@ -449,11 +449,9 @@ join_features = function(father, mother, X_train, y_train, X_val, y_val, benchma
 }
 
 
-
-
 ########### EXPERT GENETIC ####################
 classifiers   =  c("CLS.SCIKIT.XGB", "CLS.SCIKIT.LR", "CLS.SCIKIT.SVM", "CLS.SCIKIT.KNN", "CLS.SCIKIT.DT")
-encoders      =  c("ENCODER.HELMERT", "ENCODER.CATBOOST", "ENCODER.JAMESSTEIN", "ENCODER.TARGET", "ENCODER.MODEL")
+encoders      =  c("ENC.CATEGORY_ENCODERS.HLMRT", "ENCODER.CATBOOST", "ENCODER.JAMESSTEIN", "ENCODER.TARGET", "ENCODER.MODEL")
 binners       =  c('OPTBINNER', 'SMBINNING')
 
 models_pass   = c("DUMMIFIER", "MAP.MALER.MMS", "numeric", classifiers, encoders)
@@ -462,21 +460,27 @@ binners_pass  = c('integer', 'numeric', classifiers, encoders)
 free_numerics = c('integer', 'numeric')
 bound_numerics = c("MAP.MALER.MMS", "SCALER", classifiers, encoders, 'numeric')
 
-
 default_expert_templates = list(
-  list(class = 'CLS.SCIKIT.XGB', weight = 0.1, n_jobs = as.integer(7), return_logit = c(T, T, F), max_depth = 3:15, min_child_weight = 1:5, n_estimators = 50*(1:6), feature_transformer = 'MAP.MALER.IDT'),
-  list(class = 'CLS.SCIKIT.LR' , weight = 0.05, penalty = c(rep('l1',5), 'l2'), return_logit = c(T, T, T, F), pass = models_pass, feature_transformer = 'MAP.MALER.MMS'),
-  list(class = 'CLS.SCIKIT.SVM', weight = 0.05, pass = models_pass, max_train = 5000:10000, return_logit = c(T, T, F), feature_transformer = 'SCALER'),
-  list(class = 'CLS.SCIKIT.KNN', weight = 0.05, pass = models_pass, max_train = 5000:10000, return_logit = c(T, T, F), feature_transformer = 'MAP.MALER.MMS'),
-  list(class = 'CLS.SCIKIT.DT', weight = 0.05, pass = models_pass, return_logit = c(T, T, F), feature_transformer = 'MAP.MALER.IDT'),
-  list(class = 'CLS.FLASSO', weight = 0.05, pass = models_pass, lambda1 = 0.1*(0:50), lambda2 = 0.1*(0:50), return_logit = c(T, T, F), feature_transformer = 'MAP.MALER.MMS'),
-  list(class = 'CLS.SPARKLYR.GBT', weight = 0.05, pass = models_pass, return_logit = c(T, T, F),
+  cls.xgb.01 = list(class = 'CLS.SCIKIT.XGB', weight = 0.1, n_jobs = as.integer(7), return_logit = c(T, T, F), max_depth = 3:15, min_child_weight = 1:5, n_estimators = 50*(1:6), feature_transformer = 'MAP.MALER.IDT'),
+  cls.xgb.02 = list(class = 'CLS.XGBOOST', weight = 0.1, n_jobs = as.integer(7), return_logit = c(T, T, F),
+                    colsample_bytree = as.integer(1:10),
+                    gamma = list(fun = runif, min = 1, max = 10),
+                    eta = list(fun = runif, min = 0.05, max = 0.5),
+                    nrounds = 5:100,
+                    max_depth = 2:20,
+                    min_child_weight = 2:10,
+                    scale_pos_weight = 2:10,
+                    subsample = list(fun = runif, min = 0, max = 1)),
+  cls.lr.01  = list(class = 'CLS.SCIKIT.LR' , weight = 0.05, penalty = c(rep('l1',5), 'l2'), return_logit = c(T, T, T, F), pass = models_pass, feature_transformer = 'MAP.MALER.MMS'),
+  cls.svm.01 = list(class = 'CLS.SCIKIT.SVM', weight = 0.05, pass = models_pass, max_train = 5000:10000, return_logit = c(T, T, F), feature_transformer = 'SCALER'),
+  cls.knn.01 = list(class = 'CLS.SCIKIT.KNN', weight = 0.05, pass = models_pass, max_train = 5000:10000, return_logit = c(T, T, F), feature_transformer = 'MAP.MALER.MMS'),
+  cls.dt.01  = list(class = 'CLS.SCIKIT.DT', weight = 0.05, pass = models_pass, return_logit = c(T, T, F), feature_transformer = 'MAP.MALER.IDT'),
+  cls.flasso.01 = list(class = 'CLS.FLASSO', weight = 0.05, pass = models_pass, lambda1 = 0.1*(0:50), lambda2 = 0.1*(0:50), return_logit = c(T, T, F), feature_transformer = 'MAP.MALER.MMS'),
+  cls.gbt.01 = list(class = 'CLS.SPARKLYR.GBT', weight = 0.05, pass = models_pass, return_logit = c(T, T, F),
        max_iter  = 20:50, max_depth = 2:20, subsampling_rate = 0.1*(1:10),
        max_bins  = c(16, 32, 64, 128), min_info_gain = 0,
        step_size = c(0.001*(1:10), 0.01*(1:10), 0.1*(1:10)), feature_transformer = 'MAP.MALER.IDT'),
-  list(class = 'CLS.MLR', weight = 0.05, pass = models_pass,
-       model_type = mlr.classification.models$class, feature_transformer = 'MAP.MALER.IDT'),
-  list(class = 'CLS.KERAS.DNN', weight = 0.05, pass = models_pass, return_logit = c(T, T, F),
+  cls.dnn.01 = list(class = 'CLS.KERAS.DNN', weight = 0.05, pass = models_pass, return_logit = c(T, T, F),
        num_layers = 1:5,
        first_layer_nodes = 1:1024,
        layer_nodes_ratio = 0.1*(1:20),
@@ -490,15 +494,15 @@ default_expert_templates = list(
        feature_transformer = 'MAP.MALER.MMS'),
   # list(class = 'SCALER', weight = 0.01, pass = 'numeric'),
   # list(class = 'MAP.MALER.MMS', weight = 0.05, pass = 'numeric'),
-  list(class = 'BIN.MALER.OBB', weight = 0.02, pass = binners_pass, feature_transformer = 'MAP.MALER.MMS'),
-  list(class = 'ENC.CATEGORY_ENCODERS.JSTN', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
-  list(class = 'ENC.CATEGORY_ENCODERS.CATB', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
-  list(class = 'ENC.CATEGORY_ENCODERS.HLMRT', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
-  list(class = 'ENC.MALER.TE', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
-  list(class = 'FNT.MALER.INV', weight = 0.01, pass = 'numeric', trim = 100, feature_transformer = 'MAP.MALER.MMS'),
-  list(class = 'FET.MALER.D2MUL', weight = 0.01, pass = setdiff(models_pass, 'DUMMIFIER'), feature_transformer = 'MAP.MALER.MMS'),
-  list(class = 'FNT.MALER.LOG', weight = 0.01, pass = c('MAP.MALER.MMS', 'numeric', classifiers), intercept = 0.1*(0:100), feature_transformer = 'MAP.MALER.MMS'),
-  list(class = 'ENC.FASTDUMMIES.OHE', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
+  bin.obb.01   = list(class = 'BIN.MALER.OBB', weight = 0.02, pass = binners_pass, feature_transformer = 'MAP.MALER.MMS'),
+  enc.jstn.01  = list(class = 'ENC.CATEGORY_ENCODERS.JSTN', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
+  enc.catb.01  = list(class = 'ENC.CATEGORY_ENCODERS.CATB', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
+  enc.hlmrt.01 = list(class = 'ENC.CATEGORY_ENCODERS.HLMRT', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
+  enc.te.01    = list(class = 'ENC.MALER.TE', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
+  fnt.inv.01   = list(class = 'FNT.MALER.INV', weight = 0.01, pass = 'numeric', trim = 100, feature_transformer = 'MAP.MALER.MMS'),
+  fet.d2mul.01 = list(class = 'FET.MALER.D2MUL', weight = 0.01, pass = setdiff(models_pass, 'DUMMIFIER'), feature_transformer = 'MAP.MALER.MMS'),
+  fnt.log.01   = list(class = 'FNT.MALER.LOG', weight = 0.01, pass = c('MAP.MALER.MMS', 'numeric', classifiers), intercept = 0.1*(0:100), feature_transformer = 'MAP.MALER.MMS'),
+  enc.ohe.01   = list(class = 'ENC.FASTDUMMIES.OHE', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
   list(class = 'FET.MALER.MGB', weight = 0.01, pass = free_numerics, n_survivors = 2, max_fail = 2:3, feature_transformer = 'MAP.MALER.MMS'),
   list(class = 'GENETIC.BOOSTER.LOGICAL', weight = 0.01, pass = c('OPTBINNER', 'DUMMIFIER'), feature_transformer = 'MAP.MALER.IDT'),
   list(class = 'BIN.KMEANS.KMC', weight = 0.01, pass = c(free_numerics, bound_numerics), feature_transformer = 'MAP.MALER.MMS'),
@@ -613,18 +617,24 @@ grow_experts = function(experts, n_births = 100, n_target = 20, prefix = 'EX', t
 }
 
 build_expert_from_template = function(exname = NULL, template){
+  stopifnot(inherits(template, 'list'))
   tr  = try(template$class %>% new, silent = T)
   if(inherits(tr, 'try-error')){
     cat('\n', 'Building expert ', tr, ' failed!', '\n',  as.character(tr), '\n')
     return(NULL)
   }
   if(!is.null(exname)) tr$name = exname
-  configs = names(template) %-% c('class', 'weight', 'n_num', 'n_cat', 'transformers', 'pass')
+  configs = names(template) %-% c('class', 'weight', 'n_num', 'n_cat', 'transformers','feature_transformer', 'pass')
   for(cfg in configs){
-    if(length(template[[cfg]]) == 1){
-      tr$config[[cfg]] <- template[[cfg]]
+    if (inherits(template[[cfg]], 'list')){
+      stopifnot(inherits(template[[cfg]]$fun, 'function'))
+      tr$config[[cfg]] <- do.call(template[[cfg]]$fun, template[[cfg]] %>% list.add(n = 1) %>% list.remove('fun'))
     } else {
-      tr$config[[cfg]] <- template[[cfg]] %>% sample(1)
+      if(length(template[[cfg]]) == 1){
+        tr$config[[cfg]] <- template[[cfg]]
+      } else {
+        tr$config[[cfg]] <- template[[cfg]] %>% sample(1)
+      }
     }
   }
   return(tr)
@@ -834,7 +844,7 @@ pick_from_list = function(lst){
   lst[[lst %>% length %>% sequence %>% sample(size = 1)]]
 }
 
-grow_funlist = function(funlist = NULL, n_births = 100, features = NULL, function_set = default_function_set, prefix = 'FN'){
+grow_funlist = function(funlist = NULL, features = NULL, n_births = 100, function_set = default_function_set, prefix = 'FN'){
   if(is.empty(funlist)){
     assert(!is.empty(features), 'Both funlist and features are empty!')
     funlist = features %>% as.list; names(funlist) <- features}
@@ -1106,4 +1116,137 @@ train_funlist = function(flist = NULL, champions = list(), X_train, y_train, X_t
   }
   return(champions)
 }
+
+
+
+
+### Permanent Genetic:
+
+#
+
+# 1- Pick a classifier template
+# 2- Take a bunch of features
+# 3- Improve Models
+# 3-1 For DNNs, train with more rows
+# 3-2 For Function Models, run another iteration of optimization
+# 3-3 For Other classifiers chnage
+
+#### Genetic Base & Boost: ####
+
+# Read Existing Models and evaluate them:
+read_models = function(path){
+  mlist = list()
+  for(dn in list.files(path)){
+    mdl = load_model(dn, path)
+    mlist[[mdl$name]] <- mdl$copy()
+  }
+  return(mlist)
+}
+
+# Internal Function, Not to Export
+add_model_to_modlog = function(modlog = data.frame(), model = NULL, X, y, metrics = c('gini', 'lift', 'loss')){
+  if(is.null(model)) return(modlog)
+
+  modlog[model$name, 'name'] <- model$name
+  modlog[model$name, 'description'] <- model$description
+  modlog[model$name, 'package'] <- model$package
+  modlog[model$name, 'numTransformers'] <- length(model$transformers)
+  modlog[model$name, 'numGradientTransformers'] <- length(model$gradient_transformers)
+  modlog[model$name, 'numFeatures'] <- nrow(model$objects$features)
+  modlog[model$name, 'bestFeature'] <- try(model$objects$features$fname[order(model$objects$features$importance, decreasing = T)[1]], silent = T)
+
+  yp = model$predict(X)[,1]
+  for(mtrc in metrics){
+    modlog[model$package, mtrc] <- try(correlation(yp, y, metric = mtrc), silent = T)
+  }
+  return(modlog)
+}
+
+evaluate_models = function(modlist, X, y){
+  mlog = data.frame()
+  for(mdl in modlist){
+    mlog %<>% add_model_to_modlog(model = mdl, X = X, y = y)
+  }
+  return(mlog)
+}
+
+evaluate_features = function(X, y, metrics = 'gini'){
+  features <- colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.}
+  features$n_unique <- colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
+
+  for(cn in colnames(X)){
+    for(mtrc in metrics){
+      features[cn, mtrc] <- correlation(X %>% pull(cn), y_test, metric = mtrc)
+    }
+  }
+  features$type = ifelse(class == 'numeric', 'numeric', ifelse(class == 'integer', 'ordinal', 'nominal'))
+  return(features)
+}
+
+gb_supporing_classifiers = c('CLS.XGBOOST', 'CLS.KERAS.DNN')
+##
+add_classifier = function(input = list(modlog = data.frame(), modlist = list()), X_train, y_train, X_valid, y_valid, templates = default_templates,
+                       classifiers = c(CLS.SCIKIT.XGB = 1, CLS.XGBOOST = 1, CLS.SCIKIT.LR = 1),
+                       boosting_rate = 0.5, gradient_boosting_rate = 0.9,
+                       metric = 'gini', features = NULL, path = NULL){
+  if(is.null(features)){
+    features = evaluate_features(X_valid, y_valid, metric)
+  }
+
+  modlog  = input$modlog
+  modlist = input$modlist
+
+  # Building a base model:
+  base = build_from_template(template_name = pick(classifiers), features = features, templates = templates)
+
+  # Should I boost it with transformers?
+  if(nrow(modlog) > 0){
+    # Transformer Boosting
+    modnames = rownames(modlog)
+    while((runif(1) < boosting_rate) & (length(modnames) > 0)){
+      modname  <- modnames %>% sample(size = 1, prob = modlog[modnames, metric] %>% vect.normalise)
+      modnames %<>% setdiff(modname)
+
+      nt = length(base$transformers)
+      if(nt > 0){
+        base$transformers[[nt + 1]] <- modlist[[modname]]$copy()
+      } else {
+        base$transformers <- new('MAP.MALER.IDT', name = 'I', features.include = base$config$features.include)
+        base$transformers <- modlist[[modname]]$copy()
+        base$config$features.include <- NULL
+      }
+    }
+
+    # Gradient Transformer Boosting
+    if((runif(1) < gradient_boosting_rate) & inherits(base, gb_supporting_classifiers)){
+      modname  <- rownames(modlog) %>% sample(size = 1, prob = modlog[[metric]] %>% vect.map %>% vect.normalise)
+
+      base$gradient_transformers <- basemodlist[[modname]]$copy()
+      base$gradient_transformers$config$return <- 'logit'
+    }
+
+  }
+
+  try(base$fit(X_train, y_train), silent = T) -> res
+  if(!inherits(res, 'try-error')){
+    modlist[[base$name]] <- base
+    modlog %<>% add_model_to_modlog(base, X = X_valid, y = y_valid)
+
+    if(!is.null(path)){
+      save_model(base, path = path)
+    }
+  } else cat('\n', 'Model fitting failed: ', res)
+
+  return(list(modlog = modlog, modlist = modlist))
+}
+
+
+#### End ####
+
+
+
+
+
+
+
 

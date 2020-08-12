@@ -52,12 +52,12 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
       }
     },
 
-    performance = function(X, y, metric = c('gini', 'aurc', 'precision', 'recall', 'f1', 'sensitivity', 'specificity', 'accuracy', 'lift'), ratio = NULL){
+    performance = function(X, y, metric = c('gini', 'aurc', 'precision', 'recall', 'f1', 'sensitivity', 'specificity', 'accuracy', 'lift', 'loss'), ratio = NULL){
       metric = match.arg(metric)
       # cutoff_free = metric %in% c('aurc', 'gini', 'lift')
       yp = predict(X)[, 1]
 
-      correlation(yp, y, metric = metric, lift_ratio = ratio)
+      correlation(yp, y, metric = metric, ratio = ratio)
     }
   )
 )
@@ -147,9 +147,6 @@ CLS.HDPENREG.FLASSO = setRefClass('CLS.FLASSO', contains = 'CLASSIFIER', methods
   }
 ))
 
-
-suppressWarnings({mlr.classification.models = mlr::listLearners('classif')})
-
 #' @export CLASSIFIER.MLR
 CLS.MLR = setRefClass('CLS.MLR', contains = "CLASSIFIER",
     methods = list(
@@ -159,9 +156,10 @@ CLS.MLR = setRefClass('CLS.MLR', contains = "CLASSIFIER",
         description <<- 'MLR Model'
         package     <<- 'mlr'
         package_language <<- 'R'
+        config$mlr_classification_models <<- mlr::listLearners('classif')
 
         if(is.empty(name)){name <<- 'MLR' %>% paste0(sample(10000:99999, 1))}
-        config$model_type <<- config$model_type %>% verify('character', domain = mlr.classification.models %>% pull(class), default = 'classif.gbm')
+        config$model_type <<- config$model_type %>% verify('character', domain = config$mlr_classification_models %>% pull(class), default = 'classif.gbm')
         objects$model     <<- mlr::makeLearner(cl = config$model_type, predict.type = "prob")
       },
 
@@ -221,7 +219,6 @@ CLS.SCIKIT.DT = setRefClass('CLS.SCIKIT.DT', contains = "CLS.SCIKIT",
       module_dt = reticulate::import('sklearn.tree')
       objects$model <<- do.call(module_dt$DecisionTreeClassifier, config %>% list.remove(maler_words))
     }
-
   )
 )
 
@@ -232,8 +229,10 @@ CLS.SCIKIT.XGB = setRefClass('CLS.SCIKIT.XGB', contains = "CLS.SCIKIT",
         callSuper(...)
         description <<- 'Extreme Gradient Boosting'
         if(is.empty(name)){name <<- 'SKXGB' %>% paste0(sample(10000:99999, 1))}
+        if(!is.null(config$n_jobs)){config$n_jobs <<- as.integer(config$n_jobs)}
         module_xgb = reticulate::import('xgboost')
         objects$model     <<- do.call(module_xgb$XGBClassifier, config %>% list.remove(maler_words))
+
       },
 
       model.fit = function(X, y){
@@ -280,6 +279,7 @@ CLS.SCIKIT.SVM = setRefClass('CLS.SCIKIT.SVM', contains = "CLS.SCIKIT",
                            }
                          )
 )
+
 
 #' @export KERAS
 CLS.KERAS.DNN = setRefClass('CLS.KERAS.DNN', contains = 'CLASSIFIER',
@@ -335,6 +335,13 @@ CLS.KERAS.DNN = setRefClass('CLS.KERAS.DNN', contains = 'CLASSIFIER',
     model.fit = function(X, y){
       objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
       X = X[objects$features$fname]
+
+      if(is.empty(gradient_transformers)){
+        target = to_categorical(y, 2)
+      } else {
+        target = y %>% as.integer %>% as.matrix %>% cbind(NA)
+      }
+
       # Build the NN:
       if(is.null(objects$model)){
         input_layer = layer_input(shape = ncol(X), name = 'input')
@@ -347,11 +354,9 @@ CLS.KERAS.DNN = setRefClass('CLS.KERAS.DNN', contains = 'CLASSIFIER',
         }
 
         if(is.empty(gradient_transformers)){
-          target = to_categorical(y, 2)
           output_layer = sequential %>% layer_dense(name = 'output', units = 2, activation = 'softmax')
           objects$model <<- keras_model(inputs = input_layer, outputs = output_layer)
         } else {
-          target = y %>% as.integer %>% as.matrix %>% cbind(NA)
           config$loss <<- function(y_true, y_pred){
             K <- backend()
             x <- y_pred[,1]
@@ -392,7 +397,23 @@ CLS.KERAS.DNN = setRefClass('CLS.KERAS.DNN', contains = 'CLASSIFIER',
       } else {
         XOUT = objects$model$predict(list(rep(0, nrow(X)) %>% data.matrix, X %>% data.matrix))[,1] %>% logit_inv %>% as.data.frame
       }
+    },
+
+    model.save = function(path = getwd()){
+      callSuper(path)
+      keras::save_model_hdf5(object = objects$model, filepath = paste0(path, '/', name, '.hdf5'))
+    },
+
+    model.load = function(path = getwd()){
+      callSuper(path)
+      fn   = paste0(path, '/', name, '.hdf5')
+      pass = file.exists(fn)
+      warnif(!pass, paste0('File ', fn , ' does not exist!'))
+      if(pass){
+        objects$model <<- keras::load_model_hdf5(filepath = fn)
+      }
     }
+
 ))
 
 #' @export SPARKLYR.GBT
@@ -503,6 +524,7 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
 
     # parameter 'nrounds' is equivalent to 'n_estimators' in CLS.SCIKIT.XGB
     config$nrounds       <<- config$nrounds       %>% verify(c('numeric', 'integer'), lengths = 1, domain = c(0,Inf), default = 100)
+    config$nthread       <<- config$nthread       %>% verify(c('numeric', 'integer'), lengths = 1, domain = c(0,1024), default = 1)
     config$show_progress <<- config$show_progress %>% verify('logical',               lengths = 1, domain = c(T, F) , default = F)
     config$verbose       <<- config$verbose       %>% verify(c('numeric', 'integer'), lengths = 1, domain = c(0,1)  , default = 1) %>% as.integer
     config$print_every_n <<- config$print_every_n %>% verify(c('numeric', 'integer'), lengths = 1, domain = c(0,Inf), default = 1) %>% as.integer
@@ -511,7 +533,7 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
   },
 
   model.fit = function(X, y){
-    reserved_words = c('nrounds', 'show_progress', 'verbose', 'print_every_n', 'early_stopping_rounds', 'maximize', 'save_period', 'save_name', 'xgb_model', 'callbacks')
+    reserved_words = c('nrounds', 'show_progress', 'verbose', 'print_every_n', 'early_stopping_rounds', 'maximize', 'save_period', 'save_name', 'xgb_model', 'callbacks', 'nthread')
     X = X[objects$features$fname]
     if(ncol(X) == 0){stop('No columns in the input dataset!')}
 
@@ -552,6 +574,7 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
       params    = config %>% list.remove(c(maler_words, reserved_words)),
       data      = dtrain,
       nrounds   = config$nrounds,
+      nthread   = config$nthread,
       watchlist = wtchlst,
       obj       = objective,
       feval     = losserror,
@@ -559,9 +582,13 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
       print_every_n = config$print_every_n,
       early_stopping_rounds = config$early_stopping_rounds, maximize = config$maximize, save_period = config$save_period,
       save_name = config$save_name, xgb_model = config$xgb_model, callbacks = config$callbacks)
+
+    imp = xgb.importance(model = objects$model) %>% select(fname = Feature, importance = Gain)
+    objects$features %>% left_join(imp, by = 'fname') %>% na2zero ->> objects$features
   },
 
   model.predict = function(X){
+    X = X[objects$model$feature_names]
     stats::predict(objects$model, xgb.DMatrix(as.matrix(X), label = rep(NA, nrow(X)))) %>% logit_inv %>% as.data.frame
   }
 ))

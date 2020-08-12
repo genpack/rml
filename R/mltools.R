@@ -154,7 +154,7 @@ ranker = function(X){
 
 
 #' @export
-outliers = function(X, sd_threshold = 4){
+outliers.old = function(X, sd_threshold = 4){
   if(inherits(X, 'numeric')){X = matrix(X, ncol = 1)}
   out = integer()
 
@@ -168,7 +168,7 @@ outliers = function(X, sd_threshold = 4){
   return(unique(out))
 }
 
-trim_outliers = function(X, scale = F, center = F, only_numeric = F){
+trim_outliers.old = function(X, scale = F, center = F, only_numeric = F){
   m = ncol(X)
   for(i in sequence(m)){
     xi   = unique(X[,i])
@@ -198,14 +198,13 @@ trim_outliers = function(X, scale = F, center = F, only_numeric = F){
   X
 }
 
-
 na2median = function(X){
   X %<>% data.frame
   for(i in 1:ncol(X)) if(inherits(X[,i], 'numeric')) X[is.na(X[,i]), i] <- median(X[,i], na.rm = T)
   return(X)
 }
 
-correlation = function(x, y, metric = 'pearson_correlation', threshold = NULL, lift_ratio = NULL){
+correlation = function(x, y, metric = 'pearson_correlation', threshold = NULL, ratio = NULL){
   x = as.numeric(x)
   y = as.numeric(y)
   if(metric == 'pearson_correlation'){
@@ -217,12 +216,12 @@ correlation = function(x, y, metric = 'pearson_correlation', threshold = NULL, l
     crl = numeric()
     x %<>% as.data.frame
     for(col in sequence(ncl)){
-      crl = c(crl, correlation(x[,col] %>% as.numeric, y, metric = metric, threshold = threshold, lift_ratio = lift_ratio))
+      crl = c(crl, correlation(x[,col] %>% as.numeric, y, metric = metric, threshold = threshold, ratio = ratio))
     }
     return(crl)
   }
 
-  x %<>% vect.map
+  if(metric != 'loss') x %<>% vect.map
   if(!is.null(threshold)) x = as.numeric(x > threshold)
 
   if(metric %in% c('aurc', 'gini')){
@@ -235,17 +234,27 @@ correlation = function(x, y, metric = 'pearson_correlation', threshold = NULL, l
     if(unique(x) %==% c(0,1)){
       score = data.frame(y_pred = x, y_true = y) %>% scorer('y_pred', 'y_true')
     } else {
-      score = data.frame(y_pred = x, y_true = y) %>% optSplit.f1('y_pred', 'y_true')
+      cut_q = quantile(x, prob = 1 - ratio)
+      score = data.frame(y_pred = as.numeric(x > cut_q), y_true = y) %>% scorer('y_pred', 'y_true')
     }
     return(score[[metric]])
   }
 
-  if(is.null(lift_ratio)){lift_ratio = mean(y, na.rm = T)}
+  if(is.null(ratio)){ratio = mean(y, na.rm = T)}
   if(metric == 'lift'){
-    cut_q = quantile(x, prob = 1 - lift_ratio)
+    cut_q = quantile(x, prob = 1 - ratio)
     prec  = y[x >= cut_q] %>% mean(na.rm = T)
     return(prec/mean(y))
   }
+
+  if(metric == 'loss'){
+    lossfun = logistic$copy()
+    lossfun$reset()
+    lossfun$inputs$x = x
+    lossfun$inputs$y = y
+    return(lossfun$get.output() %>% mean)
+  }
+
   stop('Unknown metric' %>% paste(metric))
 }
 
@@ -827,7 +836,6 @@ load_model = function(model_name, path = getwd()){
   return(model)
 }
 
-
 model_size = function(model){
   t_size = list(config = 0, objects = 0, transformers = 0)
   for(tr in model$transformers){
@@ -840,6 +848,18 @@ model_size = function(model){
        objects = object.size(model$objects),
        transformers = object.size(model$transformers) + t_size$config + t_size$objects + t_size$transformers)
 }
+
+model_features = function(model){
+  fet = model$objects$features$fname
+  for(tr in model$transformers){
+    fet  = c(fet, model_features(tr))
+  }
+  for(tr in model$gradient_transformers){
+    fet  = c(fet, model_features(tr))
+  }
+  return(fet %>% unique)
+}
+
 
 #converts given categorical columns to integer
 int_columns = function(x, cats){
@@ -882,7 +902,6 @@ feature_subset_scorer = function(model, X, y, subset_size = 600){
   return(features)
 }
 
-
 transformer_types = function(model){
   mdlns = model$type
   for(tr in model$transformers){
@@ -890,3 +909,81 @@ transformer_types = function(model){
   }
   return(mdlns %>% unique)
 }
+
+moment = function(v, m = c(1,2), na.rm = T){
+  if(length(m) == 1) return(sum(v^m))
+  M = NULL
+  for(i in m){M %<>% c(sum(v^i, na.rm = na.rm))}
+  names(M) <- paste0('M', m)
+  return(M)
+}
+
+feature_info_numeric = function(X, probs = seq(0, 1, 0.25)){
+  X = X[numerics(X)]
+  if(inherits(X, 'WIDETABLE')){
+    tables = X$meta %>% filter(class %in% c('numeric', 'integer')) %>% pull(table) %>% unique
+    out    = NULL
+    for(tn in tables){
+      out = X$load_table(tn) %>% feature_info_numeric(probs = probs) %>% rbind(out)
+    }
+    return(out)
+  } else if(inherits(X, c('data.frame', 'matrix', 'tibble', 'data.table'))){
+    X %>% as.matrix %>% apply(2, moment, m = 1:4) %>% t %>%
+      cbind(
+        X %>% as.matrix %>% apply(2, function(v) {c(n_missing = sum(is.na(v)), n_values = sum(!is.na(v)), n_unique = length(unique(v)))}) %>% t) %>%
+      cbind(
+        X %>% as.matrix %>% apply(2, quantile, probs = probs, na.rm = T) %>% t) %>%
+      as.data.frame %>% rownames2Column('fname')
+  } else stop('X has unknown class!')
+}
+
+feature_info_categorical = function(X){
+  X = X[nominals(X)]
+  if(inherits(X, 'WIDETABLE')){
+    tables = X$meta %>% filter(class %in% c('character', 'factor', 'integer')) %>% pull(table) %>% unique
+    out    = NULL
+    for(tn in tables){
+      out = X$load_table(tn) %>% feature_info_categorical %>% rbind(out)
+    }
+    return(out)
+
+  } else if(inherits(X, c('data.frame', 'matrix', 'tibble', 'data.table'))){
+    X[nominals(X)] %>% as.matrix %>% apply(2, function(v) {c(n_missing = sum(is.na(v)), n_values = sum(!is.na(v)), n_unique = length(unique(v)))}) %>%
+      t %>% as.data.frame %>%
+      cbind(
+        values = X %>% as.matrix %>% apply(2, function(v) {
+          vu = unique(v)
+          if(length(vu) > 4) vu = c(as.character(vu[1:3]), ' ... ', vu[length(vu)])
+          paste(vu, collapse = ',')
+        })) %>%
+      rownames2Column('fname')
+  } else stop('X has unknown class!')
+}
+
+encode_nominals = function(X, encodings = list(), remove_space = T){
+  for(ft in names(encodings) %^% colnames(X)){
+    u = encodings[[ft]] %>% unlist
+    X[,ft] <- u[X[,ft] %>% as.character]
+    if(remove_space){
+      X[,ft] %<>% gsub(pattern = "\\s", replacement = "")
+    }
+  }
+
+  return(X)
+}
+
+# This function may be transferred to gener
+# dividing x/y sometimes returns Inf when the denominator is zero.
+# smart divide, replaces zero denominators with the meinimum non-zero value multiplied by a gain
+# This gain should be a value smaller than one. Default is 0.1
+smart_divide = function(x, y, gain = 0.1, tolerance = .Machine$double.eps){
+  w0 = which(equal(y, 0.0, tolerance = tolerance))
+  if(length(w0) > 0){
+    min_value = min(abs(y[-w0]))
+    if(length(min_value) > 0){
+      y[w0] <- ifelse(y[w0] >= 0, min_value*gain, - min_value*gain)
+    }
+  }
+  return(x/y)
+}
+

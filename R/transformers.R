@@ -399,22 +399,28 @@ ENC.SCIKIT.OHE = setRefClass(
       package          <<- 'sklearn'
       package_language <<- 'Python'
       type     <<-
-      if(is.empty(name)){name <<- 'OHE' %>% paste0(sample(10000:99999, 1))}
+      if(is.empty(name)){name <<- 'SKOHE' %>% paste0(sample(10000:99999, 1))}
+      config$max_domain <<- config$max_domain %>% verify(c('numeric', 'integer'), default = 25) %>% as.integer
     },
 
     model.fit = function(X, y){
       if(!fitted){
-        objects$features <<- objects$features %>% filter(fname %in% nominals(X))
+        if(!'n_unique' %in% colnames(objects$features)){
+          objects$features$n_unique <<- colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
+        }
+        objects$features <<- objects$features %>% filter(fname %in% nominals(X), n_unique <= config$max_domain)
         X = X[objects$features$fname]
 
         module = reticulate::import('sklearn.preprocessing')
+        warnif(is.empty(objects$features), 'Either no categorical columns found or all categorical columns have too many distict values!', wrn_src = name)
+
         objects$model <<- do.call(module$OneHotEncoder, config %>% list.remove(maler_words))
         objects$model$fit(X, y)
       }
     },
 
     model.predict = function(X){
-      objects$model$transform(X)
+      objects$model$transform(X) %>% as.matrix %>% as.data.frame
     }
   ))
 
@@ -539,10 +545,65 @@ ENC.CATEGORY_ENCODERS.JSTN = setRefClass(
     }
   ))
 
+ENC.MALER.FE = setRefClass(
+  'ENC.MALER.FE', contains = 'MODEL',
+  methods = list(
+    initialize = function(...){
+      callSuper(...)
+      type             <<- 'Encoder'
+      description      <<- 'Feature Encoder'
+      package          <<- 'maler'
+      package_language <<- 'R'
+
+      config$aggregator <<- config$aggregator %>% verify('character', default = 'mean')
+
+      if(is.empty(name)){name <<- 'FE' %>% paste0(sample(10000:99999, 1))}
+    },
+
+    model.fit = function(X, y = NULL){
+      if(!fitted){
+        catfigs = objects$features %>% filter(fclass %in% c('character', 'integer', 'factor')) %>% pull(fname) %>% intersect(colnames(X))
+        if(!is.null(config$categoricals)) {catfigs = catfigs %^% config$categoricals}
+
+        numfigs = objects$features %>% filter(fclass %in% c('numeric', 'integer')) %>% pull(fname) %>% intersect(colnames(X)) %>% setdiff(catfigs)
+        assert(length(catfigs) > 0, 'No categorical feature for encoding')
+        assert(length(numfigs) > 0, 'No numerical features for feature encoding')
+        objects$categoricals <<- catfigs
+
+        objects$features <<- objects$features %>% filter(fname %in% c(catfigs, numfigs))
+        X = X[objects$features$fname]
+
+        objects$model <<- list()
+        for(ccol in catfigs){
+          objects$model[[ccol]] <<- list()
+          for(ncol in numfigs){
+            objects$model[[ccol]][[ncol]] <<- parse(
+              text = sprintf("summarise(group_by(select(X, c(%s, %s)), %s), %s_%s = %s(%s))", ccol, ncol, ccol, ccol, ncol, config$aggregator, ncol)) %>% eval
+          }
+        }
+      }
+    },
+
+    model.predict = function(X){
+      XOUT = X[c()]
+
+      for(ccol in names(objects$model)){
+        for(ncol in names(objects$model[[ccol]])){
+          cn   = paste(ccol, ncol, sep = '_')
+          XOUT = X %>% left_join(objects$model[[ccol]][[ncol]], by = ccol) %>% {.[cn]} %>% cbind(XOUT)
+          if(inherits(config$action_by_original, 'function')){
+            XOUT[, cn] <- do.call(config$action_by_original, list(XOUT[, cn], X[, ncol])) %>% verify(c('numeric', 'integer'))
+          }
+        }
+      }
+      return(XOUT)
+    }
+  )
+)
 
 # Replaces categorical features with class ratios associated with each category
 #' @export ENC.MALER.TE
-ENC.MALER.TE = setRefClass('ENCODER.TARGET', contains = 'MODEL',
+ENC.MALER.TE = setRefClass('ENC.MALER.TE', contains = 'MODEL',
    methods = list(
      initialize = function(...){
        callSuper(...)
@@ -768,7 +829,6 @@ FET.MALER.D2MULC = setRefClass('FET.MALER.D2MULC', contains = 'FET.MALER.D2MUL',
   model.predict = function(X){
     X
   }
-
 ))
 
 FNT.MALER.POLY = setRefClass('FNT.MALER.POLY', contains = 'MODEL', methods = list(
@@ -1136,6 +1196,33 @@ ENS.MALER.BS = setRefClass('ENS.MALER.BS', contains = "MODEL",
   )
 )
 
+#' @export ENS.MALER.AGGR
+ENS.MALER.AGGR = setRefClass('ENS.MALER.AGGR', contains = "CLASSIFIER",
+                             methods = list(
+                               initialize = function(...){
+                                 callSuper(...)
+                                 type             <<- 'Ensembler'
+                                 description      <<- 'Aggregator Ensembler'
+                                 package          <<- 'maler'
+                                 package_language <<- 'R'
+
+                                 if(is.empty(name)){name <<- 'AGGR' %>% paste0(sample(10000:99999, 1))}
+                                 config$model_class  <<- config$model_class  %>% verify('character', default = 'CLS.SCIKIT.XGB')
+                                 config$model_config <<- config$model_config %>% verify('character', default = list())
+                                 objects$model <<- new(config$model_class, config = config$model_config)
+                               },
+
+                               model.fit = function(X, y){
+                                 objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+                                 X = X[objects$features$fname]
+                               },
+
+                               model.predict = function(X){
+                                 X %>% as.matrix %>% apply(1, mean) %>% as.data.frame
+                               }
+                             )
+)
+
 # previously KMEANS
 #' @export BIN.KMEANS.KMC
 BIN.KMEANS.KMC = setRefClass('BIN.KMEANS.KMC', contains = 'MODEL', methods = list(
@@ -1208,7 +1295,7 @@ MAP.PYLMNN.LMNN = setRefClass('MAP.PYLMNN.LMNN', contains = "MODEL", methods = l
     package_language <<- 'Python'
     if(is.empty(name)){name <<- 'LMNN' %>% paste0(sample(10000:99999, 1))}
     config$num_components <<- config$num_components %>% verify(c('numeric', 'integer'), default = 5) %>% as.integer
-    config$num_neighbors  <<- config$neighbors %>% verify(c('numeric', 'integer'), default = 10) %>% as.integer
+    config$num_neighbors  <<- config$num_neighbors %>% verify(c('numeric', 'integer'), default = 10) %>% as.integer
     config$epochs         <<- config$epochs %>% verify(c('numeric', 'integer'), default = 100) %>% as.integer
     lmnn_module   <-  reticulate::import('pylmnn')
     objects$model <<- lmnn_module$LargeMarginNearestNeighbor(n_neighbors = config$num_neighbors, max_iter = config$epochs, n_components = config$num_components, init = 'pca')

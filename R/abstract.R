@@ -1,14 +1,13 @@
-  # SPFKGhZx1y$oSbf$4m!l
-  # Registration code for cua: wssyd+MMA3Q7 - Asia Pacific (Sydney)
   # 25 Oct 2019 'fitted', 'features.include' and 'transformer' added to maler_words
 
-
-  maler_words = c('keep_columns', 'keep_features', 'max_train',
-                  'cv.ntrain', 'cv.ntest', 'cv.test_ratio','cv.train_ratio', 'cv.split_method', 'cv.performance_metric', 'cv.reset_transformer', 'cv.restore_model',
-                  'sfs.enabled', 'rfe.enabled', 'rfe.importance_threshold', 'remove_invariant_features', 'sig_level',
+  maler_words = c('keep_columns', 'keep_features', 'max_train', 'max_domain', 'action_by_original',
+                  'cv.ntrain', 'cv.ntest', 'cv.test_ratio','cv.train_ratio', 'cv.split_method', 'cv.performance_metric', 'cv.reset_transformer', 'cv.restore_model', 'cv.set',
+                  'sfs.enabled', 'fe.enabled','fe.recursive', 'fe.importance_threshold', 'fe.quantile',
+                  'pp.remove_invariant_features', 'eda.enabled',
+                  'sig_level', 'gradient_transformers_aggregator', 'save_predictions',
                   'decision_threshold', 'threshold_determination', 'metric', 'return', 'transformers', 'fitted',
-                  'segmentation_features', 'features.include', 'features.include.at', 'features.exclude', 'features.exclude.at', 'cv.set',
-                  'gradient_transformers_aggregator', 'save_predictions')
+                  'segmentation_features', 'features.include', 'features.include.at', 'features.exclude', 'features.exclude.at',
+                  'ts.enabled', 'ts.id_col', 'ts.time_col')
 
 
   #' @export MODEL
@@ -39,11 +38,16 @@
         if(is.null(settings$cv.performance_metric)){settings$cv.performance_metric <- 'gini'}
         if(is.null(settings$cv.split_method)){settings$cv.split_method <- 'shuffle'}
         if(is.null(settings$cv.reset_transformer)){settings$cv.reset_transformer = T}
-        if(is.null(settings$rfe.enabled)){settings$rfe.enabled = F}
-        if(is.null(settings$rfe.importance_threshold)){settings$rfe.importance_threshold = 0}
+        if(is.null(settings$fe.enabled)){settings$fe.enabled = F}
+        if(is.null(settings$fe.recursive)){settings$fe.recursive = F}
+        if(is.null(settings$fe.importance_threshold)){settings$fe.importance_threshold = 0}
         if(is.null(settings$save_predictions)){settings$save_predictions = F}
-        if(is.null(settings$remove_invariant_features)){settings$remove_invariant_features = T}
+        if(is.null(settings$pp.remove_invariant_features)){settings$pp.remove_invariant_features = T}
+        if(is.null(settings$eda.enabled)){settings$eda.enabled = F}
         if(is.null(settings$gradient_transformers_aggregator)){settings$gradient_transformers_aggregator = mean}
+        if(is.null(settings$ts.enabled)){settings$ts.enabled = F}
+        if(is.null(settings$ts.id_col)){settings$ts.id_col = 'caseID'}
+        if(is.null(settings$ts.time_col)){settings$ts.time_col = 'time'}
 
         config       <<- settings
         fitted       <<- FALSE
@@ -114,11 +118,12 @@
         }
 
         XOUT = transform_yout(X, XOUT)
-        colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
+        if(ncol(XOUT) > 0) colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
 
         objects$n_output <<- ncol(XOUT)
         treat(XOUT, XFET, XORG)
       },
+
 
       treat                = function(out, fet, org){
         if(!is.null(config$pass_columns)) org = org[config$pass_columns]
@@ -137,20 +142,25 @@
              else return(out)
       },
 
-      # Fitting with recursive feature elimination (RFE). Works only for model fitters which generate feature importance
-      fit.rfe = function(X, y){
+      # Fitting with feature elimination (FE). Works only for model fitters which generate feature importance
+      fit.fe = function(X, y){
         .self$model.fit(X, y)
         if('importance' %in% colnames(objects$features)){
+          if(!is.null(config$fe.quantile)){
+            threshold = objects$features$importance %>% quantile(probs = config$fe.quantile)
+          } else {
+            threshold = config$fe.importance_threshold
+          }
           fns = objects$features$fname
-          ftk = fns[which(objects$features$importance > config$rfe.importance_threshold)] # features to keep
+          ftk = fns[which(objects$features$importance > threshold)] # features to keep
           fte = fns %-% ftk
           while(length(fte) > 0){
             objects$features <<- objects$features %>% filter(fname %in% ftk)
             if(is.empty(objects$features)){.self$fit.distribution(X, y); fte = c()} else {
               .self$model.fit(X[objects$features$fname], y)
               fns = objects$features$fname
-              ftk = fns[which(objects$features$importance > config$rfe.importance_threshold)] # features to keep
-              fte = fns %-% ftk
+              ftk = fns[which(objects$features$importance > threshold)] # features to keep
+              fte = chif(config$fe.recursive, fns %-% ftk, c())
             }
           }
 
@@ -161,7 +171,7 @@
       },
 
       fit.quad = function(X, y){
-        fit.rfe(X, y)
+        fit.fe(X, y)
         clmns = colnames(X)
         XP    = X[objects$features$fname]
         for(i in 1:ncol(X)){
@@ -169,7 +179,7 @@
           Xi <- X %>% as.matrix %>% apply(2, function(u) u*v) %>% as.data.frame %>% {colnames(.) <- clmns %>% paste(clmns[i], sep = 'X');.}
           XP = XP %>% cbind(Xi)
           objects$features <<- colnames(XP) %>% sapply(function(i) XP %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
-          fit.rfe(XP, y)
+          fit.fe(XP, y)
           XP  = XP[objects$features$fname]
         }
       },
@@ -203,15 +213,35 @@
             X = X[ww,]; y = y[ww]
           }
           y = transform_yin(X, y)
-          if(!is.null(config[['features.include']])){X = X %>% spark.select(config$features.include %^% colnames(X))}
-          if(!is.null(config[['features.exclude']])){X = X %>% spark.select(colnames(X) %-% config$features.exclude)}
+          if(!is.null(config[['features.include']])){X = X[config$features.include %^% colnames(X)]}
+          if(!is.null(config[['features.exclude']])){X = X[colnames(X) %-% config$features.exclude]}
           X = transform_x(X, y)
-          if(!is.null(config[['features.include.at']])){X = X %>% spark.select(config$features.include.at %^% colnames(X))}
-          if(!is.null(config[['features.exclude.at']])){X = X %>% spark.select(colnames(X) %-% config$features.exclude.at)}
-          if(config$remove_invariant_features) X %<>% remove_invariant_features
+          if(!is.null(config[['features.include.at']])){X = X[config$features.include.at %^% colnames(X)]}
+          if(!is.null(config[['features.exclude.at']])){X = X[colnames(X) %-% config$features.exclude.at]}
           objects$features <<- colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
+          nums = objects$features$fclass %in% c('numeric', 'integer')
+          cats = objects$features$fclass %in% c('character', 'integer', 'factor')
+          if((sum(nums) > 0) & (config$eda.enabled)){
+            numinfo = feature_info_numeric(X)
+            objects$features <<- objects$features %>% left_join(numinfo, by = 'fname')
+          }
+          if((sum(cats) > 0) & (config$eda.enabled)){
+            catinfo = feature_info_categorical(X)
+            objects$features <<- objects$features %>% merge(catinfo, all = T)
+          }
+
+          if(config$pp.remove_invariant_features){
+            if(!'n_unique' %in% colnames(objects$features)){
+              objects$features$n_unique <<- colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
+            }
+            objects$features <<- objects$features %>% filter(n_unique > 1)
+            X = X[objects$features$fname]
+          }
+          # todo: Add other preprocessing: pp.treat_outliers (remove, trim, adapted trim, ...), pp.int_ordinals, ...
+          # remove outliers can be considered as a transformer as well
+
           if(is.empty(objects$features)){fit.distribution(X, y)}
-          else if(config$rfe.enabled) {fit.rfe(X, y)} else {.self$model.fit(X, y)}
+          else if(config$fe.enabled) {fit.fe(X, y)} else {.self$model.fit(X, y)}
           # if(config$quad.enabled) {fit.quad(X, y)}
         }
         fitted <<- TRUE
@@ -238,12 +268,21 @@
         if(nt > 0){
           for(i in sequence(nt)){
             transformer = gradient_transformers[[i]]
-            if(!transformer$fitted) {transformer$fit(X, y)}
+            if(inherits(transformer, 'character')){
+              assert(transformer %in% colnames(X))
+              if(i == 1){
+                YT = X[transformer]
+              } else {
+                YT = cbind(YT, X[transformer])
+              }
+            } else if (inherits(transformer, 'MODEL')){
+              if(!transformer$fitted) {transformer$fit(X, y)}
 
-            if(i == 1){
-              YT = transformer$predict(X)
-            } else {
-              YT = cbind(YT, transformer$predict(X) %>% {.[colnames(.) %-% colnames(YT)]})
+              if(i == 1){
+                YT = transformer$predict(X)
+              } else {
+                YT = cbind(YT, transformer$predict(X) %>% {.[colnames(.) %-% colnames(YT)]})
+              }
             }
             yt = YT %>% as.matrix %>% apply(1, config$gradient_transformers_aggregator)
           }
@@ -260,11 +299,14 @@
       },
 
       transform_yout = function(X, Y){
-        grad = y_gradient(X)
-        for(i in sequence(ncol(Y))){
-          Y[, i] <- Y[, i] + grad
+        if(length(gradient_transformers) > 0){
+          grad = y_gradient(X)
+
+          for(i in numerics(Y)){
+            Y[, i] <- Y[, i] + grad
+          }
+          # todo: apply y_transformers (list of functions)
         }
-        # todo: apply y_transformers (list of functions)
         return(Y)
       },
 
@@ -306,7 +348,7 @@
         info = list(name = name, type = type, class = class(.self)[1], description = description, package = package,
                     language = package_language, return = config$return,
                     fitted = fitted, keep_columns = config$keep_columns, keep_features = config$keep_features,
-                    max_train = config$max_train, rfe = config$rfe.enabled, metric = config$metric,
+                    max_train = config$max_train, fe = config$fe.enabled, metric = config$metric,
                     outputs = objects$n_output)
         for(i in names(info)){
           if(is.null(info[[i]])){ info[[i]] <- 'NULL'}
@@ -364,11 +406,17 @@
         for(tr in transformers){
           tr$model.save(path)
         }
+        for(gtr in gradient_transformers){
+          gtr$model.save(path)
+        }
       },
 
       model.load = function(path = getwd()){
         for(tr in transformers){
           tr$model.load(path)
+        }
+        for(gtr in gradient_transformers){
+          gtr$model.load(path)
         }
       },
 
@@ -428,7 +476,7 @@
       info.size             = function(){
         t_size = list(config = 0, objects = 0, transformers = 0)
         for(tr in transformers){
-          slist          = tr$get.size()
+          slist          = tr$info.size()
           t_size$config  = t_size$config  + slist$config
           t_size$objects = t_size$objects + slist$objects
           t_size$transformers = t_size$transformers + slist$transformers
