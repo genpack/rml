@@ -229,20 +229,21 @@ correlation = function(x, y, metric = 'pearson_correlation', threshold = NULL, r
     if(metric == 'aurc') return(aurc) else return(2*aurc - 1)
   }
 
+  if(is.null(ratio)){ratio = mean(y, na.rm = T)}
+
   if(metric %in% c('precision', 'recall', 'f1', 'accuracy', 'sensitivity', 'specificity', 'fp', 'fn', 'tp', 'tn')){
     if(metric == 'sensitivity') metric = 'recall'
     if(unique(x) %==% c(0,1)){
       score = data.frame(y_pred = x, y_true = y) %>% scorer('y_pred', 'y_true')
     } else {
-      cut_q = quantile(x, prob = 1 - ratio)
-      score = data.frame(y_pred = as.numeric(x > cut_q), y_true = y) %>% scorer('y_pred', 'y_true')
+      cut_q = quantile(x, prob = 1 - ratio, na.rm = T)
+      score = data.frame(y_pred = as.logical(x > cut_q), y_true = as.logical(y)) %>% scorer('y_pred', 'y_true')
     }
     return(score[[metric]])
   }
 
-  if(is.null(ratio)){ratio = mean(y, na.rm = T)}
   if(metric == 'lift'){
-    cut_q = quantile(x, prob = 1 - ratio)
+    cut_q = quantile(x, prob = 1 - ratio, na.rm = T)
     prec  = y[x >= cut_q] %>% mean(na.rm = T)
     return(prec/mean(y))
   }
@@ -836,6 +837,18 @@ load_model = function(model_name, path = getwd()){
   return(model)
 }
 
+reset_model = function(model, reset_transformers = T, reset_gradient_transformers = T){
+  model$fitted <- FALSE
+  model$objects$features <- NULL
+  model$objects$saved_pred <- NULL
+  if (reset_transformers & !is.empty(model$transformers)){
+    for (transformer in model$transformers) reset_model(model = transformer, reset_transformers = T, reset_gradient_transformers = reset_gradient_transformers)
+  }
+  if (reset_gradient_transformers & !is.empty(model$gradient_transformers)){
+    for (transformer in model$gradient_transformers) reset_model(model = transformer, reset_transformers = reset_transformers, reset_gradient_transformers = T)
+  }
+}
+
 model_size = function(model){
   t_size = list(config = 0, objects = 0, transformers = 0)
   for(tr in model$transformers){
@@ -850,7 +863,7 @@ model_size = function(model){
 }
 
 model_features = function(model){
-  fet = model$objects$features$fname
+  fet = model$objects$features$fname %U% model$config$features.include
   for(tr in model$transformers){
     fet  = c(fet, model_features(tr))
   }
@@ -889,7 +902,7 @@ feature_subset_scorer = function(model, X, y, subset_size = 600){
     tempfeat = tempfeat %-% sfet
     nf       = length(tempfeat)
 
-    perf = model$get.performance.cv(X[sfet], y)
+    perf = model$performance.cv(X[sfet], y) %>% median
 
     features[model$objects$features$fname, 'importance']   <- model$objects$features$importance
     features[model$objects$features$fname, 'model_number'] <- cnt
@@ -901,6 +914,35 @@ feature_subset_scorer = function(model, X, y, subset_size = 600){
 
   return(features)
 }
+
+# Given a set of train and test data and labels, extracts list of informative features
+# by training multiple xgboost model on random subsets of features and eliminating features that their total predictive value is
+# less than a certain percentage (specified by argument 'cumulative_gain_threshold') of total predictive value.
+extract_informative_features = function(X, y, subset_size = 200, cumulative_gain_threshold = 0.9, pre_order = T){
+  if(pre_order){
+    ef = evaluate_features(X, y, metrics = 'gini')
+    remaining_features = rownames(ef)[order(ef$gini, decreasing = T)]
+  } else {remaining_features = colnames(X)}
+  ifet = NULL
+  while(length(remaining_features) > 0){
+    nfet = min(subset_size, length(remaining_features))
+    if(pre_order){
+      fet   = remaining_features %>% head(n = nfet)
+    } else {
+      fet   = remaining_features %>% sample(size = nfet)
+    }
+    model = CLS.SCIKIT.XGB(n_jobs = as.integer(4))
+    model$fit(X[fet], y)
+    fetlog = model$objects$features %>% arrange(desc(importance))
+    fetlog$importance %>% sort(decreasing = T) %>% cumsum -> cumgain
+    ifet = rbind(ifet, fetlog[cumgain < cumulative_gain_threshold,])
+    ifet$model <- model$name
+    remaining_features %<>% setdiff(fet)
+  }
+
+  return(ifet)
+}
+
 
 transformer_types = function(model){
   mdlns = model$type

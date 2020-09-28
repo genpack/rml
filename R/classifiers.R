@@ -18,6 +18,10 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
     fit = function(X, y){
       if(!fitted){
         callSuper(X, y)
+        if(is.null(objects$features$importance)){
+          objects$features$importance <<- 1.0/nrow(objects$features)
+        }
+
         set_decision_threshold(X, y)
         objects$n_output <<- as.integer(1)
       }
@@ -29,6 +33,7 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
       if (config$return == 'logit' | has_gradient){Y %<>% as.matrix %>% apply(2, logit_fwd) %>% as.data.frame}
       Y = callSuper(X, Y)
       if (config$return == 'probs' & has_gradient){Y %<>% as.matrix %>% apply(2, logit_inv) %>% as.data.frame}
+      colnames(Y) <- config$return
       return(Y)
     },
 
@@ -143,7 +148,7 @@ CLS.HDPENREG.FLASSO = setRefClass('CLS.FLASSO', contains = 'CLASSIFIER', methods
   },
 
   model.predict = function(X){
-    X %>% as.matrix %*% objects$model$coefficient %>% as.data.frame
+    X %>% as.matrix %*% objects$model$coefficient %>% logit.inv %>% as.data.frame
   }
 ))
 
@@ -511,7 +516,41 @@ CLS.SCIKIT.MNB = setRefClass('CLS.SCIKIT.MNB', contains = 'CLS.SCIKIT', methods 
   )
 )
 
+# pmg_accuracy: Performance Metric with Gradient: Accuracy
+# Accuracy as loss
+pmg_accuracy <- function(preds, dtrain){
+  labels <- getinfo(dtrain, "label")
+  lgrads <- attr(dtrain, 'gradient')
+  preds  <- preds + lgrads
+  tp     <- sum(labels & (preds > 0))
+  tn     <- sum((!labels) & (preds < 0))
+  prf    <- (tp + tn)/length(labels)
+  return(list(metric = "accuracy", value = prf))
+}
 
+pmg_gini <- function(preds, dtrain){
+  labels <- getinfo(dtrain, "label")
+  lgrads <- attr(dtrain, 'gradient')
+  preds  <- preds + lgrads
+  prf    <- correlation(preds, labels, 'gini')
+  return(list(metric = "gini", value = prf))
+}
+
+pmg_logloss <- function(preds, dtrain){
+  labels <- getinfo(dtrain, "label")
+  lgrads <- attr(dtrain, 'gradient')
+  preds  <- preds + lgrads
+  prf    <- correlation(preds, labels, 'loss')
+  return(list(metric = "loss", value = prf))
+}
+
+pmg_lift <- function(preds, dtrain){
+  labels <- getinfo(dtrain, "label")
+  lgrads <- attr(dtrain, 'gradient')
+  preds  <- preds + lgrads
+  prf    <- correlation(preds, labels, 'lift')
+  return(list(metric = "lift", value = prf))
+}
 
 CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list(
   initialize = function(...){
@@ -526,32 +565,39 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
     config$nrounds       <<- config$nrounds       %>% verify(c('numeric', 'integer'), lengths = 1, domain = c(0,Inf), default = 100)
     config$nthread       <<- config$nthread       %>% verify(c('numeric', 'integer'), lengths = 1, domain = c(0,1024), default = 1)
     config$show_progress <<- config$show_progress %>% verify('logical',               lengths = 1, domain = c(T, F) , default = F)
-    config$verbose       <<- config$verbose       %>% verify(c('numeric', 'integer'), lengths = 1, domain = c(0,1)  , default = 1) %>% as.integer
+    config$verbose       <<- config$verbose       %>% verify(c('numeric', 'integer', 'logical'), lengths = 1, domain = c(0,1)  , default = 1) %>% as.integer
     config$print_every_n <<- config$print_every_n %>% verify(c('numeric', 'integer'), lengths = 1, domain = c(0,Inf), default = 1) %>% as.integer
     config$save_name     <<- config$save_name     %>% verify('character',             lengths = 1, default = "xgboost.model")
     config$callbacks     <<- config$callbacks     %>%  verify('list', default = list())
   },
 
   model.fit = function(X, y){
-    reserved_words = c('nrounds', 'show_progress', 'verbose', 'print_every_n', 'early_stopping_rounds', 'maximize', 'save_period', 'save_name', 'xgb_model', 'callbacks', 'nthread')
+    reserved_words = c('nrounds', 'watchlist', 'obj', 'feval', 'verbose', 'print_every_n', 'early_stopping_rounds',
+                       'maximize', 'save_period', 'save_name', 'xgb_model', 'callbacks', 'nthread', 'show_progress')
     X = X[objects$features$fname]
     if(ncol(X) == 0){stop('No columns in the input dataset!')}
 
     dtrain = xgb.DMatrix(as.matrix(X), label = y)
-    if(config$show_progress){
-      if(!is.empty(config$cv.set)){
-        dvalidation = config$cv.set[[1]]$X %>% as.matrix %>% xgb.DMatrix(label = config$cv.set[[1]]$y)
-      } else {
-        dvalidation = dtrain
+
+    need_eval = config$show_progress | !is.null(config$early_stopping_rounds)
+    if(need_eval){
+      dvalidation = list(train = dtrain)
+      # vp: Validation Pack
+      for(vp in config$cv.set){
+        # nvs: Number of Validation Sets
+        nvs = length(dvalidation)
+        grd = y_gradient(X = vp$X, y = vp$y)
+        dvalidation[["Validation_" %++% nvs]] <- vp$X[objects$features$fname] %>% as.matrix %>% xgb.DMatrix(label = vp$y)
+        if(sum(abs(grd)) > .Machine$double.eps){
+          attr(dvalidation[["Validation_" %++% nvs]], 'gradient') <- grd
+        }
+        # todo: check for neural net, check for transformers
       }
-      wtchlst = list(eval = dvalidation, train = dtrain)
-    } else {
-      wtchlst = list()
-    }
+    } else {dvalidation = list()}
 
     if(!is.null(attr(y, 'gradient'))){
       attr(dtrain, 'gradient') <- attr(y, 'gradient')
-      objective <- function(preds, dtrain){
+      config$obj   <<- function(preds, dtrain){
         # now you can access the attribute in customized function
         labels <- getinfo(dtrain, 'label')
         lgrads <- attr(dtrain, 'gradient')
@@ -561,30 +607,41 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
         hess   <- preds * (1 - preds)
         return(list(grad = grad, hess = hess))
       }
-      losserror <- function(preds, dtrain){
-        labels <- getinfo(dtrain, "label")
-        lgrads <- attr(dtrain, 'gradient')
-        preds  <- preds + lgrads
-        err    <- as.numeric(sum(labels != (preds > 0)))/length(labels)
-        return(list(metric = "error", value = err))
+      if(is.null(config$feval)){
+        config$feval <<- pmg_gini
+        config$maximize <<- T
       }
-    } else {objective = NULL; losserror = NULL}
+    }
+
+    if(need_eval & is.null(config$feval) & is.null(config$eval_metric)){
+      config$eval_metric <<- 'auc'
+      config$maximize <<- T
+    }
 
     objects$model <<- xgb.train(
       params    = config %>% list.remove(c(maler_words, reserved_words)),
       data      = dtrain,
       nrounds   = config$nrounds,
       nthread   = config$nthread,
-      watchlist = wtchlst,
-      obj       = objective,
-      feval     = losserror,
+      watchlist = dvalidation,
+      obj       = config[['obj']],
+      feval     = config$feval,
+      maximize  = config$maximize,
       verbose   = config$verbose,
       print_every_n = config$print_every_n,
-      early_stopping_rounds = config$early_stopping_rounds, maximize = config$maximize, save_period = config$save_period,
-      save_name = config$save_name, xgb_model = config$xgb_model, callbacks = config$callbacks)
+      early_stopping_rounds = config$early_stopping_rounds,
+      save_period = config$save_period,
+      save_name = config$save_name,
+      xgb_model = config$xgb_model,
+      callbacks = config$callbacks)
 
-    imp = xgb.importance(model = objects$model) %>% select(fname = Feature, importance = Gain)
-    objects$features %>% left_join(imp, by = 'fname') %>% na2zero ->> objects$features
+    imp = try(xgb.importance(model = objects$model) %>% select(fname = Feature, importance = Gain), silent = T)
+    if(!inherits(imp, 'try-error')){
+      if(!is.null(objects$features$importance)) objects$features$importance <<- NULL
+      objects$features %>% left_join(imp, by = 'fname') %>% na2zero ->> objects$features
+    } else if(is.null(objects$features$importance)){
+      objects$features$importance <<- 1.0/nrow(objects$features)
+    }
   },
 
   model.predict = function(X){

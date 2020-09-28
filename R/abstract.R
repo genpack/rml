@@ -3,7 +3,7 @@
   maler_words = c('keep_columns', 'keep_features', 'max_train', 'max_domain', 'action_by_original',
                   'cv.ntrain', 'cv.ntest', 'cv.test_ratio','cv.train_ratio', 'cv.split_method', 'cv.performance_metric', 'cv.reset_transformer', 'cv.restore_model', 'cv.set',
                   'sfs.enabled', 'fe.enabled','fe.recursive', 'fe.importance_threshold', 'fe.quantile',
-                  'pp.remove_invariant_features', 'eda.enabled',
+                  'pp.remove_invariant_features', 'eda.enabled', 'return_features', 'feature_subset_size',
                   'sig_level', 'gradient_transformers_aggregator', 'save_predictions',
                   'decision_threshold', 'threshold_determination', 'metric', 'return', 'transformers', 'fitted',
                   'segmentation_features', 'features.include', 'features.include.at', 'features.exclude', 'features.exclude.at',
@@ -57,12 +57,16 @@
         objects$features      <<- features
         objects$pupils        <<- pupils
       },
-      reset                = function(reset_transformers = T){
+
+      reset                = function(reset_transformers = T, reset_gradient_transformers = T){
         fitted <<- FALSE
         objects$features <<- NULL
         objects$saved_pred <<- NULL
         if (reset_transformers & !is.empty(transformers)){
-          for (transformer in transformers) transformer$reset(reset_transformers = T)
+          for (transformer in transformers) transformer$reset(reset_transformers = T, reset_gradient_transformers = reset_gradient_transformers)
+        }
+        if (reset_gradient_transformers & !is.empty(gradient_transformers)){
+          for (transformer in gradient_transformers) transformer$reset(reset_transformers = reset_transformers, reset_gradient_transformers = T)
         }
       },
 
@@ -163,6 +167,7 @@
               fte = chif(config$fe.recursive, fns %-% ftk, c())
             }
           }
+          config$features.include <<- objects$features$fname
 
           if(is.empty(objects$features)){
             cat(name, ': ', 'No features left after elimination! Distribution fitted for output variable.', '\n')
@@ -218,7 +223,14 @@
           X = transform_x(X, y)
           if(!is.null(config[['features.include.at']])){X = X[config$features.include.at %^% colnames(X)]}
           if(!is.null(config[['features.exclude.at']])){X = X[colnames(X) %-% config$features.exclude.at]}
-          objects$features <<- colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
+
+          assert(ncol(X) > 0, 'No column found in the training dataset!')
+
+          if(inherits(X, 'WIDETABLE')){
+            objects$features <<- X$meta %>% distinct(column, .keep_all = T) %>% select(fname = column, fclass = class, n_unique = n_unique)
+          } else {
+            objects$features <<- colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
+          }
           nums = objects$features$fclass %in% c('numeric', 'integer')
           cats = objects$features$fclass %in% c('character', 'integer', 'factor')
           if((sum(nums) > 0) & (config$eda.enabled)){
@@ -245,6 +257,7 @@
           # if(config$quad.enabled) {fit.quad(X, y)}
         }
         fitted <<- TRUE
+        objects$fitting_time <<- Sys.time()
       },
 
       transform_x = function(X, y = NULL){
@@ -434,7 +447,7 @@
         for (i in sequence(config$cv.ntrain)){
           ind_train = N %>% sequence %>% sample(size = floor(config$cv.train_ratio*N), replace = F)
 
-          X_train = X[ind_train, drop = F]
+          X_train = X[ind_train, ,drop = F]
           y_train = y[ind_train]
 
           reset(config$cv.reset_transformer)
@@ -444,13 +457,13 @@
             for(j in sequence(config$cv.ntest)){
               N2 = N - length(ind_train)
               ind_test = sequence(N) %>% setdiff(ind_train) %>% sample(size = floor(config$cv.test_ratio*N2), replace = F)
-              X_test  = X[ind_test,]
+              X_test  = X[ind_test, objects$features$fname, drop = F]
               y_test  = y[ind_test]
               scores = c(scores, .self$performance(X_test, y_test, metric = config$cv.performance_metric))
             }
           } else {
             for(vset in config$cv.set){
-              scores = c(scores, .self$performance(vset$X, vset$y, metric = config$cv.performance_metric))
+              scores = c(scores, .self$performance(vset$X[objects$features$fname], vset$y, metric = config$cv.performance_metric))
             }
           }
         }

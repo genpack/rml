@@ -1144,7 +1144,7 @@ read_models = function(path){
 }
 
 # Internal Function, Not to Export
-add_model_to_modlog = function(modlog = data.frame(), model = NULL, X, y, metrics = c('gini', 'lift', 'loss')){
+add_model_to_modlog = function(modlog = data.frame(), model = NULL, performance){
   if(is.null(model)) return(modlog)
 
   modlog[model$name, 'name'] <- model$name
@@ -1155,9 +1155,8 @@ add_model_to_modlog = function(modlog = data.frame(), model = NULL, X, y, metric
   modlog[model$name, 'numFeatures'] <- nrow(model$objects$features)
   modlog[model$name, 'bestFeature'] <- try(model$objects$features$fname[order(model$objects$features$importance, decreasing = T)[1]], silent = T)
 
-  yp = model$predict(X)[,1]
-  for(mtrc in metrics){
-    modlog[model$package, mtrc] <- try(correlation(yp, y, metric = mtrc), silent = T)
+  for(mtrc in names(performance)){
+    modlog[model$name, mtrc] <- performance[mtrc]
   }
   return(modlog)
 }
@@ -1170,31 +1169,51 @@ evaluate_models = function(modlist, X, y){
   return(mlog)
 }
 
-evaluate_features = function(X, y, metrics = 'gini'){
+evaluate_features = function(X, y, metrics = 'gini', ...){
+  if((ncol(X) == 0) | (nrow(X) == 0)) return(NULL)
+  if(inherits(X, 'WIDETABLE')){
+    ef = NULL
+    for(tn in unique(X$meta$table)){
+      cols = X$meta %>% filter(table == tn) %>% pull(column) %>% unique
+      ef = X[cols] %>% as.data.frame %>% evaluate_features(y = y, metrics = metrics) %>% rbind(ef)
+    }
+    return(ef)
+  }
   features <- colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.}
-  features$n_unique <- colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
+  features$n_unique  <- colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
+  features$n_missing <- colnames(X) %>% sapply(function(x) X %>% pull(x) %>% is.na %>% sum) %>% unlist
 
   for(cn in colnames(X)){
     for(mtrc in metrics){
-      features[cn, mtrc] <- correlation(X %>% pull(cn), y_test, metric = mtrc)
+      metricval <- try(correlation(X %>% pull(cn), y, metric = mtrc, ...), silent = T)
+      if(inherits(metricval, 'numeric')){
+        features[cn, mtrc] <- metricval
+      }
     }
   }
-  features$type = ifelse(class == 'numeric', 'numeric', ifelse(class == 'integer', 'ordinal', 'nominal'))
+  features$type = ifelse(features$fclass == 'numeric', 'numeric', ifelse(features$fclass == 'integer', 'ordinal', 'nominal'))
+  features$sumScores <- features[[metrics[1]]]
+  features$numScores <- 1
+  features$avgScores <- features$sumScores
+
   return(features)
 }
 
-gb_supporing_classifiers = c('CLS.XGBOOST', 'CLS.KERAS.DNN')
+gb_supporting_classifiers = c('CLS.XGBOOST', 'CLS.KERAS.DNN')
 ##
-add_classifier = function(input = list(modlog = data.frame(), modlist = list()), X_train, y_train, X_valid, y_valid, templates = default_templates,
-                       classifiers = c(CLS.SCIKIT.XGB = 1, CLS.XGBOOST = 1, CLS.SCIKIT.LR = 1),
-                       boosting_rate = 0.5, gradient_boosting_rate = 0.9,
-                       metric = 'gini', features = NULL, path = NULL){
-  if(is.null(features)){
-    features = evaluate_features(X_valid, y_valid, metric)
-  }
+add_classifier = function(input = list(fetlog = NULL, modlog = data.frame(), modlist = list()),
+                          templates = default_templates,
+                          X_train, y_train, X_valid, y_valid,
+                          classifiers = c(CLS.SCIKIT.XGB = 1, CLS.XGBOOST = 1, CLS.SCIKIT.LR = 1),
+                          boosting_rate = 0.5, gradient_boosting_rate = 0.5,
+                          path = NULL, metrics = c('gini', 'lift', 'loss'), ...){
+  modlog   = input$modlog
+  modlist  = input$modlist
+  features = input$fetlog
 
-  modlog  = input$modlog
-  modlist = input$modlist
+  if(is.null(features)){
+    features = evaluate_features(X_valid, y_valid, metrics[1])
+  }
 
   # Building a base model:
   base = build_from_template(template_name = pick(classifiers), features = features, templates = templates)
@@ -1204,25 +1223,25 @@ add_classifier = function(input = list(modlog = data.frame(), modlist = list()),
     # Transformer Boosting
     modnames = rownames(modlog)
     while((runif(1) < boosting_rate) & (length(modnames) > 0)){
-      modname  <- modnames %>% sample(size = 1, prob = modlog[modnames, metric] %>% vect.normalise)
+      modname  <- modnames %>% sample(size = 1, prob = modlog[modnames, metrics[1]] %>% vect.map %>% vect.normalise)
       modnames %<>% setdiff(modname)
 
       nt = length(base$transformers)
       if(nt > 0){
         base$transformers[[nt + 1]] <- modlist[[modname]]$copy()
       } else {
-        base$transformers <- new('MAP.MALER.IDT', name = 'I', features.include = base$config$features.include)
-        base$transformers <- modlist[[modname]]$copy()
+        base$transformers[[1]] <- new('MAP.MALER.IDT', name = 'I', features.include = base$config$features.include)
+        base$transformers[[2]] <- modlist[[modname]]$copy()
         base$config$features.include <- NULL
       }
     }
 
     # Gradient Transformer Boosting
     if((runif(1) < gradient_boosting_rate) & inherits(base, gb_supporting_classifiers)){
-      modname  <- rownames(modlog) %>% sample(size = 1, prob = modlog[[metric]] %>% vect.map %>% vect.normalise)
+      modname  <- rownames(modlog) %>% sample(size = 1, prob = modlog[[metrics[1]]] %>% vect.map %>% vect.normalise)
 
-      base$gradient_transformers <- basemodlist[[modname]]$copy()
-      base$gradient_transformers$config$return <- 'logit'
+      base$gradient_transformers[[1]] <- modlist[[modname]]$copy()
+      base$gradient_transformers[[1]]$config$return <- 'logit'
     }
 
   }
@@ -1230,16 +1249,37 @@ add_classifier = function(input = list(modlog = data.frame(), modlist = list()),
   try(base$fit(X_train, y_train), silent = T) -> res
   if(!inherits(res, 'try-error')){
     modlist[[base$name]] <- base
-    modlog %<>% add_model_to_modlog(base, X = X_valid, y = y_valid)
 
+    modperf = c()
+    yp = base$predict(X_valid)[,1]
+    for(mtrc in metrics){
+      modperf[mtrc] <- try(correlation(yp, y_valid, metric = mtrc), silent = T)
+    }
+
+    modlog %<>% add_model_to_modlog(base, performance = modperf)
+    features %<>% add_model_to_fetlog(base, performance = modperf)
     if(!is.null(path)){
       save_model(base, path = path)
     }
   } else cat('\n', 'Model fitting failed: ', res)
 
-  return(list(modlog = modlog, modlist = modlist))
+
+  return(list(fetlog = features, modlog = modlog, modlist = modlist))
 }
 
+# Internal function
+# Adds feature importances of the given model to the feature log
+add_model_to_fetlog = function(fetlog, model, performance){
+  performance = performance[1]
+  modfet      = model$objects$features %>% column2Rownames('fname')
+  fet         = rownames(modfet) %^% rownames(fetlog)
+
+  fetlog[fet, 'sumScores'] = fetlog[fet, 'sumScores'] + performance*(modfet[fet, 'importance'] %>% vect.map)
+  fetlog[fet, 'numScores'] = fetlog[fet, 'numScores'] + 1
+  fetlog[fet, 'avgScores'] = fetlog[fet, 'sumScores']/fetlog[fet, 'numScores']
+
+  return(fetlog)
+}
 
 #### End ####
 

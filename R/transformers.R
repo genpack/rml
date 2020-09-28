@@ -1350,9 +1350,13 @@ FET.MALER.SFS = setRefClass('FET.MALER.SFS', contains = 'MODEL', methods = list(
     config$model_class  <<- config$model_class %>% verify('character', default = 'CLS.SCIKIT.XGB')
     config$model_config <<- config$model_config %>% verify('list', default = list())
     config$return_features <<- config$return_features %>% verify('logical', lengths = 1, domain = c(T,F), default = T)
+    config$feature_subset_size <<- config$feature_subset_size %>% verify(c('integer', 'numeric'), default = 200)
   },
 
   model.fit = function(X, y){
+    if(is.null(config$model_config$cv.set) & !is.null(config$cv.set)){
+      config$model_config$cv.set <<- config$cv.set
+    }
     cv.set.transformed = config$model_config$cv.set
     if(!is.null(config$model_config$cv.set) & !is.empty(transformers)){
       for(i in sequence(length(cv.set.transformed))){cv.set.transformed[[i]]$X %<>% transform}
@@ -1362,10 +1366,11 @@ FET.MALER.SFS = setRefClass('FET.MALER.SFS', contains = 'MODEL', methods = list(
       mdl <- new(config$model_class, config = config$model_config)
       mdl$config$cv.set = cv.set.transformed
 
-      feature_subset_scorer(mdl, X, y) -> scores
+      feature_subset_scorer(mdl, X, y, subset_size = config$feature_subset_size) -> scores
       objects$features <<- scores %>% rownames2Column('fname') %>%
         filter(score > 0) %>% arrange(desc(score)) %>% mutate(fname = as.character(fname)) %>% select(fname)
     } else {
+      config$feature_order <<- config$feature_order %>% intersect(colnames(X))
       objects$features <<- data.frame(fname = config$feature_order, stringsAsFactors = F)
     }
 
@@ -1373,11 +1378,15 @@ FET.MALER.SFS = setRefClass('FET.MALER.SFS', contains = 'MODEL', methods = list(
     fetbag = c()
     perf   = -Inf
 
-    for(ft in objects$features$fname){
+    remaining_features = objects$features$fname
+
+    while(length(remaining_features) > 0){
+      ft = remaining_features %>% head(n = min(config$feature_subset_size, length(remaining_features)))
+
       mdl = new(config$model_class, config = config$model_config)
       mdl$config$cv.set = cv.set.transformed
 
-      new_perf = mdl$get.performance.cv(X[, c(fetbag, ft), drop = F], y) %>% median
+      new_perf = mdl$performance.cv(X[c(fetbag, ft)], y) %>% median
       if(new_perf > perf){
         cat('\n', 'New feature added: ', ft, ' New performance: ', new_perf)
         fetbag = mdl$objects$features %>% filter(importance > 0) %>% pull(fname)
@@ -1386,6 +1395,7 @@ FET.MALER.SFS = setRefClass('FET.MALER.SFS', contains = 'MODEL', methods = list(
           objects$model <<- mdl$copy()
         }
       }
+      remaining_features %<>% setdiff(ft)
     }
 
     # Train the final model with selected features or just keep selected features?!
