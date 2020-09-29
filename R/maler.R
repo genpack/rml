@@ -13,5 +13,5 @@
 #' @docType package
 #' @name maler
 
-
-#
+# If you changed default_templates, run this before committing:
+# default_templates %>% yaml::write_yaml('default_templates.yaml')
