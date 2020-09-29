@@ -509,7 +509,7 @@ default_expert_templates = list(
   list(class = 'MAP.PYLMNN.LMNN', weight = 0.01, pass = c(free_numerics, bound_numerics), max_train = 5000:10000, feature_transformer = 'MAP.MALER.MMS'),
   list(class = 'MAP.STATS.PCA', weight = 0.01, pass = free_numerics, num_components = 5:30, feature_transformer = 'MAP.MALER.MMS'))
 
-names(default_expert_templates) <- default_expert_templates %>% list.pull('class') %>% unname
+# names(default_expert_templates) <- default_expert_templates %>% list.pull('class') %>% unname
 
 read_exlist = function(path){
   exl = list()
@@ -833,13 +833,13 @@ load_experts = function(experts, path = getwd()){
 }
 
 ########### FUNCTIONAL GENETIC ####################
-default_function_set = c(mul2, lincomb2, hyperbola2, binbin2, hyperpoly_d1, binbin)
-for(i in 2:5){
-  default_function_set = c(default_function_set, build_lincomb(i))
-  default_function_set = c(default_function_set, build_binbin(i))
-  default_function_set = c(default_function_set, build_poly(i, 2))
-  default_function_set = c(default_function_set, build_poly(i, 3))
-}
+# default_function_set = c(mul2, lincomb2, hyperbola2, binbin2, hyperpoly_d1, binbin)
+# for(i in 2:5){
+#   default_function_set = c(default_function_set, build_lincomb(i))
+#   default_function_set = c(default_function_set, build_binbin(i))
+#   default_function_set = c(default_function_set, build_poly(i, 2))
+#   default_function_set = c(default_function_set, build_poly(i, 3))
+# }
 pick_from_list = function(lst){
   lst[[lst %>% length %>% sequence %>% sample(size = 1)]]
 }

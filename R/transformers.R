@@ -235,6 +235,7 @@ BIN.MALER.OBB = setRefClass('BIN.MALER.OBB', contains = "MODEL", methods = list(
   }
 ))
 
+#' @export ENC.CATEGORY_ENCODERS.HLMRT
 ENC.CATEGORY_ENCODERS.HLMRT = setRefClass(
   'ENC.CATEGORY_ENCODERS.HLMRT',
   contains = 'MODEL',

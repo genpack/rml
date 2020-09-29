@@ -537,7 +537,6 @@ scorer = function(tbl, prediction_col, actual_col){
 }
 
 
-#' @export
 #' Computes actual performance scores assuming the test set is down-sampled for class 0, by 'weight' times
 #' The precision is expected to be lower than scorer, but recall remains the same.
 scorer_downsampled = function(tbl, prediction_col, actual_col, weight = 2){
@@ -566,6 +565,7 @@ remove_invariant_features = function(X){
 }
 
 
+# Internal function used by grouper module
 get_map = function(X, y, source, target, encoding = 'target_ratio'){
   mu = mean(y)
   if(encoding == 'target_ratio'){
@@ -603,6 +603,7 @@ get_map = function(X, y, source, target, encoding = 'target_ratio'){
 
 
 
+# Internal function used by grouper module
 apply_map = function(X, mapping){
   X %>% left_join(mapping, by = colnames(mapping)[1])
 }
@@ -612,6 +613,7 @@ concat_columns = function(X, sources, target){
   parse(text = scr) %>% eval
 }
 
+# Internal function used by grouper module
 fit_map = function(X, y, cats, encoding = 'target_ratio'){
   allmaps  = list()
   scores   = get_chisq_scores(X, y, cats)
@@ -655,6 +657,7 @@ get_chisq_scores = function(X, y, cats){
   return(scores)
 }
 
+# Internal function used by grouper module
 fit_map_new = function(X, y, cats, encoding = 'target_ratio'){
   allmaps  = list()
   scores   = get_chisq_scores(X, y, cats)
@@ -685,6 +688,7 @@ fit_map_new = function(X, y, cats, encoding = 'target_ratio'){
   return(allmaps)
 }
 
+# Internal function used by grouper module
 predict_map = function(X, maplist){
   if(inherits(maplist, 'character')){
     return(X[maplist])
@@ -822,6 +826,7 @@ sfs.regression <- function (D, tt_ratio = 0.7, yfun = function(x){x}, yfun.inv =
   return(output)
 }
 
+#' @export
 save_model = function(model, path = getwd()){
   if(!file.exists(path)) {dir.create(path)}
   path %<>% paste(model$name, sep = '/')
@@ -829,6 +834,7 @@ save_model = function(model, path = getwd()){
   model %>% saveRDS(path %>% paste0('/', model$name, '.rds'))
 }
 
+#' @export
 load_model = function(model_name, path = getwd()){
   path %<>% paste(model_name, sep = '/')
   assert(file.exists(path), paste0('No folder named as ', model_name, ' found in the given path!'))
@@ -837,6 +843,7 @@ load_model = function(model_name, path = getwd()){
   return(model)
 }
 
+#' @export
 reset_model = function(model, reset_transformers = T, reset_gradient_transformers = T){
   model$fitted <- FALSE
   model$objects$features <- NULL
@@ -849,6 +856,7 @@ reset_model = function(model, reset_transformers = T, reset_gradient_transformer
   }
 }
 
+#' @export
 model_size = function(model){
   t_size = list(config = 0, objects = 0, transformers = 0)
   for(tr in model$transformers){
@@ -862,6 +870,7 @@ model_size = function(model){
        transformers = object.size(model$transformers) + t_size$config + t_size$objects + t_size$transformers)
 }
 
+#' @export
 model_features = function(model){
   fet = model$objects$features$fname %U% model$config$features.include
   for(tr in model$transformers){
@@ -874,7 +883,8 @@ model_features = function(model){
 }
 
 
-#converts given categorical columns to integer
+# converts given categorical columns to integer
+# take to gener
 int_columns = function(x, cats){
   X %<>% as.data.frame
   for(i in intersect(cats, colnames(x))){
@@ -884,6 +894,7 @@ int_columns = function(x, cats){
 }
 
 # converts all c9l urns to numeric
+# take to gener
 numerize_columns = function(x){
   X %<>% as.data.frame
   for(i in colnames(x))
@@ -892,6 +903,7 @@ numerize_columns = function(x){
 }
 
 # todo: make it parallel
+# should be tested again in order to export
 feature_subset_scorer = function(model, X, y, subset_size = 600){
   features = data.frame(fname = colnames(X), model_number = NA, importance = NA, performance = NA, score = NA, stringsAsFactors = F) %>% column2Rownames('fname')
   nf       = nrow(features); cnt = 0
@@ -918,6 +930,7 @@ feature_subset_scorer = function(model, X, y, subset_size = 600){
 # Given a set of train and test data and labels, extracts list of informative features
 # by training multiple xgboost model on random subsets of features and eliminating features that their total predictive value is
 # less than a certain percentage (specified by argument 'cumulative_gain_threshold') of total predictive value.
+# should be tested again in order to export
 extract_informative_features = function(X, y, subset_size = 200, cumulative_gain_threshold = 0.9, pre_order = T){
   if(pre_order){
     ef = evaluate_features(X, y, metrics = 'gini')
@@ -943,11 +956,11 @@ extract_informative_features = function(X, y, subset_size = 200, cumulative_gain
   return(ifet)
 }
 
-
+# Returns model type and types of its transformers recursively
 transformer_types = function(model){
   mdlns = model$type
   for(tr in model$transformers){
-    mdlns = c(mdlns, transformer_names(tr))
+    mdlns = c(mdlns, transformer_types(tr))
   }
   return(mdlns %>% unique)
 }
@@ -960,6 +973,7 @@ moment = function(v, m = c(1,2), na.rm = T){
   return(M)
 }
 
+# Internal function used in fit method of abstract class MODEL
 feature_info_numeric = function(X, probs = seq(0, 1, 0.25)){
   X = X[numerics(X)]
   if(inherits(X, 'WIDETABLE')){
@@ -979,6 +993,7 @@ feature_info_numeric = function(X, probs = seq(0, 1, 0.25)){
   } else stop('X has unknown class!')
 }
 
+# Internal function used in fit method of abstract class MODEL
 feature_info_categorical = function(X){
   X = X[nominals(X)]
   if(inherits(X, 'WIDETABLE')){
@@ -1018,6 +1033,7 @@ encode_nominals = function(X, encodings = list(), remove_space = T){
 # dividing x/y sometimes returns Inf when the denominator is zero.
 # smart divide, replaces zero denominators with the meinimum non-zero value multiplied by a gain
 # This gain should be a value smaller than one. Default is 0.1
+# internal function
 smart_divide = function(x, y, gain = 0.1, tolerance = .Machine$double.eps){
   w0 = which(equal(y, 0.0, tolerance = tolerance))
   if(length(w0) > 0){

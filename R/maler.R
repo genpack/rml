@@ -12,3 +12,6 @@
 #'
 #' @docType package
 #' @name maler
+
+
+#

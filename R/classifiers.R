@@ -1,4 +1,5 @@
 
+#' @export
 CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
   methods = list(
     initialize = function(...){
@@ -67,6 +68,7 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
   )
 )
 
+#' @export CLS.SCIKIT
 CLS.SCIKIT = setRefClass('CLS.SCIKIT', contains = "CLASSIFIER",
    methods = list(
      initialize = function(...){
@@ -114,6 +116,7 @@ CLS.SCIKIT = setRefClass('CLS.SCIKIT', contains = "CLASSIFIER",
    )
 )
 
+#' @export CLS.SCIKIT.KNN
 CLS.SCIKIT.KNN = setRefClass('CLS.SCIKIT.KNN', contains = "CLS.SCIKIT",
   methods = list(
     initialize = function(...){
@@ -127,6 +130,7 @@ CLS.SCIKIT.KNN = setRefClass('CLS.SCIKIT.KNN', contains = "CLS.SCIKIT",
   )
 )
 
+#' @export CLS.HDPENREG.FLASSO
 CLS.HDPENREG.FLASSO = setRefClass('CLS.FLASSO', contains = 'CLASSIFIER', methods = list(
   initialize = function(...){
     callSuper(...)
@@ -152,7 +156,7 @@ CLS.HDPENREG.FLASSO = setRefClass('CLS.FLASSO', contains = 'CLASSIFIER', methods
   }
 ))
 
-#' @export CLASSIFIER.MLR
+#' @export CLS.MLR
 CLS.MLR = setRefClass('CLS.MLR', contains = "CLASSIFIER",
     methods = list(
       initialize = function(...){
@@ -214,7 +218,7 @@ CLS.SCIKIT.LR = setRefClass('CLS.SCIKIT.LR', contains = "CLS.SCIKIT",
 
 # A simple logistic regression classifier from scikit python package:
 # It extracts only numeric features, does no dummification for categorical columns.
-#' @export SCIKIT.DT
+#' @export CLS.SCIKIT.DT
 CLS.SCIKIT.DT = setRefClass('CLS.SCIKIT.DT', contains = "CLS.SCIKIT",
   methods = list(
     initialize = function(...){
@@ -272,7 +276,7 @@ CLS.SCIKIT.XGB = setRefClass('CLS.SCIKIT.XGB', contains = "CLS.SCIKIT",
     )
 )
 
-#' @export SCIKIT.SVM
+#' @export CLS.SCIKIT.SVM
 CLS.SCIKIT.SVM = setRefClass('CLS.SCIKIT.SVM', contains = "CLS.SCIKIT",
                          methods = list(
                            initialize = function(...){
@@ -286,7 +290,7 @@ CLS.SCIKIT.SVM = setRefClass('CLS.SCIKIT.SVM', contains = "CLS.SCIKIT",
 )
 
 
-#' @export KERAS
+#' @export CLS.KERAS.DNN
 CLS.KERAS.DNN = setRefClass('CLS.KERAS.DNN', contains = 'CLASSIFIER',
   methods = c(
     initialize = function(...){
@@ -421,7 +425,7 @@ CLS.KERAS.DNN = setRefClass('CLS.KERAS.DNN', contains = 'CLASSIFIER',
 
 ))
 
-#' @export SPARKLYR.GBT
+#' @export CLS.SPARKLYR.GBT
 CLS.SPARKLYR.GBT = setRefClass('CLS.SPARKLYR.GBT', contains = 'CLASSIFIER', methods = list(
   initialize = function(...){
     callSuper(...)
@@ -518,6 +522,7 @@ CLS.SCIKIT.MNB = setRefClass('CLS.SCIKIT.MNB', contains = 'CLS.SCIKIT', methods 
 
 # pmg_accuracy: Performance Metric with Gradient: Accuracy
 # Accuracy as loss
+#' @export
 pmg_accuracy <- function(preds, dtrain){
   labels <- getinfo(dtrain, "label")
   lgrads <- attr(dtrain, 'gradient')
@@ -528,6 +533,7 @@ pmg_accuracy <- function(preds, dtrain){
   return(list(metric = "accuracy", value = prf))
 }
 
+#' @export
 pmg_gini <- function(preds, dtrain){
   labels <- getinfo(dtrain, "label")
   lgrads <- attr(dtrain, 'gradient')
@@ -536,6 +542,7 @@ pmg_gini <- function(preds, dtrain){
   return(list(metric = "gini", value = prf))
 }
 
+#' @export
 pmg_logloss <- function(preds, dtrain){
   labels <- getinfo(dtrain, "label")
   lgrads <- attr(dtrain, 'gradient')
@@ -544,6 +551,7 @@ pmg_logloss <- function(preds, dtrain){
   return(list(metric = "loss", value = prf))
 }
 
+#' @export
 pmg_lift <- function(preds, dtrain){
   labels <- getinfo(dtrain, "label")
   lgrads <- attr(dtrain, 'gradient')
@@ -552,6 +560,7 @@ pmg_lift <- function(preds, dtrain){
   return(list(metric = "lift", value = prf))
 }
 
+#' @export CLS.XGBOOST
 CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list(
   initialize = function(...){
     callSuper(...)
