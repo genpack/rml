@@ -14,4 +14,8 @@
 #' @name maler
 
 # If you changed default_templates, run this before committing:
-# default_templates %>% yaml::write_yaml('default_templates.yaml')
+# default_templates %>% yaml::write_yaml('data/default_templates.yaml')
+
+# Run these lines before building the package:
+# yaml::read_yaml('data/default_templates.yaml') -> default_templates
+# save(default_templates, file = 'data/default_templates.RData')
