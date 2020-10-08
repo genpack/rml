@@ -8,7 +8,7 @@
 #' biger
 #'
 #' This package is a tool-box for machine learning and prediction.
-#' @author Nicolas Berta
+#' @author Nicholas Berta
 #'
 #' @docType package
 #' @name maler

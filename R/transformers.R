@@ -83,8 +83,8 @@ BIN.SMBINNING.OB = setRefClass('BIN.SMBINNING.OB', contains = "MODEL",
       initialize = function(...){
         callSuper(...)
         # refer to help page for package smbinning (?smbinning::smbinning)
-        config$percentageOfRecords <<- config$percentageOfRecords %>% verify('numeric', domain = c(0, 0.5), default = '0.05')
-        config$suffix <<- config$suffix %>% verify('character', default = 'BIN')
+        config$percentageOfRecords <<- verify(config$percentageOfRecords, 'numeric', domain = c(0, 0.5), default = '0.05')
+        config$suffix <<- verify(config$suffix, 'character', default = 'BIN')
         type          <<- 'Binner'
         description   <<- 'Optimal Binner'
         package       <<- 'smbinning'
@@ -122,7 +122,7 @@ BIN.SMBINNING.OB = setRefClass('BIN.SMBINNING.OB', contains = "MODEL",
           objects$features <<- data.frame(fname = columns, stringsAsFactors = F)
 
           # Remove ctree objects to save space (They are not needed for prediction):
-          config$keep_ctrees %<>% verify('logical', lengths = 1, domain = c(T,F), default = F)
+          config$keep_ctrees <<- verify(config$keep_ctrees, 'logical', lengths = 1, domain = c(T,F), default = F)
 
           for(i in sequence(nrow(objects$features))){
             mdl = objects$model[[objects$features$fname[i]]]
@@ -158,7 +158,7 @@ MAP.MALER.MMS = setRefClass('MAP.MALER.MMS', contains = 'MODEL',
       description      <<- 'MinMax Scaler'
       package          <<- 'maler'
       package_language <<- 'R'
-      config$suffix    <<- config$suffix %>% verify('character', default = 'NRM')
+      config$suffix    <<- verify(config$suffix, 'character', default = 'NRM')
       if(is.empty(name)){name <<- 'MMS' %>% paste0(sample(10000:99999, 1))}
     },
 
@@ -185,7 +185,7 @@ MAP.MALER.ZFS = setRefClass('MAP.MALER.ZFS', contains = "MODEL", methods = list(
     package          <<- 'maler'
     package_language <<- 'R'
 
-    config$suffix    <<- config$suffix %>% verify('character', default = 'SCALED')
+    config$suffix    <<- verify(config$suffix, 'character', default = 'SCALED')
     if(is.empty(name)){name <<- 'ZFS' %>% paste0(sample(10000:99999, 1))}
   },
 
@@ -212,8 +212,8 @@ BIN.MALER.OBB = setRefClass('BIN.MALER.OBB', contains = "MODEL", methods = list(
     package_language <<- 'R'
 
     # refer to help page for package smbinning (?smbinning::smbinning)
-    config$suffix    <<- config$suffix %>% verify('character', default = 'BIN')
-    config$basis     <<- config$basis %>% verify('character', domain = c('f1', 'chi'), default = 'chi')
+    config$suffix    <<- verify(config$suffix, 'character', default = 'BIN')
+    config$basis     <<- verify(config$basis, 'character', domain = c('f1', 'chi'), default = 'chi')
     if(is.empty(name)){name <<- 'OBB' %>% paste0(sample(10000:99999, 1))}
   },
 
@@ -309,7 +309,7 @@ BIN.SCIKIT.KMC = setRefClass(
       package_language <<- 'Python'
 
       if(is.empty(name)){name <<- 'KMC' %>% paste0(sample(10000:99999, 1))}
-      config$n_clusters <<- config$n_clusters %>% verify(c('integer', 'numeric'), lengths = 1, domain = c(1,1000), default = 3)
+      config$n_clusters <<- verify(config$n_clusters, c('integer', 'numeric'), lengths = 1, domain = c(1,1000), default = 3)
     },
 
     model.fit = function(X, y){
@@ -401,7 +401,7 @@ ENC.SCIKIT.OHE = setRefClass(
       package_language <<- 'Python'
       type     <<-
       if(is.empty(name)){name <<- 'SKOHE' %>% paste0(sample(10000:99999, 1))}
-      config$max_domain <<- config$max_domain %>% verify(c('numeric', 'integer'), default = 25) %>% as.integer
+      config$max_domain <<- verify(config$max_domain, c('numeric', 'integer'), default = 25) %>% as.integer
     },
 
     model.fit = function(X, y){
@@ -556,7 +556,7 @@ ENC.MALER.FE = setRefClass(
       package          <<- 'maler'
       package_language <<- 'R'
 
-      config$aggregator <<- config$aggregator %>% verify('character', default = 'mean')
+      config$aggregator <<- verify(config$aggregator, 'character', default = 'mean')
 
       if(is.empty(name)){name <<- 'FE' %>% paste0(sample(10000:99999, 1))}
     },
@@ -650,9 +650,9 @@ ENC.MALER.ME = setRefClass('ENC.MALER.ME', contains = 'MODEL',
       package          <<- 'maler'
       package_language <<- 'R'
 
-      config$model_class  <<- config$model_class %>% verify('character', default = 'CLS.SCIKIT.XGB')
-      config$model_config <<- config$model_config %>% verify('list', default = list(predict_probabilities = T))
-      config$min_rows     <<- config$min_rows %>% verify(c('numeric', 'integer'), lengths = 1, default = 100)
+      config$model_class  <<- verify(config$model_class, 'character', default = 'CLS.SCIKIT.XGB')
+      config$model_config <<- verify(config$model_config, 'list', default = list(predict_probabilities = T))
+      config$min_rows     <<- verify(config$min_rows, c('numeric', 'integer'), lengths = 1, default = 100)
       if(is.empty(name)){name <<- 'ME' %>% paste0(sample(10000:99999, 1))}
       objects$model <<- list()
     },
@@ -754,7 +754,7 @@ FNT.MALER.INV = setRefClass('FNT.MALER.INV', contains = 'MODEL', methods = list(
     package_language <<- 'R'
 
     if(is.empty(name)){name <<- 'INV' %>% paste0(sample(10000:99999, 1))}
-    config$trim <<- config$trim %>% verify('numeric', lengths = 1, default = 10000)
+    config$trim <<- verify(config$trim, 'numeric', lengths = 1, default = 10000)
   },
 
   model.fit = function(X, y = NULL){
@@ -814,9 +814,9 @@ FET.MALER.D2MULC = setRefClass('FET.MALER.D2MULC', contains = 'FET.MALER.D2MUL',
     package_language <<- 'R'
 
     if(is.empty(name)){name <<- 'D2MC' %>% paste0(sample(10000:99999, 1))}
-    config$num_components <<- config$num_components %>% verify(c('numeric', 'integer'), default = 5)
-    config$model_class  <<- config$model_class  %>% verify('character', default = 'SCIKIT.XGB')
-    config$model_config <<- config$model_config %>% verify('character', default = list())
+    config$num_components   <<- verify(config$num_components, c('numeric', 'integer'), default = 5)
+    config$model_class      <<- verify(config$model_class, 'character' , default = 'SCIKIT.XGB')
+    config$model_config     <<- verify(config$model_config, 'character', default = list())
   },
 
   model.fit = function(X, y){
@@ -842,10 +842,10 @@ FNT.MALER.POLY = setRefClass('FNT.MALER.POLY', contains = 'MODEL', methods = lis
     if(is.empty(name)){name <<- 'PLY' %>% paste0(sample(10000:99999, 1))}
 
     # Sigma{k = 1}{n_terms} (gain*x + intercept)^k
-    config$apply_abs <<- config$apply_abs %>% verify('logical', default = F)
-    config$intercept <<- config$intercept %>% verify('numeric', default = 0)
-    config$gain      <<- config$gain %>% verify('numeric', default = 1)
-    config$n_terms   <<- config$n_terms %>% verify('numeric', default = 3) %>% as.integer
+    config$apply_abs <<- verify(config$apply_abs, 'logical', default = F)
+    config$intercept <<- verify(config$intercept, 'numeric', default = 0)
+    config$gain      <<- verify(config$gain, 'numeric', default = 1)
+    config$n_terms   <<- verify(config$n_terms, 'numeric', default = 3) %>% as.integer
   },
 
   model.fit = function(X, y = NULL){
@@ -902,8 +902,8 @@ FNT.MALER.LOG = setRefClass('FNT.MALER.LOG', contains = "MODEL", methods = list(
     package          <<- 'maler'
     package_language <<- 'R'
     if(is.empty(name)){name <<- 'LOG' %>% paste0(sample(10000:99999, 1))}
-    config$apply_abs <<- config$apply_abs %>% verify(c('logical'), default = T)
-    config$intercept <<- config$intercept %>% verify(c('numeric'), default = 1)
+    config$apply_abs <<- verify(config$apply_abs, c('logical'), default = T)
+    config$intercept <<- verify(config$intercept, c('numeric'), default = 1)
   },
 
   model.fit = function(X, y){
@@ -925,7 +925,7 @@ FNT.MALER.LOGIT = setRefClass('FNT.MALER.LOGIT', contains = "MODEL", methods = l
     package          <<- 'maler'
     package_language <<- 'R'
     if(is.empty(name)){name <<- 'LGT' %>% paste0(sample(10000:99999, 1))}
-    config$apply_mms <<- config$apply_mms %>% verify(c('logical'), default = T)
+    config$apply_mms <<- verify(config$apply_mms, c('logical'), default = T)
   },
 
   model.fit = function(X, y){
@@ -952,7 +952,7 @@ ENC.FASTDUMMIES.OHE = setRefClass('ENC.FASTDUMMIES.OHE', contains = "MODEL",
        package          <<- 'fastDummies'
        package_language <<- 'R'
        if(is.empty(name)){name <<- 'DMFR' %>% paste0(sample(10000:99999, 1))}
-       config$max_domain <<- config$max_domain %>% verify(c('numeric', 'integer'), default = 25) %>% as.integer
+       config$max_domain <<- verify(config$max_domain, c('numeric', 'integer'), default = 25) %>% as.integer
      },
 
      model.fit = function(X, y = NULL){
@@ -1174,8 +1174,8 @@ ENS.MALER.BS = setRefClass('ENS.MALER.BS', contains = "MODEL",
       package_language <<- 'R'
 
       if(is.empty(name)){name <<- 'BSUP' %>% paste0(sample(10000:99999, 1))}
-      config$model_class  <<- config$model_class  %>% verify('character', default = 'CLS.SCIKIT.XGB')
-      config$model_config <<- config$model_config %>% verify('character', default = list())
+      config$model_class  <<- verify(config$model_class, 'character', default = 'CLS.SCIKIT.XGB')
+      config$model_config <<- verify(config$model_config, 'character', default = list())
       objects$model <<- new(config$model_class, config = config$model_config)
     },
 
@@ -1199,29 +1199,31 @@ ENS.MALER.BS = setRefClass('ENS.MALER.BS', contains = "MODEL",
 
 #' @export ENS.MALER.AGGR
 ENS.MALER.AGGR = setRefClass('ENS.MALER.AGGR', contains = "CLASSIFIER",
-                             methods = list(
-                               initialize = function(...){
-                                 callSuper(...)
-                                 type             <<- 'Ensembler'
-                                 description      <<- 'Aggregator Ensembler'
-                                 package          <<- 'maler'
-                                 package_language <<- 'R'
+   methods = list(
+     initialize = function(...){
+       callSuper(...)
+       type             <<- 'Ensembler'
+       description      <<- 'Aggregator Ensembler'
+       package          <<- 'maler'
+       package_language <<- 'R'
 
-                                 if(is.empty(name)){name <<- 'AGGR' %>% paste0(sample(10000:99999, 1))}
-                                 config$model_class  <<- config$model_class  %>% verify('character', default = 'CLS.SCIKIT.XGB')
-                                 config$model_config <<- config$model_config %>% verify('character', default = list())
-                                 objects$model <<- new(config$model_class, config = config$model_config)
-                               },
+       if(is.empty(name)){name <<- 'AGGR' %>% paste0(sample(10000:99999, 1))}
 
-                               model.fit = function(X, y){
-                                 objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
-                                 X = X[objects$features$fname]
-                               },
+       config$aggregator <<- verify(config$aggregator, 'character', lengths = 1, default = 'mean')
+       assert(match.fun(config$aggregator) %>% inherits('function'), paste(config$aggregator, 'is not a function!'))
+     },
 
-                               model.predict = function(X){
-                                 X %>% as.matrix %>% apply(1, mean) %>% as.data.frame
-                               }
-                             )
+     model.fit = function(X, y){
+       objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+       X = X[objects$features$fname]
+     },
+
+     model.predict = function(X){
+       aggrfun = match.fun(config$aggregator)
+
+       X %>% as.matrix %>% apply(1, aggrfun) %>% as.data.frame
+     }
+   )
 )
 
 # previously KMEANS
@@ -1235,7 +1237,7 @@ BIN.KMEANS.KMC = setRefClass('BIN.KMEANS.KMC', contains = 'MODEL', methods = lis
     package_language <<- 'R'
     type     <<- ' from package kmeans'
     if(is.empty(name)){name <<- 'KMC' %>% paste0(sample(10000:99999, 1))}
-    config$num_clusters <<- config$num_clusters %>% verify(c('numeric', 'integer'), default = 5)
+    config$num_clusters <<- verify(config$num_clusters, c('numeric', 'integer'), default = 5)
 
   },
   model.fit = function(X, y = NULL){
@@ -1261,9 +1263,9 @@ MAP.STATS.PCA = setRefClass('MAP.STATS.PCA', contains = 'MODEL', methods = list(
     package          <<- 'stats'
     package_language <<- 'R'
     if(is.empty(name)){name <<- 'PRC' %>% paste0(sample(10000:99999, 1))}
-    config$num_components <<- config$num_components %>% verify(c('numeric', 'integer'), default = 5)
-    config$scale  <<- config$scale  %>% verify('logical', domain = c(F,T), default = T)
-    config$center <<- config$center %>% verify('logical', domain = c(F,T), default = T)
+    config$num_components <<- verify(config$num_components, c('numeric', 'integer'), default = 5)
+    config$scale  <<- verify(config$scale, 'logical', domain = c(F,T), default = T)
+    config$center <<- verify(config$center, 'logical', domain = c(F,T), default = T)
   },
 
   model.fit = function(X, y = NULL){
@@ -1295,9 +1297,9 @@ MAP.PYLMNN.LMNN = setRefClass('MAP.PYLMNN.LMNN', contains = "MODEL", methods = l
     package          <<- 'pylmnn'
     package_language <<- 'Python'
     if(is.empty(name)){name <<- 'LMNN' %>% paste0(sample(10000:99999, 1))}
-    config$num_components <<- config$num_components %>% verify(c('numeric', 'integer'), default = 5) %>% as.integer
-    config$num_neighbors  <<- config$num_neighbors %>% verify(c('numeric', 'integer'), default = 10) %>% as.integer
-    config$epochs         <<- config$epochs %>% verify(c('numeric', 'integer'), default = 100) %>% as.integer
+    config$num_components <<- verify(config$num_components, c('numeric', 'integer'), default = 5) %>% as.integer
+    config$num_neighbors  <<- verify(config$num_neighbors , c('numeric', 'integer'), default = 10) %>% as.integer
+    config$epochs         <<- verify(config$epochs, c('numeric', 'integer'), default = 100) %>% as.integer
     lmnn_module   <-  reticulate::import('pylmnn')
     objects$model <<- lmnn_module$LargeMarginNearestNeighbor(n_neighbors = config$num_neighbors, max_iter = config$epochs, n_components = config$num_components, init = 'pca')
   },
@@ -1323,7 +1325,7 @@ BIN.MALER.GROUPER = setRefClass('BIN.MALER.GROUPER', contains = "MODEL", methods
     package          <<- 'maler'
     package_language <<- 'R'
     if(is.empty(name)){name <<- 'GRP' %>% paste0(sample(10000:99999, 1))}
-    config$encoding <<- config$encoding %>% verify('character', domain =c('target_ratio', 'flasso'), default = 'target_ratio')
+    config$encoding <<- verify(config$encoding, 'character', domain =c('target_ratio', 'flasso'), default = 'target_ratio')
     #config$num_components <<- config$num_components %>% verify(c('numeric', 'integer'), default = 5) %>% as.integer
   },
 
@@ -1348,10 +1350,10 @@ FET.MALER.SFS = setRefClass('FET.MALER.SFS', contains = 'MODEL', methods = list(
     package          <<- 'maler'
     package_language <<- 'R'
     if(is.empty(name)){name <<- 'SFS' %>% paste0(sample(10000:99999, 1))}
-    config$model_class  <<- config$model_class %>% verify('character', default = 'CLS.SCIKIT.XGB')
-    config$model_config <<- config$model_config %>% verify('list', default = list())
-    config$return_features <<- config$return_features %>% verify('logical', lengths = 1, domain = c(T,F), default = T)
-    config$feature_subset_size <<- config$feature_subset_size %>% verify(c('integer', 'numeric'), default = 200)
+    config$model_class      <<- verify(config$model_class, 'character', default = 'CLS.SCIKIT.XGB')
+    config$model_config     <<- verify(config$model_config, 'list', default = list())
+    config$return_features  <<- config$return_features %>% verify('logical', lengths = 1, domain = c(T,F), default = T)
+    config$feature_subset_size <<- verify(config$feature_subset_size, c('integer', 'numeric'), default = 200)
   },
 
   model.fit = function(X, y){

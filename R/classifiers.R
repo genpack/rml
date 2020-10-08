@@ -5,11 +5,11 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
     initialize = function(...){
       callSuper(...)
       type             <<- 'Binary Classifier'
-      config$sig_level <<- config$sig_level %>% verify('numeric', domain = c(0,1), default = 0.1)
-      config$return    <<- config$return %>% verify('character', domain = c('probs', 'logit', 'class'), default = 'probs')
-      config$decision_threshold <<- config$decision_threshold %>% verify('numeric', lengths = 1, domain = c(0,1), default = 0.5)
-      config$threshold_determination <<- config$threshold_determination %>%
-        verify('character', lengths = 1, domain = c('set_as_config', 'maximum_f1', 'maximum_chi'), default = 'set_as_config')
+      config$sig_level <<- verify(config$sig_level, 'numeric', domain = c(0,1), default = 0.1)
+      config$return    <<- verify(config$return, 'character', domain = c('probs', 'logit', 'class'), default = 'probs')
+      config$decision_threshold <<- verify(config$decision_threshold, 'numeric', lengths = 1, domain = c(0,1), default = 0.5)
+      config$threshold_determination <<- verify(config$threshold_determination, 'character', lengths = 1,
+                                                domain = c('set_as_config', 'maximum_f1', 'maximum_chi'), default = 'set_as_config')
       # todo: add 'target_precision', 'target_recall', 'ratio_quantile'
       if(is.null(config$metric)){
         config$metric <<- chif(config$return == 'class', 'f1', 'gini')
@@ -123,7 +123,7 @@ CLS.SCIKIT.KNN = setRefClass('CLS.SCIKIT.KNN', contains = "CLS.SCIKIT",
       callSuper(...)
       description <<- 'K-Nearest Neighbors'
 
-      config$num_neighbors <<- config$num_neighbors %>% verify(c('numeric', 'integer'), default = 100) %>% as.integer
+      config$num_neighbors <<- verify(config$num_neighbors, c('numeric', 'integer'), default = 100) %>% as.integer
       module_knn = reticulate::import('sklearn.neighbors')
       objects$model <<- module_knn$KNeighborsClassifier(n_neighbors = config$num_neighbors)
     }
@@ -139,9 +139,9 @@ CLS.HDPENREG.FLASSO = setRefClass('CLS.FLASSO', contains = 'CLASSIFIER', methods
     description <<- 'Logistic Regression with Fusion Lasso'
     if(is.empty(name)){name <<- 'FLS' %>% paste0(sample(10000:99999, 1))}
 
-    config$lambda1 <<- config$lambda1 %>% verify('numeric', default = 1)
-    config$lambda2 <<- config$lambda2 %>% verify('numeric', default = 1)
-    config$model   <<- config$model %>% verify('character', default = 'logistic')
+    config$lambda1 <<- verify(config$lambda1, 'numeric', default = 1)
+    config$lambda2 <<- verify(config$lambda2, 'numeric', default = 1)
+    config$model   <<- verify(config$model,   'character', default = 'logistic')
   },
 
   model.fit = function(X, y){
@@ -168,7 +168,7 @@ CLS.MLR = setRefClass('CLS.MLR', contains = "CLASSIFIER",
         config$mlr_classification_models <<- mlr::listLearners('classif')
 
         if(is.empty(name)){name <<- 'MLR' %>% paste0(sample(10000:99999, 1))}
-        config$model_type <<- config$model_type %>% verify('character', domain = config$mlr_classification_models %>% pull(class), default = 'classif.gbm')
+        config$model_type <<- verify(config$model_type, 'character', domain = config$mlr_classification_models %>% pull(class), default = 'classif.gbm')
         objects$model     <<- mlr::makeLearner(cl = config$model_type, predict.type = "prob")
       },
 
@@ -193,7 +193,7 @@ CLS.SCIKIT.LR = setRefClass('CLS.SCIKIT.LR', contains = "CLS.SCIKIT",
     methods = list(
       initialize = function(...){
         callSuper(...)
-        config$sig_level <<- config$sig_level %>% verify('numeric', domain = c(0,1), default = 0.1)
+        config$sig_level <<- verify(config$sig_level, 'numeric', domain = c(0,1), default = 0.1)
         description             <<- 'Logistic Regression'
         if(is.empty(name)){name <<- 'SKLR' %>% paste0(sample(10000:99999, 1))}
         module_lm = reticulate::import('sklearn.linear_model')
@@ -304,39 +304,36 @@ CLS.KERAS.DNN = setRefClass('CLS.KERAS.DNN', contains = 'CLASSIFIER',
       if(is.empty(name)){name <<- 'KRSNN' %>% paste0(sample(10000:99999, 1))}
 
       # config$outputs <<- config$outputs %>% verify(c('numeric', 'integer'), lengths = 1, default = 2) %>% as.integer
-      config$kernel_regularization_penalty_l1    <<- config$kernel_regularization_penalty_l1 %>% verify('numeric', lengths = 1, default = 0.0)
-      config$kernel_regularization_penalty_l2    <<- config$kernel_regularization_penalty_l2 %>% verify('numeric', lengths = 1, default = 0.0)
-      config$activity_regularization_penalty_l1  <<- config$activity_regularization_penalty_l1 %>% verify('numeric', lengths = 1, default = 0.0)
-      config$activity_regularization_penalty_l2  <<- config$activity_regularization_penalty_l2 %>% verify('numeric', lengths = 1, default = 0.0)
+      config$kernel_regularization_penalty_l1    <<- verify(config$kernel_regularization_penalty_l1,   'numeric', lengths = 1, default = 0.0)
+      config$kernel_regularization_penalty_l2    <<- verify(config$kernel_regularization_penalty_l2,   'numeric', lengths = 1, default = 0.0)
+      config$activity_regularization_penalty_l1  <<- verify(config$activity_regularization_penalty_l1, 'numeric', lengths = 1, default = 0.0)
+      config$activity_regularization_penalty_l2  <<- verify(config$activity_regularization_penalty_l2, 'numeric', lengths = 1, default = 0.0)
       if(!inherits(config$kernel_initializer, 'character')){
         if(!inherits(config$kernel_initializer, 'keras.initializers.Initializer')){
-          config$initializer_minval <<- config$initializer_minval %>% verify('numeric', lengths = 1, default = - 0.1)
-          config$initializer_maxval <<- config$initializer_maxval %>% verify('numeric', lengths = 1, default =   0.1)
-          config$initializer_seed   <<- config$initializer_seed  %>% verify(c('integer', 'numeric'), lengths = 1, default = 42)  %>% as.integer
+          config$initializer_minval <<- verify(config$initializer_minval, 'numeric', lengths = 1, default = - 0.1)
+          config$initializer_maxval <<- verify(config$initializer_maxval, 'numeric', lengths = 1, default =   0.1)
+          config$initializer_seed   <<- verify(config$initializer_seed  , c('integer', 'numeric'), lengths = 1, default = 42)  %>% as.integer
           config$kernel_initializer <<- initializer_random_uniform(minval = config$initializer_minval, maxval = config$initializer_maxval, seed = config$initializer_seed)
         }
       }
-      config$num_layers         <<- config$num_layers %>% verify(c('integer', 'numeric'), lengths = 1, domain = c(1, 25), default = 1)   %>% as.integer
-      config$first_layer_nodes  <<- config$first_layer_nodes %>% verify(c('integer', 'numeric'), lengths = 1, default = 128) %>% as.integer
-      config$layer_nodes_ratio  <<- config$layer_nodes_ratio %>% verify('numeric', lengths = 1, default = 0.4)
-      config$layers_activation  <<- config$layers_activation %>% verify(c('character', 'function'), lengths = 1, default = 'relu')
-      config$layers_dropout     <<- config$layers_dropout %>% verify('numeric', lengths = 1, default = 0.25)
+      config$num_layers         <<- verify(config$num_layers, c('integer', 'numeric'), lengths = 1, domain = c(1, 25), default = 1)   %>% as.integer
+      config$first_layer_nodes  <<- verify(config$first_layer_nodes, c('integer', 'numeric'), lengths = 1, default = 128) %>% as.integer
+      config$layer_nodes_ratio  <<- verify(config$layer_nodes_ratio, 'numeric', lengths = 1, default = 0.4)
+      config$layers_activation  <<- verify(config$layers_activation, c('character', 'function'), lengths = 1, default = 'relu')
+      config$layers_dropout     <<- verify(config$layers_dropout, 'numeric', lengths = 1, default = 0.25)
       # config$output_activation  <<- config$output_activation %>% verify(c('character', 'function'), lengths = 1, default = 'softmax')
 
       if(is.null(config$layers)){config$layers <<- create_keras_layers(config)}
 
-      config$epochs  <<- config$epochs %>% verify(c('numeric', 'integer'), lengths = 1, default = 5) %>% as.integer
-      config$callback <<- config$callback %>% verify('function', default = function(epoch, logs){
+      config$epochs     <<- verify(config$epochs,     c('numeric', 'integer'), lengths = 1, default = 5) %>% as.integer
+      config$callback   <<- verify(config$callback,   'function', default = function(epoch, logs){
         cat('Epoch:', epoch, ' Loss:', logs$loss, 'Validation Loss:', logs$val_loss, '\n')})
-      config$batch_size <<- config$batch_size %>% verify(c('numeric', 'integer'), lengths = 1, default = 32) %>% as.integer
-      config$optimizer  <<- config$optimizer %>%
-        verify(
-          c('character', 'function'), lengths = 1, default = 'adam',
+      config$batch_size <<- verify(config$batch_size, c('numeric', 'integer'), lengths = 1, default = 32) %>% as.integer
+      config$optimizer  <<- verify(config$optimizer, c('character', 'function'), lengths = 1, default = 'adam',
           domain = c('adadelta', 'adagrad', 'adam', 'adamax', 'nadam', 'rmsprop', 'sgd'))
-      config$learning_rate  <<- config$learning_rate %>% verify('numeric', lengths = 1, default = 0.0001)
+      config$learning_rate  <<- verify(config$learning_rate, 'numeric', lengths = 1, default = 0.0001)
       if(!inherits(config$loss, 'function')){
-        config$loss <<- config$loss %>%
-          verify('character', lengths = 1, default = 'categorical_crossentropy', varname = "'loss'",
+        config$loss <<- verify(config$loss, 'character', lengths = 1, default = 'categorical_crossentropy', varname = "'loss'",
                  domain = c('categorical_crossentropy', 'mean_squared_error', 'mean_absolute_error', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error', 'squared_hinge', 'hinge', 'categorical_hinge', 'logcosh', 'huber_loss', 'sparse_categorical_crossentropy', 'binary_crossentropy', 'kullback_leibler_divergence', 'poisson', 'cosine_proximity'))
       }
     },
@@ -433,7 +430,7 @@ CLS.SPARKLYR.GBT = setRefClass('CLS.SPARKLYR.GBT', contains = 'CLASSIFIER', meth
     package          <<- 'sparklyr'
     package_language <<- 'R'
     if(is.empty(name)){name <<- 'SPRGBT' %>% paste0(sample(1000:9999, 1))}
-    config$spark_home <<- config$spark_home %>% verify('character', default = Sys.getenv('SPARK_HOME'))
+    config$spark_home <<- verify(config$spark_home, 'character', default = Sys.getenv('SPARK_HOME'))
     if(is.null(config$spark_config)){config$spark_config <<- sparklyr::spark_config()}
     if(is.null(config$connection)){
       config$connection <<- sparklyr::spark_connect(
@@ -571,13 +568,13 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
     assert(require(xgboost), "Package 'xgboost' needs to be installed!")
 
     # parameter 'nrounds' is equivalent to 'n_estimators' in CLS.SCIKIT.XGB
-    config$nrounds       <<- config$nrounds       %>% verify(c('numeric', 'integer'), lengths = 1, domain = c(0,Inf), default = 100)
-    config$nthread       <<- config$nthread       %>% verify(c('numeric', 'integer'), lengths = 1, domain = c(0,1024), default = 1)
-    config$show_progress <<- config$show_progress %>% verify('logical',               lengths = 1, domain = c(T, F) , default = F)
-    config$verbose       <<- config$verbose       %>% verify(c('numeric', 'integer', 'logical'), lengths = 1, domain = c(0,1)  , default = 1) %>% as.integer
-    config$print_every_n <<- config$print_every_n %>% verify(c('numeric', 'integer'), lengths = 1, domain = c(0,Inf), default = 1) %>% as.integer
-    config$save_name     <<- config$save_name     %>% verify('character',             lengths = 1, default = "xgboost.model")
-    config$callbacks     <<- config$callbacks     %>%  verify('list', default = list())
+    config$nrounds       <<- verify(config$nrounds       , c('numeric', 'integer'), lengths = 1, domain = c(0,Inf), default = 100)
+    config$nthread       <<- verify(config$nthread       , c('numeric', 'integer'), lengths = 1, domain = c(0,1024), default = 1)
+    config$show_progress <<- verify(config$show_progress , 'logical',               lengths = 1, domain = c(T, F) , default = F)
+    config$verbose       <<- verify(config$verbose       , c('numeric', 'integer', 'logical'), lengths = 1, domain = c(0,1)  , default = 1) %>% as.integer
+    config$print_every_n <<- verify(config$print_every_n , c('numeric', 'integer'), lengths = 1, domain = c(0,Inf), default = 1) %>% as.integer
+    config$save_name     <<- verify(config$save_name     , 'character',             lengths = 1, default = "xgboost.model")
+    config$callbacks     <<- verify(config$callbacks     ,  'list', default = list())
   },
 
   model.fit = function(X, y){

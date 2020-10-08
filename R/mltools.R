@@ -26,8 +26,8 @@ medae = function(y1, y2){
 
 #' @export
 cross_f1 = function(v1, v2){
-  v2 %<>% verify(c('logical', 'integer', 'numeric'), null_allowed = F) %>% as.logical
-  N = length(v2)
+  v2 = verify(v2, c('logical', 'integer', 'numeric'), null_allowed = F) %>% as.logical
+  N  = length(v2)
 
   if(is.null(dim(v1)) & inherits(v1, c('logical', 'integer', 'numeric'))){
     v1  %<>% as.logical
@@ -89,19 +89,20 @@ int_ordinals = function(X){
 
 
 add_keras_layer_dense = function(input_layer, layer, ...){
-  input_layer %<>% layer_dense(units       = layer$units %>% verify(c('numeric', 'integer'), lengths = 1, null_allowed = F) %>% as.integer,
-              activation  = layer$activation %>% verify('character', lengths = 1, default = 'relu'),
-              use_bias    = layer$use_bias %>% verify('logical', lengths = 1, domain = c(T,F), default = T),
-              kernel_regularizer = layer$kernel_regularizer,
-              bias_regularizer   = layer$kernel_regularizer,
-              activity_regularizer = layer$activity_regularizer,
-              kernel_constraint = layer$kernel_constraint,
-              bias_constraint = layer$bias_constraint,
-              batch_input_shape = layer$batch_input_shape,
-              batch_size = layer$batch_size,
-              name = layer$name, trainable = layer$trainable,
-              weights = layer$weights,
-              ...)
+  input_layer %<>% layer_dense(
+    units = verify(layer$units, c('numeric', 'integer'), lengths = 1, null_allowed = F) %>% as.integer,
+    activation  = verify(layer$activation, 'character', lengths = 1, default = 'relu'),
+    use_bias    = verify(layer$use_bias, 'logical', lengths = 1, domain = c(T,F), default = T),
+    kernel_regularizer = layer$kernel_regularizer,
+    bias_regularizer   = layer$kernel_regularizer,
+    activity_regularizer = layer$activity_regularizer,
+    kernel_constraint = layer$kernel_constraint,
+    bias_constraint = layer$bias_constraint,
+    batch_input_shape = layer$batch_input_shape,
+    batch_size = layer$batch_size,
+    name = layer$name, trainable = layer$trainable,
+    weights = layer$weights,
+    ...)
   if(!is.null(layer$dropout)){
     input_layer %<>% layer_dropout(rate = layer$dropout)
   }
@@ -403,7 +404,7 @@ spark.dte = function(tbl, prob_col, label_col, breaks = 1000, fun = NULL){
 #' @export
 optSplitColumns.f1 = function(df, columns = NULL, label_col = 'label', fun = NULL){
   defcols = numerics(df) %-% label_col
-  columns %<>% verify('character', domain = defcols, default = defcols)
+  columns = verify(columns, 'character', domain = defcols, default = defcols)
   for(i in sequence(length(columns))){
     col = columns[i]
     res1 <- df %>% optSplit.f1(prob_col = col, label_col = label_col, fun = fun)
@@ -1045,3 +1046,36 @@ smart_divide = function(x, y, gain = 0.1, tolerance = .Machine$double.eps){
   return(x/y)
 }
 
+distinct_transformer_names = function(model){
+  model$transformers %>% lapply(function(x) x$name) %>% unlist -> tnames
+  wdp = which(duplicated(tnames))
+  while(length(wdp) > 0){
+    for(i in wdp){
+      model$transformers[[i]]$name <- model$transformers[[i]]$name %>% paste(i, sep = '_')
+    }
+    model$transformers %>% lapply(function(x) x$name) %>% unlist -> tnames
+    wdp = which(duplicated(tnames))
+  }
+}
+
+# Given two models A and B, if we want to have an ensemble model,
+# one way is to take a number of cases from top probabilities of model A and a different number from top list of model B,
+# then merge the two lists and present them as positive cases.
+# Question is how many of each model shpuld we take?
+# This function returns the lift performance of the ensemble model if r_A percentage of selected cases are taken from
+# model A and the rest taken from model B.
+# Inputs:
+# r   : percentage of entire number of rows (cases) for which lift is being measured
+# r_A : percentage of selected cases taken from model A
+# y   : labels
+# yh_A: probs of model A
+# yh_B: probs of model B
+ensemble_lift = function(y, yh_A, yh_B, r, r_A){
+  N     = length(y)
+  assert((N == length(yh_A)) & (N == length(yh_B)), 'length of vectors must be the same!')
+  tr_A  = quantile(yh_A, probs = 1.0 - r_A*r)
+  sel_A = which(yh_A > tr_A)
+  n_req = as.integer(r*N)
+  sel_B = order(yh_B) %>% setdiff(sel_A) %>% tail(n_req - length(sel_A))
+  mean(y[c(sel_A, sel_B)])/mean(y)
+}
