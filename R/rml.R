@@ -5,7 +5,7 @@
 # 1.0.0 (05 August 2013)    - Initial Issue
 # Description for Roxygen
 
-#' biger
+#' rml
 #'
 #' This package is a tool-box for machine learning and prediction.
 #' @author Nicholas Berta

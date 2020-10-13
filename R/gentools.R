@@ -916,7 +916,7 @@ boost_funlist_parallel = function(funlist, X, y, metric = logloss_sum, n_jobs = 
     source('~/Documents/software/R/packages/rfun/R/funlib2.R')
     source('~/Documents/software/R/packages/rfun/R/builders.R')
     source('~/Documents/software/R/packages/rfun/R/solvers.R')
-    source('~/Documents/software/R/packages/rutils/R/gener.R')
+    source('~/Documents/software/R/packages/rutils/R/rutils.R')
     source('~/Documents/software/R/packages/rml/R/mltools.R')
 
     ofun          <- metric$copy()

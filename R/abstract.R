@@ -14,7 +14,9 @@ rml_words = c('keep_columns', 'keep_features', 'max_train', 'max_domain', 'actio
                 'segmentation_features', 'features.include', 'features.include.at', 'features.exclude', 'features.exclude.at',
                 'ts.enabled', 'ts.id_col', 'ts.time_col')
 
-#' Reference Class \code{MODEL} is the highest level of herarchy in a series of classes defined in the \code{rml} package.
+#' Abstract Model Class
+
+#' @description  Reference Class \code{MODEL} is the highest level of herarchy in a series of classes defined in the \code{rml} package.
 #' All transformers, classifiers, regressors and survival models inherit from this class.
 #'
 #' @field name character containing name of the model

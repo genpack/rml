@@ -1248,7 +1248,7 @@ BIN.KMEANS.KMC = setRefClass('BIN.KMEANS.KMC', contains = 'MODEL', methods = lis
 
   model.predict = function(X){
     bibi = function(u){
-      objects$model$centers %>% apply(1, function(v) gener::difference(u, v)) %>% order %>% first
+      objects$model$centers %>% apply(1, function(v) rutils::difference(u, v)) %>% order %>% first
     }
     X %>% as.matrix %>% apply(1, bibi) %>% as.data.frame %>% {colnames(.)<-NULL;.}
   }
