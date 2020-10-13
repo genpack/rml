@@ -12,14 +12,17 @@ cross_accuracy = function(v1, v2){
   return(a %>% sapply(function(x) max(x, 1-x)))
 }
 
+#' @export
 rmse = function(y1, y2){
   mean((y1 - y2)^2, na.rm = T) %>% sqrt
 }
 
+#' @export
 mae = function(y1, y2){
   (y1 - y2) %>% abs %>% mean(na.rm = T)
 }
 
+#' @export
 medae = function(y1, y2){
   (y1 - y2) %>% abs %>% median(na.rm = T)
 }
@@ -48,6 +51,7 @@ cross_f1 = function(v1, v2){
 }
 
 # converts probabilities to logit
+#' @export
 logit_fwd = function(x) {
   x    = abs(x)
   mask = x < .Machine$double.eps
@@ -58,11 +62,13 @@ logit_fwd = function(x) {
 }
 
 # convert logit to probabilities
+#' @export
 logit_inv = function(x){
   e = exp(x)
   return(1.0 - 1.0/(1 + e))
 }
 
+#' @export
 remove_outliers = function(X, sd_threshold = 3){
   m = ncol(X)
   Xs = X %>% scale %>% as.data.frame
@@ -75,6 +81,7 @@ remove_outliers = function(X, sd_threshold = 3){
   X[Xs$keep,]
 }
 
+#' @export
 int_ordinals = function(X){
   X %<>% as.data.frame
   nms = colnames(X)
@@ -88,6 +95,7 @@ int_ordinals = function(X){
 }
 
 
+# Internal Function
 add_keras_layer_dense = function(input_layer, layer, ...){
   input_layer %<>% layer_dense(
     units = verify(layer$units, c('numeric', 'integer'), lengths = 1, null_allowed = F) %>% as.integer,
@@ -108,6 +116,7 @@ add_keras_layer_dense = function(input_layer, layer, ...){
   }
 }
 
+# Internal Function
 create_keras_layers = function(config){
   build_regularizer = function(l1, l2){
     if(l1 == 0){
@@ -141,7 +150,11 @@ create_keras_layers = function(config){
   return(layers)
 }
 
-
+#' This function gets a data.frame and replaces each cell with its rank among all the cells in its column.
+#' 
+#' @field X \code{data.frame} or \code{matrix}: Input table to be ranked
+#' @return \code{data.frame} containing ranked values. Suffix \code{_rank} is added to each column header. 
+#' @export
 ranker = function(X){
   X %<>% as.data.frame
   for(col in colnames(X)){
@@ -152,7 +165,6 @@ ranker = function(X){
   }
   return(X)
 }
-
 
 #' @export
 outliers.old = function(X, sd_threshold = 4){
@@ -168,6 +180,7 @@ outliers.old = function(X, sd_threshold = 4){
   }
   return(unique(out))
 }
+
 
 trim_outliers.old = function(X, scale = F, center = F, only_numeric = F){
   m = ncol(X)
@@ -199,16 +212,29 @@ trim_outliers.old = function(X, scale = F, center = F, only_numeric = F){
   X
 }
 
+#' Imputes missing values with the median of non-existing values in each column
+#' 
+#' @field X \code{data.frame} or \code{matrix}: Input table to be imputed
+#' @return \code{data.frame} with missing values replaced by imputed values
+#' @export
 na2median = function(X){
   X %<>% data.frame
   for(i in 1:ncol(X)) if(inherits(X[,i], 'numeric')) X[is.na(X[,i]), i] <- median(X[,i], na.rm = T)
   return(X)
 }
 
-correlation = function(x, y, metric = 'pearson_correlation', threshold = NULL, ratio = NULL){
+#' Use this function to get correlation of two vectors with various metrics.
+#' 
+#' @field x \code{vector} first vector
+#' @field x \code{vector} second vector (must have the same number of elements as vector \code{x})
+#' @field metric \code{character} specifying metric. Valid values are
+#' \code{pearson, loss, aurc, gini, 'precision', 'recall', 'f1', 'accuracy', 'sensitivity', 'specificity', 'fp', 'fn', 'tp', 'tn', 'lift'}
+#' @return \code{numeric} the value of correlation between two given vectors by the specified metric
+#' @export
+correlation = function(x, y, metric = 'pearson', threshold = NULL, ratio = NULL){
   x = as.numeric(x)
   y = as.numeric(y)
-  if(metric == 'pearson_correlation'){
+  if(metric == 'pearson'){
     return(cor(x, y))
   }
 
@@ -609,6 +635,7 @@ apply_map = function(X, mapping){
   X %>% left_join(mapping, by = colnames(mapping)[1])
 }
 
+# Internal function
 concat_columns = function(X, sources, target){
   scr = paste0("X %>% mutate(", target, " = paste(", sources %>% paste(collapse = ','), ", sep = '-'))")
   parse(text = scr) %>% eval
@@ -643,6 +670,7 @@ fit_map = function(X, y, cats, encoding = 'target_ratio'){
 }
 
 
+# Internal function
 get_chisq_scores = function(X, y, cats){
   scores = c()
   for(col in cats){
@@ -726,7 +754,7 @@ predict_glm_fit <- function(glmfit, newmatrix, addintercept=TRUE){
 
 # File: init.R must be in the working directory
 
-# previously called evaluate
+# Internal function: previously called evaluate
 sfs.regression <- function (D, tt_ratio = 0.7, yfun = function(x){x}, yfun.inv = yfun) {
   if(!inherits(D, 'matrix')) D %<>% as.matrix
 
@@ -845,15 +873,15 @@ load_model = function(model_name, path = getwd()){
 }
 
 #' @export
-reset_model = function(model, reset_transformers = T, reset_gradient_transformers = T){
+model_reset = function(model, reset_transformers = T, reset_gradient_transformers = T){
   model$fitted <- FALSE
   model$objects$features <- NULL
   model$objects$saved_pred <- NULL
   if (reset_transformers & !is.empty(model$transformers)){
-    for (transformer in model$transformers) reset_model(model = transformer, reset_transformers = T, reset_gradient_transformers = reset_gradient_transformers)
+    for (transformer in model$transformers) model_reset(model = transformer, reset_transformers = T, reset_gradient_transformers = reset_gradient_transformers)
   }
   if (reset_gradient_transformers & !is.empty(model$gradient_transformers)){
-    for (transformer in model$gradient_transformers) reset_model(model = transformer, reset_transformers = reset_transformers, reset_gradient_transformers = T)
+    for (transformer in model$gradient_transformers) model_reset(model = transformer, reset_transformers = reset_transformers, reset_gradient_transformers = T)
   }
 }
 
@@ -894,7 +922,7 @@ int_columns = function(x, cats){
   return(x)
 }
 
-# converts all c9l urns to numeric
+# converts all columns to numeric
 # take to gener
 numerize_columns = function(x){
   X %<>% as.data.frame
@@ -957,8 +985,13 @@ extract_informative_features = function(X, y, subset_size = 200, cumulative_gain
   return(ifet)
 }
 
-# Returns model type and types of its transformers recursively
-transformer_types = function(model){
+#' Returns model type and types of its transformers recursively
+#' 
+#' @field model Any object inheriting from class \code{MODEL} 
+#' @return \code{character} vector containing model type and all its transformer types
+
+#' @export
+model_types = function(model){
   mdlns = model$type
   for(tr in model$transformers){
     mdlns = c(mdlns, transformer_types(tr))
@@ -966,6 +999,14 @@ transformer_types = function(model){
   return(mdlns %>% unique)
 }
 
+
+#' Returns desired moments of a given numeric vector
+#' 
+#' @field v \code{numeric} input vector for which moments are to be computed
+#' @field m \code{integer} desired moment orders
+#' @field na.rm \code{logical} should missing values be removed?
+#' @return \code{numeric} output vector containing moment values
+#' @export 
 moment = function(v, m = c(1,2), na.rm = T){
   if(length(m) == 1) return(sum(v^m))
   M = NULL
@@ -1018,6 +1059,8 @@ feature_info_categorical = function(X){
   } else stop('X has unknown class!')
 }
 
+
+#' @export 
 encode_nominals = function(X, encodings = list(), remove_space = T){
   for(ft in names(encodings) %^% colnames(X)){
     u = encodings[[ft]] %>% unlist
@@ -1035,6 +1078,7 @@ encode_nominals = function(X, encodings = list(), remove_space = T){
 # smart divide, replaces zero denominators with the meinimum non-zero value multiplied by a gain
 # This gain should be a value smaller than one. Default is 0.1
 # internal function
+#' @export 
 smart_divide = function(x, y, gain = 0.1, tolerance = .Machine$double.eps){
   w0 = which(equal(y, 0.0, tolerance = tolerance))
   if(length(w0) > 0){
@@ -1046,7 +1090,12 @@ smart_divide = function(x, y, gain = 0.1, tolerance = .Machine$double.eps){
   return(x/y)
 }
 
-distinct_transformer_names = function(model){
+#' Changes duplicated transformer names of a given model to ensure all transformers have distinct names 
+#' 
+#' @field model Any object inheriting from class \code{MODEL} 
+#' @return None
+#' @export 
+model_make_unique_transformer_names = function(model){
   model$transformers %>% lapply(function(x) x$name) %>% unlist -> tnames
   wdp = which(duplicated(tnames))
   while(length(wdp) > 0){

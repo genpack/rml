@@ -329,7 +329,7 @@ BIN.SCIKIT.KMC = setRefClass(
   ))
 
 FET.SCIKIT.MFG = setRefClass(
-  'MAP.SCIKIT.NRM',
+  'MAP.SCIKIT.MFG',
   contains = 'MODEL',
   methods = list(
     initialize = function(...){
@@ -358,6 +358,7 @@ FET.SCIKIT.MFG = setRefClass(
     }
   ))
 
+#' @export MAP.SCIKIT.NRM
 MAP.SCIKIT.NRM = setRefClass(
   'MAP.SCIKIT.NRM',
   contains = 'MODEL',
@@ -389,6 +390,7 @@ MAP.SCIKIT.NRM = setRefClass(
   ))
 
 
+#' @export MAP.SCIKIT.OHE
 ENC.SCIKIT.OHE = setRefClass(
   'ENC.SCIKIT.OHE',
   contains = 'MODEL',
@@ -425,6 +427,7 @@ ENC.SCIKIT.OHE = setRefClass(
     }
   ))
 
+#' @export MAP.SCIKIT.ZFS
 MAP.SCIKIT.ZFS = setRefClass(
   'MAP.SCIKIT.ZFS',
   contains = 'MODEL',
@@ -454,6 +457,7 @@ MAP.SCIKIT.ZFS = setRefClass(
     }
   ))
 
+#' @export MAP.SCIKIT.MMS
 MAP.SCIKIT.MMS = setRefClass(
   'MAP.SCIKIT.MMS',
   contains = 'MODEL',
@@ -484,6 +488,7 @@ MAP.SCIKIT.MMS = setRefClass(
   ))
 
 
+#' @export ENC.CATEGORY_ENCODERS.CATB
 ENC.CATEGORY_ENCODERS.CATB = setRefClass(
   'ENC.CATEGORY_ENCODERS.CATB',
   contains = 'MODEL',
@@ -869,9 +874,6 @@ FNT.RML.POLY = setRefClass('FNT.RML.POLY', contains = 'MODEL', methods = list(
 
 ))
 
-
-
-#' @export CATCONCATER
 CATCONCATER = setRefClass('CATCONCATER', contains = "MODEL",
    methods = list(
      initialize = function(...){
@@ -994,7 +996,6 @@ ENC.FASTDUMMIES.OHE = setRefClass('ENC.FASTDUMMIES.OHE', contains = "MODEL",
 
 
 # Previously GENETIC.BOOSTER.GEOMETRIC
-#' @export FET.RML.MGB
 FET.RML.MGB = setRefClass('FET.RML.MGB', contains = 'MODEL',
     methods = list(
       initialize = function(...){
@@ -1117,7 +1118,6 @@ FET.RML.MGB = setRefClass('FET.RML.MGB', contains = 'MODEL',
 )
 
 # previously GENETIC.BOOSTER.LOGICAL
-#' @export GENETIC.BOOSTER.LOGICAL
 FET.RML.LGB = setRefClass('FET.RML.LGB', contains = 'MODEL', methods = list(
   initialize = function(...){
     callSuper(...)
@@ -1414,6 +1414,7 @@ FET.RML.SFS = setRefClass('FET.RML.SFS', contains = 'MODEL', methods = list(
 
 
 # previously: IDENTITY
+#' @export MAP.RML.IDT
 MAP.RML.IDT = setRefClass('MAP.RML.IDT' , contains = "MODEL",
   methods = list(
     initialize = function(...){

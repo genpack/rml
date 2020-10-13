@@ -1,8 +1,15 @@
 # Header
 # Filename:       rml.R
-# Description:    A toolbox for R programmers for machine learning and prediction
+# Description:    A pipeline and toolbox for R programmers useful for building products for machine learning and prediction
 # Version History:
-# 1.0.0 (05 August 2013)    - Initial Issue
+# 0.0.0 (05 August 2013)   - Initial Issue
+# 0.1.0 (23 February 2014) - Second Issue
+# 0.1.2 (06 August 2014)   - Third Issue
+# 0.1.3 (13 October 2014)  - Forth Issue
+
+
+
+
 # Description for Roxygen
 
 #' rml
@@ -19,3 +26,4 @@
 # Run these lines before building the package:
 # yaml::read_yaml('data/default_templates.yaml') -> default_templates
 # save(default_templates, file = 'data/default_templates.RData')
+
