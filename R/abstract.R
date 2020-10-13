@@ -1,11 +1,11 @@
-# 25 Oct 2019 'fitted', 'features.include' and 'transformer' added to maler_words
+# 25 Oct 2019 'fitted', 'features.include' and 'transformer' added to rml_words
 # Todos:
 # 1- Add imputer module to config to impute for missing values
 # look at Recipes: https://conf20-intro-ml.netlify.app/slides/06-recipes.html#2
 # 2- Add upsampling and downsampling modules
 
 library(magrittr)
-maler_words = c('keep_columns', 'keep_features', 'max_train', 'max_domain', 'action_by_original',
+rml_words = c('keep_columns', 'keep_features', 'max_train', 'max_domain', 'action_by_original',
                 'cv.ntrain', 'cv.ntest', 'cv.test_ratio','cv.train_ratio', 'cv.split_method', 'cv.performance_metric', 'cv.reset_transformer', 'cv.restore_model', 'cv.set',
                 'sfs.enabled', 'fe.enabled','fe.recursive', 'fe.importance_threshold', 'fe.quantile',
                 'pp.remove_invariant_features', 'eda.enabled', 'return_features', 'feature_subset_size',
@@ -14,7 +14,7 @@ maler_words = c('keep_columns', 'keep_features', 'max_train', 'max_domain', 'act
                 'segmentation_features', 'features.include', 'features.include.at', 'features.exclude', 'features.exclude.at',
                 'ts.enabled', 'ts.id_col', 'ts.time_col')
 
-#' Reference Class \code{MODEL} is the highest level of herarchy in a series of classes defined in the \code{maler} package.
+#' Reference Class \code{MODEL} is the highest level of herarchy in a series of classes defined in the \code{rml} package.
 #' All transformers, classifiers, regressors and survival models inherit from this class.
 #'
 #' @field name character containing name of the model

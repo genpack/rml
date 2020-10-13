@@ -9,20 +9,20 @@ CLS.SCIKIT.XGB:
     - CLS.SCIKIT.LR
     - CLS.KERAS.DNN
     probability: 0.05
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.1
   - classes:
     - ENC.CATEGORY_ENCODERS.CATB
     - ENC.CATEGORY_ENCODERS.HLMRT
     - ENC.CATEGORY_ENCODERS.JSTN
     probability: 0.01
-  - classes: MAP.MALER.IDT
+  - classes: MAP.RML.IDT
     probability: 0.2
   - classes:
     - MAP.PYLMNN.LMNN
     - MAP.STATS.PCA
     probability: 0.02
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.01
   return:
   - logit
@@ -188,20 +188,20 @@ CLS.XGBOOST:
     - CLS.SCIKIT.LR
     - CLS.KERAS.DNN
     probability: 0.05
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.1
   - classes:
     - ENC.CATEGORY_ENCODERS.CATB
     - ENC.CATEGORY_ENCODERS.HLMRT
     - ENC.CATEGORY_ENCODERS.JSTN
     probability: 0.01
-  - classes: MAP.MALER.IDT
+  - classes: MAP.RML.IDT
     probability: 0.2
   - classes:
     - MAP.PYLMNN.LMNN
     - MAP.STATS.PCA
     probability: 0.02
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.01
   return:
   - logit
@@ -379,30 +379,30 @@ CLS.SCIKIT.LR:
     - CLS.SCIKIT.LR
     - CLS.KERAS.DNN
     probability: 0.01
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.2
   - classes:
     - ENC.CATEGORY_ENCODERS.CATB
     - ENC.CATEGORY_ENCODERS.HLMRT
     - ENC.CATEGORY_ENCODERS.JSTN
     probability: 0.2
-  - classes: MAP.MALER.IDT
+  - classes: MAP.RML.IDT
     probability: 0.01
   - classes:
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.ZFS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.ZFS
     probability: 0.6
   - classes:
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
@@ -426,7 +426,7 @@ CLS.SCIKIT.LR:
     - MAP.STATS.PCA
     - MAP.STATS.PCA
     probability: 0.1
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.1
   feature_sample_ratio:
     fun: runif
@@ -463,30 +463,30 @@ CLS.KERAS.DNN:
     - CLS.SCIKIT.LR
     - CLS.KERAS.DNN
     probability: 0.01
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.2
   - classes:
     - ENC.CATEGORY_ENCODERS.CATB
     - ENC.CATEGORY_ENCODERS.HLMRT
     - ENC.CATEGORY_ENCODERS.JSTN
     probability: 0.2
-  - classes: MAP.MALER.IDT
+  - classes: MAP.RML.IDT
     probability: 0.01
   - classes:
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.ZFS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.ZFS
     probability: 0.6
   - classes:
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
@@ -510,7 +510,7 @@ CLS.KERAS.DNN:
     - MAP.STATS.PCA
     - MAP.STATS.PCA
     probability: 0.1
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.1
   num_layers:
   - 1
@@ -2651,31 +2651,31 @@ CLS.KERAS.DNN:
   max_train:
     fun: rgeom
     prob: 1.0e-05
-MAP.MALER.MMS:
-  class: MAP.MALER.MMS
+MAP.RML.MMS:
+  class: MAP.RML.MMS
   pass:
     type:
     - numeric
     - ordinal
   transformers:
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.1
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.2
   feature_sample_ratio:
     fun: runif
     min: 0.01
     max: 0.2
-MAP.MALER.ZFS:
-  class: MAP.MALER.ZFS
+MAP.RML.ZFS:
+  class: MAP.RML.ZFS
   pass:
     type:
     - numeric
     - ordinal
   transformers:
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.1
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.2
   feature_sample_ratio:
     fun: runif
@@ -2688,9 +2688,9 @@ MAP.SCIKIT.ZFS:
     - numeric
     - ordinal
   transformers:
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.1
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.2
   feature_sample_ratio:
     fun: runif
@@ -2703,9 +2703,9 @@ MAP.SCIKIT.MMS:
     - numeric
     - ordinal
   transformers:
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.1
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.2
   feature_sample_ratio:
     fun: runif
@@ -2718,9 +2718,9 @@ MAP.SCIKIT.NRM:
     - numeric
     - ordinal
   transformers:
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.1
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.2
   feature_sample_ratio:
     fun: runif
@@ -2733,9 +2733,9 @@ MAP.STATS.PCA:
     - numeric
     - ordinal
   transformers:
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.1
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.2
   num_components:
   - 5
@@ -2768,8 +2768,8 @@ MAP.STATS.PCA:
     fun: runif
     min: 0.01
     max: 0.2
-MAP.MALER.IDT:
-  class: MAP.MALER.IDT
+MAP.RML.IDT:
+  class: MAP.RML.IDT
   feature_sample_ratio:
     fun: runif
     min: 0.01
@@ -2786,12 +2786,12 @@ ENC.CATEGORY_ENCODERS.JSTN:
     - BIN.KMEANS.KMC
     - BIN.KMEANS.KMC
     - BIN.SMBINNING.OB
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
     probability: 0.3
   feature_sample_ratio:
     fun: runif
@@ -2809,12 +2809,12 @@ ENC.CATEGORY_ENCODERS.CATB:
     - BIN.KMEANS.KMC
     - BIN.KMEANS.KMC
     - BIN.SMBINNING.OB
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
     probability: 0.3
   feature_sample_ratio:
     fun: runif
@@ -2832,12 +2832,12 @@ ENC.CATEGORY_ENCODERS.HLMRT:
     - BIN.KMEANS.KMC
     - BIN.KMEANS.KMC
     - BIN.SMBINNING.OB
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
     probability: 0.3
   feature_sample_ratio:
     fun: runif
@@ -2856,12 +2856,12 @@ ENC.FASTDUMMIES.OHE:
     - BIN.KMEANS.KMC
     - BIN.KMEANS.KMC
     - BIN.SMBINNING.OB
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
     probability: 0.3
   feature_sample_ratio:
     fun: runif
@@ -2880,19 +2880,19 @@ ENC.SCIKIT.OHE:
     - BIN.KMEANS.KMC
     - BIN.KMEANS.KMC
     - BIN.SMBINNING.OB
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
     probability: 0.3
   feature_sample_ratio:
     fun: runif
     min: 0.01
     max: 0.2
-ENC.MALER.FE:
-  class: ENC.MALER.FE
+ENC.RML.FE:
+  class: ENC.RML.FE
   pass:
     type:
     - numeric
@@ -2904,12 +2904,12 @@ ENC.MALER.FE:
     - BIN.KMEANS.KMC
     - BIN.KMEANS.KMC
     - BIN.SMBINNING.OB
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
     probability: 0.3
   - classes:
     - CLS.SCIKIT.XGB
@@ -2919,30 +2919,30 @@ ENC.MALER.FE:
     - CLS.SCIKIT.LR
     - CLS.KERAS.DNN
     probability: 0.01
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.2
   - classes:
     - ENC.CATEGORY_ENCODERS.CATB
     - ENC.CATEGORY_ENCODERS.HLMRT
     - ENC.CATEGORY_ENCODERS.JSTN
     probability: 0.2
-  - classes: MAP.MALER.IDT
+  - classes: MAP.RML.IDT
     probability: 0.01
   - classes:
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.ZFS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.ZFS
     probability: 0.6
   - classes:
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
@@ -2966,14 +2966,14 @@ ENC.MALER.FE:
     - MAP.STATS.PCA
     - MAP.STATS.PCA
     probability: 0.1
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.1
   feature_sample_ratio:
     fun: runif
     min: 0.01
     max: 0.2
-ENC.MALER.TE:
-  class: ENC.MALER.TE
+ENC.RML.TE:
+  class: ENC.RML.TE
   pass:
     type:
     - ordinal
@@ -2984,12 +2984,12 @@ ENC.MALER.TE:
     - BIN.KMEANS.KMC
     - BIN.KMEANS.KMC
     - BIN.SMBINNING.OB
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
     probability: 0.3
   - classes:
     - CLS.SCIKIT.XGB
@@ -2999,30 +2999,30 @@ ENC.MALER.TE:
     - CLS.SCIKIT.LR
     - CLS.KERAS.DNN
     probability: 0.01
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.2
   - classes:
     - ENC.CATEGORY_ENCODERS.CATB
     - ENC.CATEGORY_ENCODERS.HLMRT
     - ENC.CATEGORY_ENCODERS.JSTN
     probability: 0.2
-  - classes: MAP.MALER.IDT
+  - classes: MAP.RML.IDT
     probability: 0.01
   - classes:
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.ZFS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.ZFS
     probability: 0.6
   - classes:
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
@@ -3046,14 +3046,14 @@ ENC.MALER.TE:
     - MAP.STATS.PCA
     - MAP.STATS.PCA
     probability: 0.1
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.1
   feature_sample_ratio:
     fun: runif
     min: 0.01
     max: 0.2
-ENC.MALER.ME:
-  class: ENC.MALER.ME
+ENC.RML.ME:
+  class: ENC.RML.ME
   pass:
     type:
     - ordinal
@@ -3064,12 +3064,12 @@ ENC.MALER.ME:
     - BIN.KMEANS.KMC
     - BIN.KMEANS.KMC
     - BIN.SMBINNING.OB
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
     probability: 0.3
   - classes:
     - CLS.SCIKIT.XGB
@@ -3079,30 +3079,30 @@ ENC.MALER.ME:
     - CLS.SCIKIT.LR
     - CLS.KERAS.DNN
     probability: 0.01
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.2
   - classes:
     - ENC.CATEGORY_ENCODERS.CATB
     - ENC.CATEGORY_ENCODERS.HLMRT
     - ENC.CATEGORY_ENCODERS.JSTN
     probability: 0.2
-  - classes: MAP.MALER.IDT
+  - classes: MAP.RML.IDT
     probability: 0.01
   - classes:
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.ZFS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.ZFS
     probability: 0.6
   - classes:
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
@@ -3126,14 +3126,14 @@ ENC.MALER.ME:
     - MAP.STATS.PCA
     - MAP.STATS.PCA
     probability: 0.1
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.1
   feature_sample_ratio:
     fun: runif
     min: 0.01
     max: 0.2
-ENC.MALER.MEB:
-  class: ENC.MALER.MEB
+ENC.RML.MEB:
+  class: ENC.RML.MEB
   pass:
     type:
     - ordinal
@@ -3144,12 +3144,12 @@ ENC.MALER.MEB:
     - BIN.KMEANS.KMC
     - BIN.KMEANS.KMC
     - BIN.SMBINNING.OB
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
-    - BIN.MALER.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
+    - BIN.RML.GROUPER
     probability: 0.3
   - classes:
     - CLS.SCIKIT.XGB
@@ -3159,30 +3159,30 @@ ENC.MALER.MEB:
     - CLS.SCIKIT.LR
     - CLS.KERAS.DNN
     probability: 0.01
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.2
   - classes:
     - ENC.CATEGORY_ENCODERS.CATB
     - ENC.CATEGORY_ENCODERS.HLMRT
     - ENC.CATEGORY_ENCODERS.JSTN
     probability: 0.2
-  - classes: MAP.MALER.IDT
+  - classes: MAP.RML.IDT
     probability: 0.01
   - classes:
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.ZFS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.ZFS
     probability: 0.6
   - classes:
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
@@ -3206,14 +3206,14 @@ ENC.MALER.MEB:
     - MAP.STATS.PCA
     - MAP.STATS.PCA
     probability: 0.1
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.1
   feature_sample_ratio:
     fun: runif
     min: 0.01
     max: 0.2
-BIN.MALER.OBB:
-  class: BIN.MALER.OBB
+BIN.RML.OBB:
+  class: BIN.RML.OBB
   type:
   - numeric
   - ordinal
@@ -3229,30 +3229,30 @@ BIN.MALER.OBB:
     - CLS.SCIKIT.LR
     - CLS.KERAS.DNN
     probability: 0.01
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.2
   - classes:
     - ENC.CATEGORY_ENCODERS.CATB
     - ENC.CATEGORY_ENCODERS.HLMRT
     - ENC.CATEGORY_ENCODERS.JSTN
     probability: 0.2
-  - classes: MAP.MALER.IDT
+  - classes: MAP.RML.IDT
     probability: 0.01
   - classes:
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.ZFS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.ZFS
     probability: 0.6
   - classes:
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
@@ -3276,14 +3276,14 @@ BIN.MALER.OBB:
     - MAP.STATS.PCA
     - MAP.STATS.PCA
     probability: 0.1
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.1
   feature_sample_ratio:
     fun: runif
     min: 0.01
     max: 0.2
-BIN.MALER.GROUPER:
-  class: BIN.MALER.GROUPER
+BIN.RML.GROUPER:
+  class: BIN.RML.GROUPER
   type:
   - nominal
   - ordinal
@@ -3302,30 +3302,30 @@ BIN.MALER.GROUPER:
     - CLS.SCIKIT.LR
     - CLS.KERAS.DNN
     probability: 0.01
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.2
   - classes:
     - ENC.CATEGORY_ENCODERS.CATB
     - ENC.CATEGORY_ENCODERS.HLMRT
     - ENC.CATEGORY_ENCODERS.JSTN
     probability: 0.2
-  - classes: MAP.MALER.IDT
+  - classes: MAP.RML.IDT
     probability: 0.01
   - classes:
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.ZFS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.ZFS
     probability: 0.6
   - classes:
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
@@ -3349,7 +3349,7 @@ BIN.MALER.GROUPER:
     - MAP.STATS.PCA
     - MAP.STATS.PCA
     probability: 0.1
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.1
   feature_sample_ratio:
     fun: runif
@@ -3372,30 +3372,30 @@ BIN.SMBINNING.OB:
     - CLS.SCIKIT.LR
     - CLS.KERAS.DNN
     probability: 0.01
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.2
   - classes:
     - ENC.CATEGORY_ENCODERS.CATB
     - ENC.CATEGORY_ENCODERS.HLMRT
     - ENC.CATEGORY_ENCODERS.JSTN
     probability: 0.2
-  - classes: MAP.MALER.IDT
+  - classes: MAP.RML.IDT
     probability: 0.01
   - classes:
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.ZFS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.ZFS
     probability: 0.6
   - classes:
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
@@ -3419,7 +3419,7 @@ BIN.SMBINNING.OB:
     - MAP.STATS.PCA
     - MAP.STATS.PCA
     probability: 0.1
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.1
   feature_sample_size:
   - 1
@@ -3453,30 +3453,30 @@ BIN.SCIKIT.KMC:
     - CLS.SCIKIT.LR
     - CLS.KERAS.DNN
     probability: 0.01
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.2
   - classes:
     - ENC.CATEGORY_ENCODERS.CATB
     - ENC.CATEGORY_ENCODERS.HLMRT
     - ENC.CATEGORY_ENCODERS.JSTN
     probability: 0.2
-  - classes: MAP.MALER.IDT
+  - classes: MAP.RML.IDT
     probability: 0.01
   - classes:
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.ZFS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.ZFS
     probability: 0.6
   - classes:
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
@@ -3500,7 +3500,7 @@ BIN.SCIKIT.KMC:
     - MAP.STATS.PCA
     - MAP.STATS.PCA
     probability: 0.1
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.1
   n_clusters:
   - 2
@@ -3548,30 +3548,30 @@ BIN.KMEANS.KMC:
     - CLS.SCIKIT.LR
     - CLS.KERAS.DNN
     probability: 0.01
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.2
   - classes:
     - ENC.CATEGORY_ENCODERS.CATB
     - ENC.CATEGORY_ENCODERS.HLMRT
     - ENC.CATEGORY_ENCODERS.JSTN
     probability: 0.2
-  - classes: MAP.MALER.IDT
+  - classes: MAP.RML.IDT
     probability: 0.01
   - classes:
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.ZFS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.ZFS
     probability: 0.6
   - classes:
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
@@ -3595,7 +3595,7 @@ BIN.KMEANS.KMC:
     - MAP.STATS.PCA
     - MAP.STATS.PCA
     probability: 0.1
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.1
   num_clusters:
   - 2
@@ -3626,15 +3626,15 @@ BIN.KMEANS.KMC:
     fun: runif
     min: 0.01
     max: 0.2
-FNT.MALER.INV:
-  class: FNT.MALER.INV
+FNT.RML.INV:
+  class: FNT.RML.INV
   trim: 100.0
   feature_sample_ratio:
     fun: runif
     min: 0.01
     max: 0.2
-FNT.MALER.LOG:
-  class: FNT.MALER.LOG
+FNT.RML.LOG:
+  class: FNT.RML.LOG
   intercept:
     fun: runif
     min: 0.0
@@ -3643,14 +3643,14 @@ FNT.MALER.LOG:
     fun: runif
     min: 0.01
     max: 0.2
-FNT.MALER.POLY:
-  class: FNT.MALER.POLY
+FNT.RML.POLY:
+  class: FNT.RML.POLY
   feature_sample_ratio:
     fun: runif
     min: 0.01
     max: 0.2
-FET.MALER.D2MUL:
-  class: FET.MALER.D2MUL
+FET.RML.D2MUL:
+  class: FET.RML.D2MUL
   feature_sample_ratio:
     fun: runif
     min: 0.01
@@ -3661,8 +3661,8 @@ FET.SCIKIT.MFG:
     fun: runif
     min: 0.01
     max: 0.2
-FET.MALER.MGB:
-  class: FET.MALER.MGB
+FET.RML.MGB:
+  class: FET.RML.MGB
   pass:
     type:
     - numeric
@@ -3679,30 +3679,30 @@ FET.MALER.MGB:
     - CLS.SCIKIT.LR
     - CLS.KERAS.DNN
     probability: 0.01
-  - classes: ENC.MALER.FE
+  - classes: ENC.RML.FE
     probability: 0.2
   - classes:
     - ENC.CATEGORY_ENCODERS.CATB
     - ENC.CATEGORY_ENCODERS.HLMRT
     - ENC.CATEGORY_ENCODERS.JSTN
     probability: 0.2
-  - classes: MAP.MALER.IDT
+  - classes: MAP.RML.IDT
     probability: 0.01
   - classes:
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.MMS
-    - MAP.MALER.ZFS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.MMS
+    - MAP.RML.ZFS
     probability: 0.6
   - classes:
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
@@ -3726,7 +3726,7 @@ FET.MALER.MGB:
     - MAP.STATS.PCA
     - MAP.STATS.PCA
     probability: 0.1
-  - classes: FET.MALER.D2MUL
+  - classes: FET.RML.D2MUL
     probability: 0.1
   epochs:
   - 5
@@ -4435,20 +4435,20 @@ FET.MALER.MGB:
     fun: runif
     min: 0.01
     max: 0.2
-FET.MALER.LGB:
-  class: FET.MALER.LGB
+FET.RML.LGB:
+  class: FET.RML.LGB
   pass:
     type: ordinal
     n_unique: 2.0
   transformers:
   - classes:
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
-    - BIN.MALER.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
+    - BIN.RML.OBB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
     - BIN.SMBINNING.OB
@@ -5167,14 +5167,14 @@ FET.MALER.LGB:
     fun: runif
     min: 0.01
     max: 0.2
-ENS.MALER.BS:
-  class: ENS.MALER.BS
+ENS.RML.BS:
+  class: ENS.RML.BS
   feature_sample_ratio:
     fun: runif
     min: 0.01
     max: 0.2
-ENS.MALER.AGGR:
-  class: ENS.MALER.AGGR
+ENS.RML.AGGR:
+  class: ENS.RML.AGGR
   feature_sample_ratio:
     fun: runif
     min: 0.01

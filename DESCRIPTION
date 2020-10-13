@@ -1,4 +1,4 @@
-Package: maler
+Package: rml
 Type: Package
 Title: A set of Machine Learning and transformer models.
 Version: 0.1.2

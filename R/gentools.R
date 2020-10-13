@@ -241,7 +241,7 @@ createFeatures = function(flist, nf, types, prefix = 'FEAT', X, y){
     translist       = flist %>% list.extract(trans_parents) %>% list.pull('model', do_unlist = F)
 
     if(!is.empty(feature_parents)){
-      idt = MAP.MALER.IDT(features.include = feature_parents)
+      idt = MAP.RML.IDT(features.include = feature_parents)
       translist[[idt$name]] <- idt
     }
 
@@ -340,7 +340,7 @@ createFeatures.supervisor = function(flist, nf, prefix = 'Feat'){
 ########### GREEDY GENETIC ####################
 default_greedy_templates = list(
   xgb1 = list(class = 'CLS.SCIKIT.XGB', weight = 0.20, n_num = c(30:60, 40:80), n_cat = c(0:10, 5:15),    n_jobs = as.integer(7), return_logit = c(T, T, F)),
-  lr1  = list(class = 'CLS.SCIKIT.LR' , weight = 0.20, n_num = c(20:60)       , n_cat = c(0:10),           penalty = 'l1', return_logit = c(T, T, T, F), transformers = "MAP.MALER.MMS()"),
+  lr1  = list(class = 'CLS.SCIKIT.LR' , weight = 0.20, n_num = c(20:60)       , n_cat = c(0:10),           penalty = 'l1', return_logit = c(T, T, T, F), transformers = "MAP.RML.MMS()"),
   svm1 = list(class = 'CLS.SCIKIT.SVM', weight = 0.05, n_num = c(5:20)        , n_cat = c(0:10)))
 
 create_transformer = function(X, y, types = default_greedy_templates, name = NULL){
@@ -396,7 +396,7 @@ addTransformer = function(model, transformer, X_train, y_train, X_val, y_val, be
     benchmark = model$performance(X_val, y_val, 'gini')
   }
   if(length(model$transformers) == 0){
-    idt = MAP.MALER.IDT(name = 'I', features.include = model$config$features.include, features.exclude = model$config$features.exclude)
+    idt = MAP.RML.IDT(name = 'I', features.include = model$config$features.include, features.exclude = model$config$features.exclude)
     model$transformers[['I']]   <- idt
   }
   model$transformers[[transformer$name]] <- transformer
@@ -425,7 +425,7 @@ join_features = function(father, mother, X_train, y_train, X_val, y_val, benchma
     benchmark = model$performance(X_val, y_val, 'gini')
   }
   if(length(model$transformers) == 0){
-    idt = MAP.MALER.IDT(name = 'I', features.include = model$config$features.include, features.exclude = model$config$features.exclude)
+    idt = MAP.RML.IDT(name = 'I', features.include = model$config$features.include, features.exclude = model$config$features.exclude)
     model$transformers[['I']]   <- idt
   }
   model$transformers[[transformer$name]] <- transformer
@@ -454,14 +454,14 @@ classifiers   =  c("CLS.SCIKIT.XGB", "CLS.SCIKIT.LR", "CLS.SCIKIT.SVM", "CLS.SCI
 encoders      =  c("ENC.CATEGORY_ENCODERS.HLMRT", "ENCODER.CATBOOST", "ENCODER.JAMESSTEIN", "ENCODER.TARGET", "ENCODER.MODEL")
 binners       =  c('OPTBINNER', 'SMBINNING')
 
-models_pass   = c("DUMMIFIER", "MAP.MALER.MMS", "numeric", classifiers, encoders)
+models_pass   = c("DUMMIFIER", "MAP.RML.MMS", "numeric", classifiers, encoders)
 encoders_pass = c('integer', 'GROUPER', 'BIN.KMEANS.KMC', 'SKMEANS')
 binners_pass  = c('integer', 'numeric', classifiers, encoders)
 free_numerics = c('integer', 'numeric')
-bound_numerics = c("MAP.MALER.MMS", "SCALER", classifiers, encoders, 'numeric')
+bound_numerics = c("MAP.RML.MMS", "SCALER", classifiers, encoders, 'numeric')
 
 default_expert_templates = list(
-  cls.xgb.01 = list(class = 'CLS.SCIKIT.XGB', weight = 0.1, n_jobs = as.integer(7), return_logit = c(T, T, F), max_depth = 3:15, min_child_weight = 1:5, n_estimators = 50*(1:6), feature_transformer = 'MAP.MALER.IDT'),
+  cls.xgb.01 = list(class = 'CLS.SCIKIT.XGB', weight = 0.1, n_jobs = as.integer(7), return_logit = c(T, T, F), max_depth = 3:15, min_child_weight = 1:5, n_estimators = 50*(1:6), feature_transformer = 'MAP.RML.IDT'),
   cls.xgb.02 = list(class = 'CLS.XGBOOST', weight = 0.1, n_jobs = as.integer(7), return_logit = c(T, T, F),
                     colsample_bytree = as.integer(1:10),
                     gamma = list(fun = runif, min = 1, max = 10),
@@ -471,15 +471,15 @@ default_expert_templates = list(
                     min_child_weight = 2:10,
                     scale_pos_weight = 2:10,
                     subsample = list(fun = runif, min = 0, max = 1)),
-  cls.lr.01  = list(class = 'CLS.SCIKIT.LR' , weight = 0.05, penalty = c(rep('l1',5), 'l2'), return_logit = c(T, T, T, F), pass = models_pass, feature_transformer = 'MAP.MALER.MMS'),
+  cls.lr.01  = list(class = 'CLS.SCIKIT.LR' , weight = 0.05, penalty = c(rep('l1',5), 'l2'), return_logit = c(T, T, T, F), pass = models_pass, feature_transformer = 'MAP.RML.MMS'),
   cls.svm.01 = list(class = 'CLS.SCIKIT.SVM', weight = 0.05, pass = models_pass, max_train = 5000:10000, return_logit = c(T, T, F), feature_transformer = 'SCALER'),
-  cls.knn.01 = list(class = 'CLS.SCIKIT.KNN', weight = 0.05, pass = models_pass, max_train = 5000:10000, return_logit = c(T, T, F), feature_transformer = 'MAP.MALER.MMS'),
-  cls.dt.01  = list(class = 'CLS.SCIKIT.DT', weight = 0.05, pass = models_pass, return_logit = c(T, T, F), feature_transformer = 'MAP.MALER.IDT'),
-  cls.flasso.01 = list(class = 'CLS.FLASSO', weight = 0.05, pass = models_pass, lambda1 = 0.1*(0:50), lambda2 = 0.1*(0:50), return_logit = c(T, T, F), feature_transformer = 'MAP.MALER.MMS'),
+  cls.knn.01 = list(class = 'CLS.SCIKIT.KNN', weight = 0.05, pass = models_pass, max_train = 5000:10000, return_logit = c(T, T, F), feature_transformer = 'MAP.RML.MMS'),
+  cls.dt.01  = list(class = 'CLS.SCIKIT.DT', weight = 0.05, pass = models_pass, return_logit = c(T, T, F), feature_transformer = 'MAP.RML.IDT'),
+  cls.flasso.01 = list(class = 'CLS.FLASSO', weight = 0.05, pass = models_pass, lambda1 = 0.1*(0:50), lambda2 = 0.1*(0:50), return_logit = c(T, T, F), feature_transformer = 'MAP.RML.MMS'),
   cls.gbt.01 = list(class = 'CLS.SPARKLYR.GBT', weight = 0.05, pass = models_pass, return_logit = c(T, T, F),
        max_iter  = 20:50, max_depth = 2:20, subsampling_rate = 0.1*(1:10),
        max_bins  = c(16, 32, 64, 128), min_info_gain = 0,
-       step_size = c(0.001*(1:10), 0.01*(1:10), 0.1*(1:10)), feature_transformer = 'MAP.MALER.IDT'),
+       step_size = c(0.001*(1:10), 0.01*(1:10), 0.1*(1:10)), feature_transformer = 'MAP.RML.IDT'),
   cls.dnn.01 = list(class = 'CLS.KERAS.DNN', weight = 0.05, pass = models_pass, return_logit = c(T, T, F),
        num_layers = 1:5,
        first_layer_nodes = 1:1024,
@@ -491,23 +491,23 @@ default_expert_templates = list(
        kernel_regularization_penalty_l2 = c(rep(0, 20), 0.001*(1:1000)),
        learning_rate = 0.0001*(1:1000),
        optimizer = c('adadelta', 'adagrad', 'adam', 'adamax', 'nadam', 'rmsprop', 'sgd'),
-       feature_transformer = 'MAP.MALER.MMS'),
+       feature_transformer = 'MAP.RML.MMS'),
   # list(class = 'SCALER', weight = 0.01, pass = 'numeric'),
-  # list(class = 'MAP.MALER.MMS', weight = 0.05, pass = 'numeric'),
-  bin.obb.01   = list(class = 'BIN.MALER.OBB', weight = 0.02, pass = binners_pass, feature_transformer = 'MAP.MALER.MMS'),
-  enc.jstn.01  = list(class = 'ENC.CATEGORY_ENCODERS.JSTN', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
-  enc.catb.01  = list(class = 'ENC.CATEGORY_ENCODERS.CATB', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
-  enc.hlmrt.01 = list(class = 'ENC.CATEGORY_ENCODERS.HLMRT', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
-  enc.te.01    = list(class = 'ENC.MALER.TE', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
-  fnt.inv.01   = list(class = 'FNT.MALER.INV', weight = 0.01, pass = 'numeric', trim = 100, feature_transformer = 'MAP.MALER.MMS'),
-  fet.d2mul.01 = list(class = 'FET.MALER.D2MUL', weight = 0.01, pass = setdiff(models_pass, 'DUMMIFIER'), feature_transformer = 'MAP.MALER.MMS'),
-  fnt.log.01   = list(class = 'FNT.MALER.LOG', weight = 0.01, pass = c('MAP.MALER.MMS', 'numeric', classifiers), intercept = 0.1*(0:100), feature_transformer = 'MAP.MALER.MMS'),
-  enc.ohe.01   = list(class = 'ENC.FASTDUMMIES.OHE', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.MALER.IDT'),
-  list(class = 'FET.MALER.MGB', weight = 0.01, pass = free_numerics, n_survivors = 2, max_fail = 2:3, feature_transformer = 'MAP.MALER.MMS'),
-  list(class = 'GENETIC.BOOSTER.LOGICAL', weight = 0.01, pass = c('OPTBINNER', 'DUMMIFIER'), feature_transformer = 'MAP.MALER.IDT'),
-  list(class = 'BIN.KMEANS.KMC', weight = 0.01, pass = c(free_numerics, bound_numerics), feature_transformer = 'MAP.MALER.MMS'),
-  list(class = 'MAP.PYLMNN.LMNN', weight = 0.01, pass = c(free_numerics, bound_numerics), max_train = 5000:10000, feature_transformer = 'MAP.MALER.MMS'),
-  list(class = 'MAP.STATS.PCA', weight = 0.01, pass = free_numerics, num_components = 5:30, feature_transformer = 'MAP.MALER.MMS'))
+  # list(class = 'MAP.RML.MMS', weight = 0.05, pass = 'numeric'),
+  bin.obb.01   = list(class = 'BIN.RML.OBB', weight = 0.02, pass = binners_pass, feature_transformer = 'MAP.RML.MMS'),
+  enc.jstn.01  = list(class = 'ENC.CATEGORY_ENCODERS.JSTN', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.RML.IDT'),
+  enc.catb.01  = list(class = 'ENC.CATEGORY_ENCODERS.CATB', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.RML.IDT'),
+  enc.hlmrt.01 = list(class = 'ENC.CATEGORY_ENCODERS.HLMRT', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.RML.IDT'),
+  enc.te.01    = list(class = 'ENC.RML.TE', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.RML.IDT'),
+  fnt.inv.01   = list(class = 'FNT.RML.INV', weight = 0.01, pass = 'numeric', trim = 100, feature_transformer = 'MAP.RML.MMS'),
+  fet.d2mul.01 = list(class = 'FET.RML.D2MUL', weight = 0.01, pass = setdiff(models_pass, 'DUMMIFIER'), feature_transformer = 'MAP.RML.MMS'),
+  fnt.log.01   = list(class = 'FNT.RML.LOG', weight = 0.01, pass = c('MAP.RML.MMS', 'numeric', classifiers), intercept = 0.1*(0:100), feature_transformer = 'MAP.RML.MMS'),
+  enc.ohe.01   = list(class = 'ENC.FASTDUMMIES.OHE', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.RML.IDT'),
+  list(class = 'FET.RML.MGB', weight = 0.01, pass = free_numerics, n_survivors = 2, max_fail = 2:3, feature_transformer = 'MAP.RML.MMS'),
+  list(class = 'GENETIC.BOOSTER.LOGICAL', weight = 0.01, pass = c('OPTBINNER', 'DUMMIFIER'), feature_transformer = 'MAP.RML.IDT'),
+  list(class = 'BIN.KMEANS.KMC', weight = 0.01, pass = c(free_numerics, bound_numerics), feature_transformer = 'MAP.RML.MMS'),
+  list(class = 'MAP.PYLMNN.LMNN', weight = 0.01, pass = c(free_numerics, bound_numerics), max_train = 5000:10000, feature_transformer = 'MAP.RML.MMS'),
+  list(class = 'MAP.STATS.PCA', weight = 0.01, pass = free_numerics, num_components = 5:30, feature_transformer = 'MAP.RML.MMS'))
 
 # names(default_expert_templates) <- default_expert_templates %>% list.pull('class') %>% unname
 
@@ -911,13 +911,13 @@ boost_funlist_parallel = function(funlist, X, y, metric = logloss_sum, n_jobs = 
 
   boostlist = funlist %>% lapply(function(ff) {out = inherits(ff, 'FUNCTION'); if(out) out = length(ff$list.parameters()) > 0; out}) %>% unlist %>% which %>% names
   bflist    = foreach(fn = boostlist, .combine = c, .packages = c('magrittr', 'dplyr'), .errorhandling = 'stop') %dopar% {
-    source('~/Documents/software/R/projects/funchain/funclass.R')
-    source('~/Documents/software/R/projects/funchain/funlib.R')
-    source('~/Documents/software/R/projects/funchain/funlib2.R')
-    source('~/Documents/software/R/projects/funchain/builders.R')
-    source('~/Documents/software/R/projects/funchain/solvers.R')
-    source('~/Documents/software/R/packages/gener/R/gener.R')
-    source('~/Documents/software/R/packages/maler/R/mltools.R')
+    source('~/Documents/software/R/packages/rfun/R/funclass.R')
+    source('~/Documents/software/R/packages/rfun/R/funlib.R')
+    source('~/Documents/software/R/packages/rfun/R/funlib2.R')
+    source('~/Documents/software/R/packages/rfun/R/builders.R')
+    source('~/Documents/software/R/packages/rfun/R/solvers.R')
+    source('~/Documents/software/R/packages/rutils/R/gener.R')
+    source('~/Documents/software/R/packages/rml/R/mltools.R')
 
     ofun          <- metric$copy()
     ofun$inputs$y <- y
@@ -1230,7 +1230,7 @@ add_classifier = function(input = list(fetlog = NULL, modlog = data.frame(), mod
       if(nt > 0){
         base$transformers[[nt + 1]] <- modlist[[modname]]$copy()
       } else {
-        base$transformers[[1]] <- new('MAP.MALER.IDT', name = 'I', features.include = base$config$features.include)
+        base$transformers[[1]] <- new('MAP.RML.IDT', name = 'I', features.include = base$config$features.include)
         base$transformers[[2]] <- modlist[[modname]]$copy()
         base$config$features.include <- NULL
       }

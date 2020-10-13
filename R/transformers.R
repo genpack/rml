@@ -149,14 +149,14 @@ BIN.SMBINNING.OB = setRefClass('BIN.SMBINNING.OB', contains = "MODEL",
 )
 
 # previously NORMALIZER
-#' @export MAP.MALER.MMS
-MAP.MALER.MMS = setRefClass('MAP.MALER.MMS', contains = 'MODEL',
+#' @export MAP.RML.MMS
+MAP.RML.MMS = setRefClass('MAP.RML.MMS', contains = 'MODEL',
   methods = list(
     initialize = function(...){
       callSuper(...)
       type             <<- 'Mapper'
       description      <<- 'MinMax Scaler'
-      package          <<- 'maler'
+      package          <<- 'rml'
       package_language <<- 'R'
       config$suffix    <<- verify(config$suffix, 'character', default = 'NRM')
       if(is.empty(name)){name <<- 'MMS' %>% paste0(sample(10000:99999, 1))}
@@ -176,13 +176,13 @@ MAP.MALER.MMS = setRefClass('MAP.MALER.MMS', contains = 'MODEL',
   ))
 
 # previously SCALER
-#' @export MAP.MALER.ZFS
-MAP.MALER.ZFS = setRefClass('MAP.MALER.ZFS', contains = "MODEL", methods = list(
+#' @export MAP.RML.ZFS
+MAP.RML.ZFS = setRefClass('MAP.RML.ZFS', contains = "MODEL", methods = list(
   initialize = function(...){
     callSuper(...)
     type             <<- 'Mapper'
     description      <<- 'ZFactor Standard Scaler'
-    package          <<- 'maler'
+    package          <<- 'rml'
     package_language <<- 'R'
 
     config$suffix    <<- verify(config$suffix, 'character', default = 'SCALED')
@@ -202,13 +202,13 @@ MAP.MALER.ZFS = setRefClass('MAP.MALER.ZFS', contains = "MODEL", methods = list(
   }
 ))
 
-#' @export BIN.MALER.OBB
-BIN.MALER.OBB = setRefClass('BIN.MALER.OBB', contains = "MODEL", methods = list(
+#' @export BIN.RML.OBB
+BIN.RML.OBB = setRefClass('BIN.RML.OBB', contains = "MODEL", methods = list(
   initialize = function(...){
     callSuper(...)
     type             <<- 'Binner'
     description      <<- 'Optimal Binary Binner'
-    package          <<- 'maler'
+    package          <<- 'rml'
     package_language <<- 'R'
 
     # refer to help page for package smbinning (?smbinning::smbinning)
@@ -257,7 +257,7 @@ ENC.CATEGORY_ENCODERS.HLMRT = setRefClass(
 
         module = reticulate::import('category_encoders')
         objects$model <<- do.call(module$helmert$HelmertEncoder,
-                                  config %>% list.remove(maler_words) %>% list.add(cols = objects$features$fname))
+                                  config %>% list.remove(rml_words) %>% list.add(cols = objects$features$fname))
         objects$model$fit(X, y)
       }
     },
@@ -287,7 +287,7 @@ MAP.SCIKIT.QT = setRefClass(
         X = X[objects$features$fname]
 
         module = reticulate::import('sklearn.preprocessing')
-        objects$model <<- do.call(module$QuantileTransformer, config %>% list.remove(maler_words))
+        objects$model <<- do.call(module$QuantileTransformer, config %>% list.remove(rml_words))
         objects$model$fit(X, y)
       }
     },
@@ -318,7 +318,7 @@ BIN.SCIKIT.KMC = setRefClass(
         X = X[objects$features$fname]
 
         module = reticulate::import('sklearn.cluster')
-        objects$model <<- do.call(module$k_means, config %>% list.remove(maler_words))
+        objects$model <<- do.call(module$k_means, config %>% list.remove(rml_words))
         objects$model$fit(X, y)
       }
     },
@@ -348,7 +348,7 @@ FET.SCIKIT.MFG = setRefClass(
         X = X[objects$features$fname]
 
         module = reticulate::import('sklearn.preprocessing')
-        objects$model <<- do.call(PolynomialFeatures, config %>% list.remove(maler_words))
+        objects$model <<- do.call(PolynomialFeatures, config %>% list.remove(rml_words))
         objects$model$fit(X, y)
       }
     },
@@ -378,7 +378,7 @@ MAP.SCIKIT.NRM = setRefClass(
         X = X[objects$features$fname]
 
         module = reticulate::import('sklearn.preprocessing')
-        objects$model <<- do.call(module$Normalizer, config %>% list.remove(maler_words))
+        objects$model <<- do.call(module$Normalizer, config %>% list.remove(rml_words))
         objects$model$fit(X, y)
       }
     },
@@ -415,7 +415,7 @@ ENC.SCIKIT.OHE = setRefClass(
         module = reticulate::import('sklearn.preprocessing')
         warnif(is.empty(objects$features), 'Either no categorical columns found or all categorical columns have too many distict values!', wrn_src = name)
 
-        objects$model <<- do.call(module$OneHotEncoder, config %>% list.remove(maler_words))
+        objects$model <<- do.call(module$OneHotEncoder, config %>% list.remove(rml_words))
         objects$model$fit(X, y)
       }
     },
@@ -444,7 +444,7 @@ MAP.SCIKIT.ZFS = setRefClass(
         X = X[objects$features$fname]
 
         module = reticulate::import('sklearn.preprocessing')
-        objects$model <<- do.call(module$StandardScaler, config %>% list.remove(maler_words))
+        objects$model <<- do.call(module$StandardScaler, config %>% list.remove(rml_words))
         objects$model$fit(X, y)
       }
     },
@@ -473,7 +473,7 @@ MAP.SCIKIT.MMS = setRefClass(
         X = X[objects$features$fname]
 
         module = reticulate::import('sklearn.preprocessing')
-        objects$model <<- do.call(module$MinMaxScaler, config %>% list.remove(maler_words))
+        objects$model <<- do.call(module$MinMaxScaler, config %>% list.remove(rml_words))
         objects$model$fit(X, y)
       }
     },
@@ -505,7 +505,7 @@ ENC.CATEGORY_ENCODERS.CATB = setRefClass(
 
         module = reticulate::import('category_encoders')
         objects$model <<- do.call(module$cat_boost$CatBoostEncoder,
-                                  config %>% list.remove(maler_words) %>% list.add(cols = objects$features$fname))
+                                  config %>% list.remove(rml_words) %>% list.add(cols = objects$features$fname))
         objects$model$fit(X, y)
       }
     },
@@ -536,7 +536,7 @@ ENC.CATEGORY_ENCODERS.JSTN = setRefClass(
 
         module = reticulate::import('category_encoders')
         objects$model <<- do.call(module$james_stein$JamesSteinEncoder,
-                                  config %>% list.remove(maler_words) %>% list.add(cols = objects$features$fname))
+                                  config %>% list.remove(rml_words) %>% list.add(cols = objects$features$fname))
         objects$model$fit(X, y)
       }
     },
@@ -546,14 +546,14 @@ ENC.CATEGORY_ENCODERS.JSTN = setRefClass(
     }
   ))
 
-ENC.MALER.FE = setRefClass(
-  'ENC.MALER.FE', contains = 'MODEL',
+ENC.RML.FE = setRefClass(
+  'ENC.RML.FE', contains = 'MODEL',
   methods = list(
     initialize = function(...){
       callSuper(...)
       type             <<- 'Encoder'
       description      <<- 'Feature Encoder'
-      package          <<- 'maler'
+      package          <<- 'rml'
       package_language <<- 'R'
 
       config$aggregator <<- verify(config$aggregator, 'character', default = 'mean')
@@ -603,14 +603,14 @@ ENC.MALER.FE = setRefClass(
 )
 
 # Replaces categorical features with class ratios associated with each category
-#' @export ENC.MALER.TE
-ENC.MALER.TE = setRefClass('ENC.MALER.TE', contains = 'MODEL',
+#' @export ENC.RML.TE
+ENC.RML.TE = setRefClass('ENC.RML.TE', contains = 'MODEL',
    methods = list(
      initialize = function(...){
        callSuper(...)
        type             <<- 'Encoder'
        description      <<- 'Target Encoder'
-       package          <<- 'maler'
+       package          <<- 'rml'
        package_language <<- 'R'
 
        if(is.empty(name)){name <<- 'TE' %>% paste0(sample(10000:99999, 1))}
@@ -640,14 +640,14 @@ ENC.MALER.TE = setRefClass('ENC.MALER.TE', contains = 'MODEL',
 )
 
 # Todo: does not save joblib for Python segment models
-#' @export ENC.MALER.ME
-ENC.MALER.ME = setRefClass('ENC.MALER.ME', contains = 'MODEL',
+#' @export ENC.RML.ME
+ENC.RML.ME = setRefClass('ENC.RML.ME', contains = 'MODEL',
   methods = list(
     initialize = function(...){
       callSuper(...)
       type             <<- 'Encoder'
       description      <<- 'Model Encoder'
-      package          <<- 'maler'
+      package          <<- 'rml'
       package_language <<- 'R'
 
       config$model_class  <<- verify(config$model_class, 'character', default = 'CLS.SCIKIT.XGB')
@@ -710,9 +710,9 @@ ENC.MALER.ME = setRefClass('ENC.MALER.ME', contains = 'MODEL',
 
 # previously: SEGMENTER.MODEL.BOOSTER
 # Model Encoder Booster
-ENC.MALER.MEB =
-  setRefClass('ENC.MALER.MEB',
-              contains = 'ENC.MALER.ME',
+ENC.RML.MEB =
+  setRefClass('ENC.RML.MEB',
+              contains = 'ENC.RML.ME',
 
               methods = list(
                           model.fit = function(X, y){
@@ -745,12 +745,12 @@ ENC.MALER.MEB =
                         )
 )
 
-FNT.MALER.INV = setRefClass('FNT.MALER.INV', contains = 'MODEL', methods = list(
+FNT.RML.INV = setRefClass('FNT.RML.INV', contains = 'MODEL', methods = list(
   initialize = function(...){
     callSuper(...)
     type             <<- 'Function Transformer'
     description      <<- 'Geometric'
-    package          <<- 'maler'
+    package          <<- 'rml'
     package_language <<- 'R'
 
     if(is.empty(name)){name <<- 'INV' %>% paste0(sample(10000:99999, 1))}
@@ -776,12 +776,12 @@ FNT.MALER.INV = setRefClass('FNT.MALER.INV', contains = 'MODEL', methods = list(
 ))
 
 # previously : MULTIPLIER.BINARY
-FET.MALER.D2MUL = setRefClass('FET.MALER.D2MUL', contains = 'MODEL', methods = list(
+FET.RML.D2MUL = setRefClass('FET.RML.D2MUL', contains = 'MODEL', methods = list(
   initialize = function(...){
     callSuper(...)
     type             <<- 'Feature Generator'
     description      <<- 'Degree 2 Multiplier'
-    package          <<- 'maler'
+    package          <<- 'rml'
     package_language <<- 'R'
     if(is.empty(name)){name <<- 'D2MUL' %>% paste0(sample(10000:99999, 1))}
   },
@@ -805,12 +805,12 @@ FET.MALER.D2MUL = setRefClass('FET.MALER.D2MUL', contains = 'MODEL', methods = l
 ))
 
 # previously : MULTIPLIER.BINARY.COMP
-FET.MALER.D2MULC = setRefClass('FET.MALER.D2MULC', contains = 'FET.MALER.D2MUL', methods = list(
+FET.RML.D2MULC = setRefClass('FET.RML.D2MULC', contains = 'FET.RML.D2MUL', methods = list(
   initialize = function(...){
     callSuper(...)
     type             <<- 'Feature Generator'
     description      <<- 'Degree 2 Multiplier Components'
-    package          <<- 'maler'
+    package          <<- 'rml'
     package_language <<- 'R'
 
     if(is.empty(name)){name <<- 'D2MC' %>% paste0(sample(10000:99999, 1))}
@@ -832,12 +832,12 @@ FET.MALER.D2MULC = setRefClass('FET.MALER.D2MULC', contains = 'FET.MALER.D2MUL',
   }
 ))
 
-FNT.MALER.POLY = setRefClass('FNT.MALER.POLY', contains = 'MODEL', methods = list(
+FNT.RML.POLY = setRefClass('FNT.RML.POLY', contains = 'MODEL', methods = list(
   initialize = function(...){
     callSuper(...)
     type             <<- 'Function Transformer'
     description      <<- 'Polynomial'
-    package          <<- 'maler'
+    package          <<- 'rml'
     package_language <<- 'R'
     if(is.empty(name)){name <<- 'PLY' %>% paste0(sample(10000:99999, 1))}
 
@@ -878,7 +878,7 @@ CATCONCATER = setRefClass('CATCONCATER', contains = "MODEL",
        callSuper(...)
        type             <<- 'Feature Generator'
        description      <<- 'Categorical Features Concater'
-       package          <<- 'maler'
+       package          <<- 'rml'
        package_language <<- 'R'
        if(is.empty(name)){name <<- 'CATCON' %>% paste0(sample(10000:99999, 1))}
      },
@@ -894,12 +894,12 @@ CATCONCATER = setRefClass('CATCONCATER', contains = "MODEL",
 )
 
 
-FNT.MALER.LOG = setRefClass('FNT.MALER.LOG', contains = "MODEL", methods = list(
+FNT.RML.LOG = setRefClass('FNT.RML.LOG', contains = "MODEL", methods = list(
   initialize = function(...){
     callSuper(...)
     type             <<- 'Function Transformer'
     description      <<- 'Logarythm'
-    package          <<- 'maler'
+    package          <<- 'rml'
     package_language <<- 'R'
     if(is.empty(name)){name <<- 'LOG' %>% paste0(sample(10000:99999, 1))}
     config$apply_abs <<- verify(config$apply_abs, c('logical'), default = T)
@@ -917,12 +917,12 @@ FNT.MALER.LOG = setRefClass('FNT.MALER.LOG', contains = "MODEL", methods = list(
   }
 ))
 
-FNT.MALER.LOGIT = setRefClass('FNT.MALER.LOGIT', contains = "MODEL", methods = list(
+FNT.RML.LOGIT = setRefClass('FNT.RML.LOGIT', contains = "MODEL", methods = list(
   initialize = function(...){
     callSuper(...)
     type             <<- 'Function Transformer'
     description      <<- 'Logit'
-    package          <<- 'maler'
+    package          <<- 'rml'
     package_language <<- 'R'
     if(is.empty(name)){name <<- 'LGT' %>% paste0(sample(10000:99999, 1))}
     config$apply_mms <<- verify(config$apply_mms, c('logical'), default = T)
@@ -994,13 +994,13 @@ ENC.FASTDUMMIES.OHE = setRefClass('ENC.FASTDUMMIES.OHE', contains = "MODEL",
 
 
 # Previously GENETIC.BOOSTER.GEOMETRIC
-#' @export FET.MALER.MGB
-FET.MALER.MGB = setRefClass('FET.MALER.MGB', contains = 'MODEL',
+#' @export FET.RML.MGB
+FET.RML.MGB = setRefClass('FET.RML.MGB', contains = 'MODEL',
     methods = list(
       initialize = function(...){
         type             <<- 'Feature Generator'
         description      <<- 'Multiplicative Genetic Booster'
-        package          <<- 'maler'
+        package          <<- 'rml'
         package_language <<- 'R'
         if(is.empty(name)){name <<- 'MGB' %>% paste0(sample(10000:99999, 1))}
 
@@ -1118,12 +1118,12 @@ FET.MALER.MGB = setRefClass('FET.MALER.MGB', contains = 'MODEL',
 
 # previously GENETIC.BOOSTER.LOGICAL
 #' @export GENETIC.BOOSTER.LOGICAL
-FET.MALER.LGB = setRefClass('FET.MALER.LGB', contains = 'MODEL', methods = list(
+FET.RML.LGB = setRefClass('FET.RML.LGB', contains = 'MODEL', methods = list(
   initialize = function(...){
     callSuper(...)
     type             <<- 'Feature Generator'
     description      <<- 'Logical Genetic Booster'
-    package          <<- 'maler'
+    package          <<- 'rml'
     package_language <<- 'R'
 
     if(is.empty(name)){name <<- 'GBL' %>% paste0(sample(10000:99999, 1))}
@@ -1162,15 +1162,15 @@ FET.MALER.LGB = setRefClass('FET.MALER.LGB', contains = 'MODEL', methods = list(
   }
 ))
 
-# previously ENS.MALER.BS
-#' @export ENS.MALER.BS
-ENS.MALER.BS = setRefClass('ENS.MALER.BS', contains = "MODEL",
+# previously ENS.RML.BS
+#' @export ENS.RML.BS
+ENS.RML.BS = setRefClass('ENS.RML.BS', contains = "MODEL",
   methods = list(
     initialize = function(...){
       callSuper(...)
       type             <<- 'Ensembler'
       description      <<- 'Binary Supervisor Ensembler'
-      package          <<- 'maler'
+      package          <<- 'rml'
       package_language <<- 'R'
 
       if(is.empty(name)){name <<- 'BSUP' %>% paste0(sample(10000:99999, 1))}
@@ -1197,14 +1197,14 @@ ENS.MALER.BS = setRefClass('ENS.MALER.BS', contains = "MODEL",
   )
 )
 
-#' @export ENS.MALER.AGGR
-ENS.MALER.AGGR = setRefClass('ENS.MALER.AGGR', contains = "CLASSIFIER",
+#' @export ENS.RML.AGGR
+ENS.RML.AGGR = setRefClass('ENS.RML.AGGR', contains = "CLASSIFIER",
    methods = list(
      initialize = function(...){
        callSuper(...)
        type             <<- 'Ensembler'
        description      <<- 'Aggregator Ensembler'
-       package          <<- 'maler'
+       package          <<- 'rml'
        package_language <<- 'R'
 
        if(is.empty(name)){name <<- 'AGGR' %>% paste0(sample(10000:99999, 1))}
@@ -1233,7 +1233,7 @@ BIN.KMEANS.KMC = setRefClass('BIN.KMEANS.KMC', contains = 'MODEL', methods = lis
     callSuper(...)
     type             <<- 'Binner'
     description      <<- 'KMeans Clustering'
-    package          <<- 'maler'
+    package          <<- 'rml'
     package_language <<- 'R'
     type     <<- ' from package kmeans'
     if(is.empty(name)){name <<- 'KMC' %>% paste0(sample(10000:99999, 1))}
@@ -1317,12 +1317,12 @@ MAP.PYLMNN.LMNN = setRefClass('MAP.PYLMNN.LMNN', contains = "MODEL", methods = l
 ))
 
 # previously GROUPER
-BIN.MALER.GROUPER = setRefClass('BIN.MALER.GROUPER', contains = "MODEL", methods = list(
+BIN.RML.GROUPER = setRefClass('BIN.RML.GROUPER', contains = "MODEL", methods = list(
   initialize = function(...){
     callSuper(...)
     type             <<- 'Binner'
     description      <<- 'Categorical Feature Grouper'
-    package          <<- 'maler'
+    package          <<- 'rml'
     package_language <<- 'R'
     if(is.empty(name)){name <<- 'GRP' %>% paste0(sample(10000:99999, 1))}
     config$encoding <<- verify(config$encoding, 'character', domain =c('target_ratio', 'flasso'), default = 'target_ratio')
@@ -1342,12 +1342,12 @@ BIN.MALER.GROUPER = setRefClass('BIN.MALER.GROUPER', contains = "MODEL", methods
 ))
 
 
-FET.MALER.SFS = setRefClass('FET.MALER.SFS', contains = 'MODEL', methods = list(
+FET.RML.SFS = setRefClass('FET.RML.SFS', contains = 'MODEL', methods = list(
   initialize = function(...){
     callSuper(...)
     type             <<- 'Feature Generator'
     description      <<- 'Stepwise Feature Selector'
-    package          <<- 'maler'
+    package          <<- 'rml'
     package_language <<- 'R'
     if(is.empty(name)){name <<- 'SFS' %>% paste0(sample(10000:99999, 1))}
     config$model_class      <<- verify(config$model_class, 'character', default = 'CLS.SCIKIT.XGB')
@@ -1414,13 +1414,13 @@ FET.MALER.SFS = setRefClass('FET.MALER.SFS', contains = 'MODEL', methods = list(
 
 
 # previously: IDENTITY
-MAP.MALER.IDT = setRefClass('MAP.MALER.IDT' , contains = "MODEL",
+MAP.RML.IDT = setRefClass('MAP.RML.IDT' , contains = "MODEL",
   methods = list(
     initialize = function(...){
       callSuper(...)
       type             <<- 'Mapper'
       description      <<- 'Identity'
-      package          <<- 'maler'
+      package          <<- 'rml'
       package_language <<- 'R'
       if(is.empty(name)){name <<-'IDT' %>% paste0(sample(10000:99999, 1))}
     },

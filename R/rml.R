@@ -1,5 +1,5 @@
 # Header
-# Filename:       maler.R
+# Filename:       rml.R
 # Description:    A toolbox for R programmers for machine learning and prediction
 # Version History:
 # 1.0.0 (05 August 2013)    - Initial Issue
@@ -11,7 +11,7 @@
 #' @author Nicholas Berta
 #'
 #' @docType package
-#' @name maler
+#' @name rml
 
 # If you changed default_templates, run this before committing:
 # default_templates %>% yaml::write_yaml('data/default_templates.yaml')

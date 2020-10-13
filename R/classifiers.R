@@ -147,7 +147,7 @@ CLS.HDPENREG.FLASSO = setRefClass('CLS.FLASSO', contains = 'CLASSIFIER', methods
   model.fit = function(X, y){
     objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
     X = X[objects$features$fname]
-    objects$model <<- do.call(HDPenReg::EMfusedlasso, list(X = X %>% as.matrix, y = y) %<==>% (config %>% list.remove(maler_words)))
+    objects$model <<- do.call(HDPenReg::EMfusedlasso, list(X = X %>% as.matrix, y = y) %<==>% (config %>% list.remove(rml_words)))
     objects$features$importance <<- objects$model$coefficient
   },
 
@@ -197,7 +197,7 @@ CLS.SCIKIT.LR = setRefClass('CLS.SCIKIT.LR', contains = "CLS.SCIKIT",
         description             <<- 'Logistic Regression'
         if(is.empty(name)){name <<- 'SKLR' %>% paste0(sample(10000:99999, 1))}
         module_lm = reticulate::import('sklearn.linear_model')
-        objects$model <<- do.call(module_lm$LogisticRegression, config %>% list.remove(maler_words))
+        objects$model <<- do.call(module_lm$LogisticRegression, config %>% list.remove(rml_words))
       },
 
       model.fit = function(X, y){
@@ -226,7 +226,7 @@ CLS.SCIKIT.DT = setRefClass('CLS.SCIKIT.DT', contains = "CLS.SCIKIT",
       description <<- 'Decision Tree'
       if(is.empty(name)){name <<- 'SKDT' %>% paste0(sample(10000:99999, 1))}
       module_dt = reticulate::import('sklearn.tree')
-      objects$model <<- do.call(module_dt$DecisionTreeClassifier, config %>% list.remove(maler_words))
+      objects$model <<- do.call(module_dt$DecisionTreeClassifier, config %>% list.remove(rml_words))
     }
   )
 )
@@ -240,7 +240,7 @@ CLS.SCIKIT.XGB = setRefClass('CLS.SCIKIT.XGB', contains = "CLS.SCIKIT",
         if(is.empty(name)){name <<- 'SKXGB' %>% paste0(sample(10000:99999, 1))}
         if(!is.null(config$n_jobs)){config$n_jobs <<- as.integer(config$n_jobs)}
         module_xgb = reticulate::import('xgboost')
-        objects$model     <<- do.call(module_xgb$XGBClassifier, config %>% list.remove(maler_words))
+        objects$model     <<- do.call(module_xgb$XGBClassifier, config %>% list.remove(rml_words))
 
       },
 
@@ -443,7 +443,7 @@ CLS.SPARKLYR.GBT = setRefClass('CLS.SPARKLYR.GBT', contains = 'CLASSIFIER', meth
       X_TBL    = sparklyr::sdf_copy_to(sc = config$connection, x = cbind(X, label = y), name = 'X_TBL', memory = T, repartition = 10)
       features = colnames(X)
       formula  = paste0('label ~ ', paste(features, collapse = ' + ')) %>% as.formula
-      objects$model <<- do.call(sparklyr::ml_gbt_classifier, list(X = X_TBL, formula = formula) %<==>% (config %>% list.remove(maler_words)))
+      objects$model <<- do.call(sparklyr::ml_gbt_classifier, list(X = X_TBL, formula = formula) %<==>% (config %>% list.remove(rml_words)))
       imp = try(objects$model$model$feature_importances() %>% as.numeric, silent = T)
       if(inherits(imp, 'numeric')) objects$features$importance <<- imp
   },
@@ -511,7 +511,7 @@ CLS.SCIKIT.MNB = setRefClass('CLS.SCIKIT.MNB', contains = 'CLS.SCIKIT', methods 
         objects$features <<- objects$features %>% filter(fclass == 'integer')
         X = X[objects$features$fname]
         if(ncol(X) == 0){stop('No integer columns left!')}
-        objects$model <<- do.call(module_mnb$MultinomialNB, config %>% list.remove(maler_words))
+        objects$model <<- do.call(module_mnb$MultinomialNB, config %>% list.remove(rml_words))
         objects$model$fit(X %>% data.matrix, y)
     }
   )
@@ -625,7 +625,7 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
     }
 
     objects$model <<- xgb.train(
-      params    = config %>% list.remove(c(maler_words, reserved_words)),
+      params    = config %>% list.remove(c(rml_words, reserved_words)),
       data      = dtrain,
       nrounds   = config$nrounds,
       nthread   = config$nthread,
