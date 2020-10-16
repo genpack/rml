@@ -74,6 +74,7 @@ MODEL = setRefClass('MODEL',
       if(is.null(settings$fe.importance_threshold)){settings$fe.importance_threshold = 0}
       if(is.null(settings$pp.remove_invariant_features)){settings$pp.remove_invariant_features = T}
       if(is.null(settings$pp.remove_nominal_features)){settings$pp.remove_nominal_features = T}
+      if(is.null(settings$pp.remove_numeric_features)){settings$pp.remove_numeric_features = F}
       if(is.null(settings$pp.coerce_integer_features)){settings$pp.coerce_integer_features = F}
       if(is.null(settings$eda.enabled)){settings$eda.enabled = F}
       if(is.null(settings$ts.enabled)){settings$ts.enabled = F}
