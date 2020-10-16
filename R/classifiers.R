@@ -1,3 +1,4 @@
+#' @include transformers.R
 
 #' @export
 CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
@@ -68,45 +69,23 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
   )
 )
 
-#' @export CLS.SCIKIT
-CLS.SCIKIT = setRefClass('CLS.SCIKIT', contains = "CLASSIFIER",
+#' @export CLS.SKLEARN
+CLS.SKLEARN = setRefClass('CLS.SKLEARN', contains = c("CLASSIFIER", "TRM.SKLEARN"),
    methods = list(
      initialize = function(...){
        callSuper(...)
-       if(!require(reticulate)) stop("Package 'reticulate' is not installed!")
-       if(!is.null(config$python_address)){
-         use_python(config$python_address)
-       }
-       package <<- 'sklearn'
-       package_language <<- 'python'
-     },
-
-     model.save = function(path = getwd()){
-       callSuper(path)
-       joblib = reticulate::import('joblib')
-       joblib$dump(objects$model, paste0(path, '/', name, '.joblib'))
-     },
-
-     model.load = function(path = getwd()){
-       callSuper(path)
-       fn   = paste0(path, '/', name, '.joblib')
-       pass = file.exists(fn)
-       warnif(!pass, paste0('File ', fn , ' does not exist!'))
-       if(pass){
-         joblib = reticulate::import('joblib')
-         objects$model <<- joblib$load(fn)
-       }
+       type <<- 'Classifier'
      },
 
      model.predict = function(X){
        objects$model$predict_proba(X %>% data.matrix)[,2, drop = F] %>% as.data.frame
      },
 
-     model.fit = function(X, y){
-       objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
-       X = X[objects$features$fname]
-       objects$model$fit(X %>% data.matrix, y)
-     },
+     # model.fit = function(X, y){
+     #   objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+     #   X = X[objects$features$fname]
+     #   objects$model$fit(X %>% data.matrix, y)
+     # },
 
      get.feature.weights = function(){
        if(fitted){
@@ -116,16 +95,17 @@ CLS.SCIKIT = setRefClass('CLS.SCIKIT', contains = "CLASSIFIER",
    )
 )
 
-#' @export CLS.SCIKIT.KNN
-CLS.SCIKIT.KNN = setRefClass('CLS.SCIKIT.KNN', contains = "CLS.SCIKIT",
+#' @export CLS.SKLEARN.KNN
+CLS.SKLEARN.KNN = setRefClass('CLS.SKLEARN.KNN', contains = "CLS.SKLEARN",
   methods = list(
     initialize = function(...){
       callSuper(...)
       description <<- 'K-Nearest Neighbors'
 
-      config$num_neighbors <<- verify(config$num_neighbors, c('numeric', 'integer'), default = 100) %>% as.integer
-      module_knn = reticulate::import('sklearn.neighbors')
-      objects$model <<- module_knn$KNeighborsClassifier(n_neighbors = config$num_neighbors)
+      config$model.module <<- 'neighbors'
+      config$model.class  <<- KNeighborsClassifier
+      
+      # config$num_neighbors <<- verify(config$num_neighbors, c('numeric', 'integer'), default = 100) %>% as.integer
     }
   )
 )
@@ -186,15 +166,14 @@ CLS.MLR = setRefClass('CLS.MLR', contains = "CLASSIFIER",
     )
 )
 
-# A simple logistic regression classifier from scikit python package:
+# A simple logistic regression classifier from SKLEARN python package:
 # It extracts only numeric features, does no dummification for categorical columns.
-#' @export SCIKIT.LR
-CLS.SCIKIT.LR = setRefClass('CLS.SCIKIT.LR', contains = "CLS.SCIKIT",
+#' @export CLS.SKLEARN.LR
+CLS.SKLEARN.LR = setRefClass('CLS.SKLEARN.LR', contains = "CLS.SKLEARN",
     methods = list(
       initialize = function(...){
         callSuper(...)
-        config$sig_level <<- verify(config$sig_level, 'numeric', domain = c(0,1), default = 0.1)
-        description             <<- 'Logistic Regression'
+        description <<- 'Logistic Regression'
         if(is.empty(name)){name <<- 'SKLR' %>% paste0(sample(10000:99999, 1))}
         module_lm = reticulate::import('sklearn.linear_model')
         objects$model <<- do.call(module_lm$LogisticRegression, config %>% list.remove(rml_words))
@@ -216,31 +195,43 @@ CLS.SCIKIT.LR = setRefClass('CLS.SCIKIT.LR', contains = "CLS.SCIKIT",
    )
 )
 
-# A simple logistic regression classifier from scikit python package:
+# A simple logistic regression classifier from SKLEARN python package:
 # It extracts only numeric features, does no dummification for categorical columns.
-#' @export CLS.SCIKIT.DT
-CLS.SCIKIT.DT = setRefClass('CLS.SCIKIT.DT', contains = "CLS.SCIKIT",
+#' @export CLS.SKLEARN.DT
+CLS.SKLEARN.DT = setRefClass('CLS.SKLEARN.DT', contains = "CLS.SKLEARN",
   methods = list(
     initialize = function(...){
+      config$model.module <<- 'tree'
+      config$model.class  <<- 'DecisionTreeClassifier'
       callSuper(...)
       description <<- 'Decision Tree'
       if(is.empty(name)){name <<- 'SKDT' %>% paste0(sample(10000:99999, 1))}
-      module_dt = reticulate::import('sklearn.tree')
-      objects$model <<- do.call(module_dt$DecisionTreeClassifier, config %>% list.remove(rml_words))
     }
   )
 )
 
-#' @export CLS.SCIKIT.XGB
-CLS.SCIKIT.XGB = setRefClass('CLS.SCIKIT.XGB', contains = "CLS.SCIKIT",
+#' @export CLS.SKLEARN.XGB
+CLS.SKLEARN.XGB = setRefClass('CLS.SKLEARN.XGB', contains = "CLASSIFIER",
     methods = list(
       initialize = function(...){
+        config$model.module <<- 'xgboost'
+        config$model.class  <<- 'XGBClassifier'
+        
+        if(!require(reticulate)) stop("Package 'reticulate' is not installed!")
+        if(!is.null(config$python_address)){
+          use_python(config$python_address)
+        }
+
+        type             <<- 'Classifier'
+        description      <<- 'Extreme Gradient Boosting'
+        package          <<- 'sklearn'
+        package_language <<- 'Python'
+        
         callSuper(...)
-        description <<- 'Extreme Gradient Boosting'
         if(is.empty(name)){name <<- 'SKXGB' %>% paste0(sample(10000:99999, 1))}
         if(!is.null(config$n_jobs)){config$n_jobs <<- as.integer(config$n_jobs)}
         module_xgb = reticulate::import('xgboost')
-        objects$model     <<- do.call(module_xgb$XGBClassifier, config %>% list.remove(rml_words))
+        objects$model <<- do.call(module_xgb$XGBClassifier, config %>% list.remove(rml_words))
 
       },
 
@@ -250,6 +241,10 @@ CLS.SCIKIT.XGB = setRefClass('CLS.SCIKIT.XGB', contains = "CLS.SCIKIT",
           if(inherits(imp, 'numeric')) objects$features$importance <<- imp
       },
 
+      model.predict = function(X){
+        objects$model$predict_proba(X %>% data.matrix)[,2, drop = F] %>% as.data.frame
+      },
+      
       get.function = function(...){
         assert(fitted, 'Model not fitted!')
         xseq = paste0('x', sequence(nrow(objects$features)))
@@ -276,19 +271,19 @@ CLS.SCIKIT.XGB = setRefClass('CLS.SCIKIT.XGB', contains = "CLS.SCIKIT",
     )
 )
 
-#' @export CLS.SCIKIT.SVM
-CLS.SCIKIT.SVM = setRefClass('CLS.SCIKIT.SVM', contains = "CLS.SCIKIT",
-                         methods = list(
-                           initialize = function(...){
-                             callSuper(...)
-                             description <<- 'Support Vector Machine'
-                             if(is.empty(name)){name <<- 'SKSVM' %>% paste0(sample(10000:99999, 1))}
-                             module_svm = reticulate::import('sklearn.svm')
-                             objects$model <<- module_svm$SVC(gamma = 'scale', probability = T)
-                           }
-                         )
+#' @export CLS.SKLEARN.SVM
+CLS.SKLEARN.SVM = setRefClass('CLS.SKLEARN.SVM', contains = "CLS.SKLEARN",
+   methods = list(
+     initialize = function(...){
+       config$model.module <<- 'svm'
+       config$model.class  <<- 'SVC'
+       callSuper(...)
+       description <<- 'Support Vector Machine'
+       
+       if(is.empty(name)){name <<- 'SKSVM' %>% paste0(sample(10000:99999, 1))}
+     }
+   )
 )
-
 
 #' @export CLS.KERAS.DNN
 CLS.KERAS.DNN = setRefClass('CLS.KERAS.DNN', contains = 'CLASSIFIER',
@@ -419,7 +414,6 @@ CLS.KERAS.DNN = setRefClass('CLS.KERAS.DNN', contains = 'CLASSIFIER',
         objects$model <<- keras::load_model_hdf5(filepath = fn)
       }
     }
-
 ))
 
 #' @export CLS.SPARKLYR.GBT
@@ -499,20 +493,22 @@ CLS.RPART.DT = setRefClass('CLS.RPART.DT', contains = 'MODEL', methods = list(
   ))
 
 # Multinominal Naive Bayes Classifier:
-CLS.SCIKIT.MNB = setRefClass('CLS.SCIKIT.MNB', contains = 'CLS.SCIKIT', methods = list(
+CLS.SKLEARN.MNB = setRefClass('CLS.SKLEARN.MNB', contains = 'CLS.SKLEARN', methods = list(
     initialize = function(...){
+      config$model.module <<- 'naive_bayes'
+      config$model.class  <<- MultinomialNB
       callSuper(...)
       description <<- 'Multinominal Naive Bayes'
-      if(is.empty(name)){name <<- 'MNB' %>% paste0(sample(10000:99999, 1))}
-      module_mnb = reticulate::import('sklearn.naive_bayes')
+      
+      if(is.empty(name)){name <<- 'SKMNB' %>% paste0(sample(10000:99999, 1))}
     },
 
     model.fit = function(X, y){
         objects$features <<- objects$features %>% filter(fclass == 'integer')
         X = X[objects$features$fname]
         if(ncol(X) == 0){stop('No integer columns left!')}
-        objects$model <<- do.call(module_mnb$MultinomialNB, config %>% list.remove(rml_words))
-        objects$model$fit(X %>% data.matrix, y)
+        
+        callSuper(X, y)
     }
   )
 )
@@ -567,7 +563,7 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
     if(is.empty(name)){name <<- 'XGB' %>% paste0(sample(10000:99999, 1))}
     assert(require(xgboost), "Package 'xgboost' needs to be installed!")
 
-    # parameter 'nrounds' is equivalent to 'n_estimators' in CLS.SCIKIT.XGB
+    # parameter 'nrounds' is equivalent to 'n_estimators' in CLS.SKLEARN.XGB
     config$nrounds       <<- verify(config$nrounds       , c('numeric', 'integer'), lengths = 1, domain = c(0,Inf), default = 100)
     config$nthread       <<- verify(config$nthread       , c('numeric', 'integer'), lengths = 1, domain = c(0,1024), default = 1)
     config$show_progress <<- verify(config$show_progress , 'logical',               lengths = 1, domain = c(T, F) , default = F)

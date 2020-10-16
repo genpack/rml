@@ -1,12 +1,12 @@
-CLS.SCIKIT.XGB:
-  class: CLS.SCIKIT.XGB
+CLS.SKLEARN.XGB:
+  class: CLS.SKLEARN.XGB
   transformers:
   - classes:
-    - CLS.SCIKIT.XGB
+    - CLS.SKLEARN.XGB
     - CLS.XGBOOST
     probability: 0.02
   - classes:
-    - CLS.SCIKIT.LR
+    - CLS.SKLEARN.LR
     - CLS.KERAS.DNN
     probability: 0.05
   - classes: ENC.RML.FE
@@ -181,11 +181,11 @@ CLS.XGBOOST:
   class: CLS.XGBOOST
   transformers:
   - classes:
-    - CLS.SCIKIT.XGB
+    - CLS.SKLEARN.XGB
     - CLS.XGBOOST
     probability: 0.02
   - classes:
-    - CLS.SCIKIT.LR
+    - CLS.SKLEARN.LR
     - CLS.KERAS.DNN
     probability: 0.05
   - classes: ENC.RML.FE
@@ -364,19 +364,19 @@ CLS.XGBOOST:
   max_train:
     fun: rgeom
     prob: 1.0e-05
-CLS.SCIKIT.LR:
-  class: CLS.SCIKIT.LR
+CLS.SKLEARN.LR:
+  class: CLS.SKLEARN.LR
   pass:
     type:
     - numeric
     - ordinal
   transformers:
   - classes:
-    - CLS.SCIKIT.XGB
+    - CLS.SKLEARN.XGB
     - CLS.XGBOOST
     probability: 0.5
   - classes:
-    - CLS.SCIKIT.LR
+    - CLS.SKLEARN.LR
     - CLS.KERAS.DNN
     probability: 0.01
   - classes: ENC.RML.FE
@@ -412,7 +412,7 @@ CLS.SCIKIT.LR:
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
-    - ENC.SCIKIT.OHE
+    - ENC.SKLEARN.OHE
     probability: 0.6
   - classes:
     - MAP.PYLMNN.LMNN
@@ -456,11 +456,11 @@ CLS.KERAS.DNN:
   - no
   transformers:
   - classes:
-    - CLS.SCIKIT.XGB
+    - CLS.SKLEARN.XGB
     - CLS.XGBOOST
     probability: 0.5
   - classes:
-    - CLS.SCIKIT.LR
+    - CLS.SKLEARN.LR
     - CLS.KERAS.DNN
     probability: 0.01
   - classes: ENC.RML.FE
@@ -496,7 +496,7 @@ CLS.KERAS.DNN:
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
-    - ENC.SCIKIT.OHE
+    - ENC.SKLEARN.OHE
     probability: 0.6
   - classes:
     - MAP.PYLMNN.LMNN
@@ -2681,8 +2681,8 @@ MAP.RML.ZFS:
     fun: runif
     min: 0.01
     max: 0.2
-MAP.SCIKIT.ZFS:
-  class: MAP.SCIKIT.ZFS
+MAP.SKLEARN.ZFS:
+  class: MAP.SKLEARN.ZFS
   pass:
     type:
     - numeric
@@ -2696,8 +2696,8 @@ MAP.SCIKIT.ZFS:
     fun: runif
     min: 0.01
     max: 0.2
-MAP.SCIKIT.MMS:
-  class: MAP.SCIKIT.MMS
+MAP.SKLEARN.MMS:
+  class: MAP.SKLEARN.MMS
   pass:
     type:
     - numeric
@@ -2711,8 +2711,8 @@ MAP.SCIKIT.MMS:
     fun: runif
     min: 0.01
     max: 0.2
-MAP.SCIKIT.NRM:
-  class: MAP.SCIKIT.NRM
+MAP.SKLEARN.NRM:
+  class: MAP.SKLEARN.NRM
   pass:
     type:
     - numeric
@@ -2867,8 +2867,8 @@ ENC.FASTDUMMIES.OHE:
     fun: runif
     min: 0.01
     max: 0.2
-ENC.SCIKIT.OHE:
-  class: ENC.SCIKIT.OHE
+ENC.SKLEARN.OHE:
+  class: ENC.SKLEARN.OHE
   pass:
     type: nominal
     n_unique:
@@ -2912,11 +2912,11 @@ ENC.RML.FE:
     - BIN.RML.GROUPER
     probability: 0.3
   - classes:
-    - CLS.SCIKIT.XGB
+    - CLS.SKLEARN.XGB
     - CLS.XGBOOST
     probability: 0.5
   - classes:
-    - CLS.SCIKIT.LR
+    - CLS.SKLEARN.LR
     - CLS.KERAS.DNN
     probability: 0.01
   - classes: ENC.RML.FE
@@ -2952,7 +2952,7 @@ ENC.RML.FE:
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
-    - ENC.SCIKIT.OHE
+    - ENC.SKLEARN.OHE
     probability: 0.6
   - classes:
     - MAP.PYLMNN.LMNN
@@ -2992,11 +2992,11 @@ ENC.RML.TE:
     - BIN.RML.GROUPER
     probability: 0.3
   - classes:
-    - CLS.SCIKIT.XGB
+    - CLS.SKLEARN.XGB
     - CLS.XGBOOST
     probability: 0.5
   - classes:
-    - CLS.SCIKIT.LR
+    - CLS.SKLEARN.LR
     - CLS.KERAS.DNN
     probability: 0.01
   - classes: ENC.RML.FE
@@ -3032,7 +3032,7 @@ ENC.RML.TE:
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
-    - ENC.SCIKIT.OHE
+    - ENC.SKLEARN.OHE
     probability: 0.6
   - classes:
     - MAP.PYLMNN.LMNN
@@ -3072,11 +3072,11 @@ ENC.RML.ME:
     - BIN.RML.GROUPER
     probability: 0.3
   - classes:
-    - CLS.SCIKIT.XGB
+    - CLS.SKLEARN.XGB
     - CLS.XGBOOST
     probability: 0.5
   - classes:
-    - CLS.SCIKIT.LR
+    - CLS.SKLEARN.LR
     - CLS.KERAS.DNN
     probability: 0.01
   - classes: ENC.RML.FE
@@ -3112,7 +3112,7 @@ ENC.RML.ME:
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
-    - ENC.SCIKIT.OHE
+    - ENC.SKLEARN.OHE
     probability: 0.6
   - classes:
     - MAP.PYLMNN.LMNN
@@ -3152,11 +3152,11 @@ ENC.RML.MEB:
     - BIN.RML.GROUPER
     probability: 0.3
   - classes:
-    - CLS.SCIKIT.XGB
+    - CLS.SKLEARN.XGB
     - CLS.XGBOOST
     probability: 0.5
   - classes:
-    - CLS.SCIKIT.LR
+    - CLS.SKLEARN.LR
     - CLS.KERAS.DNN
     probability: 0.01
   - classes: ENC.RML.FE
@@ -3192,7 +3192,7 @@ ENC.RML.MEB:
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
-    - ENC.SCIKIT.OHE
+    - ENC.SKLEARN.OHE
     probability: 0.6
   - classes:
     - MAP.PYLMNN.LMNN
@@ -3222,11 +3222,11 @@ BIN.RML.OBB:
   - .inf
   transformers:
   - classes:
-    - CLS.SCIKIT.XGB
+    - CLS.SKLEARN.XGB
     - CLS.XGBOOST
     probability: 0.5
   - classes:
-    - CLS.SCIKIT.LR
+    - CLS.SKLEARN.LR
     - CLS.KERAS.DNN
     probability: 0.01
   - classes: ENC.RML.FE
@@ -3262,7 +3262,7 @@ BIN.RML.OBB:
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
-    - ENC.SCIKIT.OHE
+    - ENC.SKLEARN.OHE
     probability: 0.6
   - classes:
     - MAP.PYLMNN.LMNN
@@ -3295,11 +3295,11 @@ BIN.RML.GROUPER:
   - 2
   transformers:
   - classes:
-    - CLS.SCIKIT.XGB
+    - CLS.SKLEARN.XGB
     - CLS.XGBOOST
     probability: 0.5
   - classes:
-    - CLS.SCIKIT.LR
+    - CLS.SKLEARN.LR
     - CLS.KERAS.DNN
     probability: 0.01
   - classes: ENC.RML.FE
@@ -3335,7 +3335,7 @@ BIN.RML.GROUPER:
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
-    - ENC.SCIKIT.OHE
+    - ENC.SKLEARN.OHE
     probability: 0.6
   - classes:
     - MAP.PYLMNN.LMNN
@@ -3365,11 +3365,11 @@ BIN.SMBINNING.OB:
   - .inf
   transformers:
   - classes:
-    - CLS.SCIKIT.XGB
+    - CLS.SKLEARN.XGB
     - CLS.XGBOOST
     probability: 0.5
   - classes:
-    - CLS.SCIKIT.LR
+    - CLS.SKLEARN.LR
     - CLS.KERAS.DNN
     probability: 0.01
   - classes: ENC.RML.FE
@@ -3405,7 +3405,7 @@ BIN.SMBINNING.OB:
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
-    - ENC.SCIKIT.OHE
+    - ENC.SKLEARN.OHE
     probability: 0.6
   - classes:
     - MAP.PYLMNN.LMNN
@@ -3436,8 +3436,8 @@ BIN.SMBINNING.OB:
     fun: runif
     min: 0.01
     max: 0.2
-BIN.SCIKIT.KMC:
-  class: BIN.SCIKIT.KMC
+BIN.SKLEARN.KMC:
+  class: BIN.SKLEARN.KMC
   type:
   - numeric
   - ordinal
@@ -3446,11 +3446,11 @@ BIN.SCIKIT.KMC:
   - .inf
   transformers:
   - classes:
-    - CLS.SCIKIT.XGB
+    - CLS.SKLEARN.XGB
     - CLS.XGBOOST
     probability: 0.5
   - classes:
-    - CLS.SCIKIT.LR
+    - CLS.SKLEARN.LR
     - CLS.KERAS.DNN
     probability: 0.01
   - classes: ENC.RML.FE
@@ -3486,7 +3486,7 @@ BIN.SCIKIT.KMC:
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
-    - ENC.SCIKIT.OHE
+    - ENC.SKLEARN.OHE
     probability: 0.6
   - classes:
     - MAP.PYLMNN.LMNN
@@ -3541,11 +3541,11 @@ BIN.KMEANS.KMC:
   - .inf
   transformers:
   - classes:
-    - CLS.SCIKIT.XGB
+    - CLS.SKLEARN.XGB
     - CLS.XGBOOST
     probability: 0.5
   - classes:
-    - CLS.SCIKIT.LR
+    - CLS.SKLEARN.LR
     - CLS.KERAS.DNN
     probability: 0.01
   - classes: ENC.RML.FE
@@ -3581,7 +3581,7 @@ BIN.KMEANS.KMC:
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
-    - ENC.SCIKIT.OHE
+    - ENC.SKLEARN.OHE
     probability: 0.6
   - classes:
     - MAP.PYLMNN.LMNN
@@ -3655,8 +3655,8 @@ FET.RML.D2MUL:
     fun: runif
     min: 0.01
     max: 0.2
-FET.SCIKIT.MFG:
-  class: FET.SCIKIT.MFG
+FET.SKLEARN.MFG:
+  class: FET.SKLEARN.MFG
   feature_sample_ratio:
     fun: runif
     min: 0.01
@@ -3672,11 +3672,11 @@ FET.RML.MGB:
     - .inf
   transformers:
   - classes:
-    - CLS.SCIKIT.XGB
+    - CLS.SKLEARN.XGB
     - CLS.XGBOOST
     probability: 0.5
   - classes:
-    - CLS.SCIKIT.LR
+    - CLS.SKLEARN.LR
     - CLS.KERAS.DNN
     probability: 0.01
   - classes: ENC.RML.FE
@@ -3712,7 +3712,7 @@ FET.RML.MGB:
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
-    - ENC.SCIKIT.OHE
+    - ENC.SKLEARN.OHE
     probability: 0.6
   - classes:
     - MAP.PYLMNN.LMNN
@@ -4458,7 +4458,7 @@ FET.RML.LGB:
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
     - ENC.FASTDUMMIES.OHE
-    - ENC.SCIKIT.OHE
+    - ENC.SKLEARN.OHE
     probability: 0.5
   epochs:
   - 5

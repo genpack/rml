@@ -5,14 +5,18 @@
 # 2- Add upsampling and downsampling modules
 
 library(magrittr)
-rml_words = c('keep_columns', 'keep_features', 'max_train', 'max_domain', 'action_by_original',
-                'cv.ntrain', 'cv.ntest', 'cv.test_ratio','cv.train_ratio', 'cv.split_method', 'cv.performance_metric', 'cv.reset_transformer', 'cv.restore_model', 'cv.set',
-                'sfs.enabled', 'fe.enabled','fe.recursive', 'fe.importance_threshold', 'fe.quantile',
-                'pp.remove_invariant_features', 'eda.enabled', 'return_features', 'feature_subset_size',
-                'sig_level', 'gradient_transformers_aggregator', 'save_predictions',
-                'decision_threshold', 'threshold_determination', 'metric', 'return', 'transformers', 'fitted',
-                'segmentation_features', 'features.include', 'features.include.at', 'features.exclude', 'features.exclude.at',
-                'ts.enabled', 'ts.id_col', 'ts.time_col')
+rml_words = c('keep_columns', 'keep_features', 
+              'max_train', 'max_domain', 
+              'cv.ntrain', 'cv.ntest', 'cv.test_ratio','cv.train_ratio', 'cv.split_method', 'cv.performance_metric', 'cv.reset_transformer', 'cv.restore_model', 'cv.set',
+              'sfs.enabled', 
+              'fe.enabled','fe.recursive', 'fe.importance_threshold', 'fe.quantile',
+              'pp.remove_invariant_features', 'pp.remove_nominal_features', 'pp.remove_numeric_features', 'pp.coerce_integer_features',
+              'model.class', 'model.config', 'model.module',
+              'eda.enabled', 
+              'features.include', 'features.include.at', 'features.exclude', 'features.exclude.at',
+              'ts.enabled', 'ts.id_col', 'ts.time_col', 
+              'segmentation_features', 'action_by_original', 'return_features', 'feature_subset_size', 'sig_level', 'gradient_transformers_aggregator', 'save_predictions',
+              'decision_threshold', 'threshold_determination', 'metric', 'return', 'transformers', 'fitted')
 
 #' Abstract Model Class
 
@@ -68,14 +72,16 @@ MODEL = setRefClass('MODEL',
       if(is.null(settings$fe.enabled)){settings$fe.enabled = F}
       if(is.null(settings$fe.recursive)){settings$fe.recursive = F}
       if(is.null(settings$fe.importance_threshold)){settings$fe.importance_threshold = 0}
-      if(is.null(settings$save_predictions)){settings$save_predictions = F}
       if(is.null(settings$pp.remove_invariant_features)){settings$pp.remove_invariant_features = T}
+      if(is.null(settings$pp.remove_nominal_features)){settings$pp.remove_nominal_features = T}
+      if(is.null(settings$pp.coerce_integer_features)){settings$pp.coerce_integer_features = F}
       if(is.null(settings$eda.enabled)){settings$eda.enabled = F}
-      if(is.null(settings$gradient_transformers_aggregator)){settings$gradient_transformers_aggregator = mean}
       if(is.null(settings$ts.enabled)){settings$ts.enabled = F}
       if(is.null(settings$ts.id_col)){settings$ts.id_col = 'caseID'}
       if(is.null(settings$ts.time_col)){settings$ts.time_col = 'time'}
-
+      if(is.null(settings$gradient_transformers_aggregator)){settings$gradient_transformers_aggregator = mean}
+      if(is.null(settings$save_predictions)){settings$save_predictions = F}
+      
       config       <<- settings
       fitted       <<- FALSE
       transformers <<- transformers %>% {if(inherits(.,'list')) . else list(.)}
@@ -252,6 +258,10 @@ MODEL = setRefClass('MODEL',
 
         assert(ncol(X) > 0, 'No column found in the training dataset!')
 
+        if(config$pp.coerce_integer_features){
+          X %<>% int_ordinals
+        }
+        
         if(inherits(X, 'WIDETABLE')){
           objects$features <<- X$meta %>% distinct(column, .keep_all = T) %>% select(fname = column, fclass = class, n_unique = n_unique)
         } else {
@@ -275,9 +285,19 @@ MODEL = setRefClass('MODEL',
           objects$features <<- objects$features %>% filter(n_unique > 1)
           X = X[objects$features$fname]
         }
-        # todo: Add other preprocessing: pp.treat_outliers (remove, trim, adapted trim, ...), pp.int_ordinals, ...
+        
+        # todo: Add other preprocessing: pp.treat_outliers (remove, trim, adapted trim, ...), ...
         # remove outliers can be considered as a transformer as well
-
+        if(config$pp.remove_nominal_features){
+          objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer', 'float', 'float64'))
+          X = X[objects$features$fname]
+        }
+        
+        if(config$pp.remove_numeric_features){
+          objects$features <<- objects$features %>% filter(!fclass %in% c('numeric', 'float', 'float64'))
+          X = X[objects$features$fname]
+        }
+        
         if(is.empty(objects$features)){fit.distribution(X, y)}
         else if(config$fe.enabled) {fit.fe(X, y)} else {.self$model.fit(X, y)}
         # if(config$quad.enabled) {fit.quad(X, y)}

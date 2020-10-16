@@ -163,7 +163,7 @@ genBinFeatBoost.fit = function(X, y, target = 0.9, epochs = 10, max_fail = 2, cy
 
 #
 #
-# xgb = SCIKIT.XGB()
+# xgb = SKLEARN.XGB()
 # dm  = DUMMIFIER()
 # ob  = OPTBINNER()
 
@@ -331,7 +331,7 @@ createFeatures.supervisor = function(flist, nf, prefix = 'Feat'){
       name = prefix %>% paste(nrow(flist) + sequence(nf)),
       father = features %>% sample(nf, replace = T),
       mother = features %>% sample(nf, replace = T),
-      m_type = 'CLS.SCIKIT.XGB',
+      m_type = 'CLS.SKLEARN.XGB',
       correlation = NA,
       safety = 0, stringsAsFactors = F) %>% column2Rownames('name'))
 }
@@ -339,9 +339,9 @@ createFeatures.supervisor = function(flist, nf, prefix = 'Feat'){
 
 ########### GREEDY GENETIC ####################
 default_greedy_templates = list(
-  xgb1 = list(class = 'CLS.SCIKIT.XGB', weight = 0.20, n_num = c(30:60, 40:80), n_cat = c(0:10, 5:15),    n_jobs = as.integer(7), return_logit = c(T, T, F)),
-  lr1  = list(class = 'CLS.SCIKIT.LR' , weight = 0.20, n_num = c(20:60)       , n_cat = c(0:10),           penalty = 'l1', return_logit = c(T, T, T, F), transformers = "MAP.RML.MMS()"),
-  svm1 = list(class = 'CLS.SCIKIT.SVM', weight = 0.05, n_num = c(5:20)        , n_cat = c(0:10)))
+  xgb1 = list(class = 'CLS.SKLEARN.XGB', weight = 0.20, n_num = c(30:60, 40:80), n_cat = c(0:10, 5:15),    n_jobs = as.integer(7), return_logit = c(T, T, F)),
+  lr1  = list(class = 'CLS.SKLEARN.LR' , weight = 0.20, n_num = c(20:60)       , n_cat = c(0:10),           penalty = 'l1', return_logit = c(T, T, T, F), transformers = "MAP.RML.MMS()"),
+  svm1 = list(class = 'CLS.SKLEARN.SVM', weight = 0.05, n_num = c(5:20)        , n_cat = c(0:10)))
 
 create_transformer = function(X, y, types = default_greedy_templates, name = NULL){
   colnames(X) %>% sapply(function(i) X[,i] %>% class) -> features
@@ -450,7 +450,7 @@ join_features = function(father, mother, X_train, y_train, X_val, y_val, benchma
 
 
 ########### EXPERT GENETIC ####################
-classifiers   =  c("CLS.SCIKIT.XGB", "CLS.SCIKIT.LR", "CLS.SCIKIT.SVM", "CLS.SCIKIT.KNN", "CLS.SCIKIT.DT")
+classifiers   =  c("CLS.SKLEARN.XGB", "CLS.SKLEARN.LR", "CLS.SKLEARN.SVM", "CLS.SKLEARN.KNN", "CLS.SKLEARN.DT")
 encoders      =  c("ENC.CATEGORY_ENCODERS.HLMRT", "ENCODER.CATBOOST", "ENCODER.JAMESSTEIN", "ENCODER.TARGET", "ENCODER.MODEL")
 binners       =  c('OPTBINNER', 'SMBINNING')
 
@@ -461,7 +461,7 @@ free_numerics = c('integer', 'numeric')
 bound_numerics = c("MAP.RML.MMS", "SCALER", classifiers, encoders, 'numeric')
 
 default_expert_templates = list(
-  cls.xgb.01 = list(class = 'CLS.SCIKIT.XGB', weight = 0.1, n_jobs = as.integer(7), return_logit = c(T, T, F), max_depth = 3:15, min_child_weight = 1:5, n_estimators = 50*(1:6), feature_transformer = 'MAP.RML.IDT'),
+  cls.xgb.01 = list(class = 'CLS.SKLEARN.XGB', weight = 0.1, n_jobs = as.integer(7), return_logit = c(T, T, F), max_depth = 3:15, min_child_weight = 1:5, n_estimators = 50*(1:6), feature_transformer = 'MAP.RML.IDT'),
   cls.xgb.02 = list(class = 'CLS.XGBOOST', weight = 0.1, n_jobs = as.integer(7), return_logit = c(T, T, F),
                     colsample_bytree = as.integer(1:10),
                     gamma = list(fun = runif, min = 1, max = 10),
@@ -471,10 +471,10 @@ default_expert_templates = list(
                     min_child_weight = 2:10,
                     scale_pos_weight = 2:10,
                     subsample = list(fun = runif, min = 0, max = 1)),
-  cls.lr.01  = list(class = 'CLS.SCIKIT.LR' , weight = 0.05, penalty = c(rep('l1',5), 'l2'), return_logit = c(T, T, T, F), pass = models_pass, feature_transformer = 'MAP.RML.MMS'),
-  cls.svm.01 = list(class = 'CLS.SCIKIT.SVM', weight = 0.05, pass = models_pass, max_train = 5000:10000, return_logit = c(T, T, F), feature_transformer = 'SCALER'),
-  cls.knn.01 = list(class = 'CLS.SCIKIT.KNN', weight = 0.05, pass = models_pass, max_train = 5000:10000, return_logit = c(T, T, F), feature_transformer = 'MAP.RML.MMS'),
-  cls.dt.01  = list(class = 'CLS.SCIKIT.DT', weight = 0.05, pass = models_pass, return_logit = c(T, T, F), feature_transformer = 'MAP.RML.IDT'),
+  cls.lr.01  = list(class = 'CLS.SKLEARN.LR' , weight = 0.05, penalty = c(rep('l1',5), 'l2'), return_logit = c(T, T, T, F), pass = models_pass, feature_transformer = 'MAP.RML.MMS'),
+  cls.svm.01 = list(class = 'CLS.SKLEARN.SVM', weight = 0.05, pass = models_pass, max_train = 5000:10000, return_logit = c(T, T, F), feature_transformer = 'SCALER'),
+  cls.knn.01 = list(class = 'CLS.SKLEARN.KNN', weight = 0.05, pass = models_pass, max_train = 5000:10000, return_logit = c(T, T, F), feature_transformer = 'MAP.RML.MMS'),
+  cls.dt.01  = list(class = 'CLS.SKLEARN.DT', weight = 0.05, pass = models_pass, return_logit = c(T, T, F), feature_transformer = 'MAP.RML.IDT'),
   cls.flasso.01 = list(class = 'CLS.FLASSO', weight = 0.05, pass = models_pass, lambda1 = 0.1*(0:50), lambda2 = 0.1*(0:50), return_logit = c(T, T, F), feature_transformer = 'MAP.RML.MMS'),
   cls.gbt.01 = list(class = 'CLS.SPARKLYR.GBT', weight = 0.05, pass = models_pass, return_logit = c(T, T, F),
        max_iter  = 20:50, max_depth = 2:20, subsampling_rate = 0.1*(1:10),
@@ -1204,7 +1204,7 @@ gb_supporting_classifiers = c('CLS.XGBOOST', 'CLS.KERAS.DNN')
 add_classifier = function(input = list(fetlog = NULL, modlog = data.frame(), modlist = list()),
                           templates = default_templates,
                           X_train, y_train, X_valid, y_valid,
-                          classifiers = c(CLS.SCIKIT.XGB = 1, CLS.XGBOOST = 1, CLS.SCIKIT.LR = 1),
+                          classifiers = c(CLS.SKLEARN.XGB = 1, CLS.XGBOOST = 1, CLS.SKLEARN.LR = 1),
                           boosting_rate = 0.5, gradient_boosting_rate = 0.5,
                           path = NULL, metrics = c('gini', 'lift', 'loss'), ...){
   modlog   = input$modlog

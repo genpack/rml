@@ -81,12 +81,13 @@ remove_outliers = function(X, sd_threshold = 3){
   X[Xs$keep,]
 }
 
+# todo: should work for WideTables as well
 #' @export
 int_ordinals = function(X){
-  X %<>% as.data.frame
+  if(inherits(X, 'matrix')) {X %<>% as.data.frame}
   nms = colnames(X)
   for (col in nms){
-    v = X %>% pull(col)
+    v = X[[col]]
     if(inherits(v, c('numeric', 'integer', 'integer64'))){
       if(sum(as.integer(v) != v, na.rm = T) == 0) X[,col] %<>%  as.integer
     }
@@ -166,7 +167,6 @@ ranker = function(X){
   return(X)
 }
 
-#' @export
 outliers.old = function(X, sd_threshold = 4){
   if(inherits(X, 'numeric')){X = matrix(X, ncol = 1)}
   out = integer()
@@ -973,7 +973,7 @@ extract_informative_features = function(X, y, subset_size = 200, cumulative_gain
     } else {
       fet   = remaining_features %>% sample(size = nfet)
     }
-    model = CLS.SCIKIT.XGB(n_jobs = as.integer(4))
+    model = CLS.SKLEARN.XGB(n_jobs = as.integer(4))
     model$fit(X[fet], y)
     fetlog = model$objects$features %>% arrange(desc(importance))
     fetlog$importance %>% sort(decreasing = T) %>% cumsum -> cumgain
