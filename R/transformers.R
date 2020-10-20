@@ -115,7 +115,7 @@ TRM.SKLEARN = setRefClass(
 
     model.fit = function(X, y){
       if(!fitted){
-        objects$model <<- do.call(objects$module[[config[['model.class']]]], args = config %>% list.remove(rml_words))
+        objects$model <<- do.call(objects$module[[config[['model.class']]]], args = config %>% list.remove(reserved_words))
         objects$model$fit(X, y)
       }
     },

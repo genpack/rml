@@ -186,7 +186,7 @@ BIN.SKLEARN.KMC = setRefClass(
         X = X[objects$features$fname]
         
         module = reticulate::import('sklearn.cluster')
-        objects$model <<- do.call(module$k_means, config %>% list.remove(rml_words))
+        objects$model <<- do.call(module$k_means, config %>% list.remove(reserved_words))
         objects$model$fit(X, y)
       }
     },

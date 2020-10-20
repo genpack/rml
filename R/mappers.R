@@ -215,7 +215,7 @@ MAP.SKLEARN.QT = setRefClass(
         X = X[objects$features$fname]
         
         module = reticulate::import('sklearn.preprocessing')
-        objects$model <<- do.call(module$QuantileTransformer, config %>% list.remove(rml_words))
+        objects$model <<- do.call(module$QuantileTransformer, config %>% list.remove(reserved_words))
         objects$model$fit(X, y)
       }
     },

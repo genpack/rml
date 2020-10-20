@@ -113,7 +113,7 @@ ENC.CATEGORY_ENCODERS = setRefClass(
       if(!fitted){
         module = reticulate::import('category_encoders')
         objects$model <<- do.call(objects$module[[config$model.class]],
-                                  config %>% list.remove(rml_words) %>% list.add(cols = objects$features$fname))
+                                  config %>% list.remove(reserved_words) %>% list.add(cols = objects$features$fname))
         objects$model$fit(X, y)
       }
     },

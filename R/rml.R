@@ -6,7 +6,8 @@
 # 0.1.0 (23 February 2014) - Second Issue
 # 0.1.2 (06 August 2014)   - Third Issue
 # 0.1.3 (13 October 2014)  - Forth Issue
-# 0.2.1 (15 October 2014)  - Fundamental Changes: transformers transferred to separate files. Super classes created for sklearn and category_encoders packages.
+# 0.2.2 (15 October 2014)  - Fundamental Changes: transformers transferred to separate files. Super classes created for sklearn and category_encoders packages.
+# 0.2.3 (21 October 2014)  - reserved_words added to class MODEL
 
 
 # Description for Roxygen

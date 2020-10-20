@@ -1,22 +1,10 @@
-# 25 Oct 2019 'fitted', 'features.include' and 'transformer' added to rml_words
+# 25 Oct 2019 'fitted', 'features.include' and 'transformer' added to reserved_words
 # Todos:
 # 1- Add imputer module to config to impute for missing values
 # look at Recipes: https://conf20-intro-ml.netlify.app/slides/06-recipes.html#2
 # 2- Add upsampling and downsampling modules
 
 library(magrittr)
-rml_words = c('keep_columns', 'keep_features', 
-              'max_train', 'max_domain', 
-              'cv.ntrain', 'cv.ntest', 'cv.test_ratio','cv.train_ratio', 'cv.split_method', 'cv.performance_metric', 'cv.reset_transformer', 'cv.restore_model', 'cv.set',
-              'sfs.enabled', 
-              'fe.enabled','fe.recursive', 'fe.importance_threshold', 'fe.quantile',
-              'pp.remove_invariant_features', 'pp.remove_nominal_features', 'pp.remove_numeric_features', 'pp.coerce_integer_features',
-              'model.class', 'model.config', 'model.module',
-              'eda.enabled', 
-              'features.include', 'features.include.at', 'features.exclude', 'features.exclude.at',
-              'ts.enabled', 'ts.id_col', 'ts.time_col', 
-              'segmentation_features', 'action_by_original', 'return_features', 'feature_subset_size', 'sig_level', 'gradient_transformers_aggregator', 'save_predictions',
-              'decision_threshold', 'threshold_determination', 'metric', 'return', 'transformers', 'fitted')
 
 #' Abstract Model Class
 
@@ -43,7 +31,7 @@ rml_words = c('keep_columns', 'keep_features',
 #' @export MODEL
 #' @exportClass MODEL
 MODEL = setRefClass('MODEL',
-  fields = list(name = "character", type = "character", package = "character", package_language = "character", description = "character",
+  fields = list(name = "character", type = "character", package = "character", package_language = "character", description = "character", reserved_words = "character",
                 config = "list", fitted = 'logical', transformers = 'list', gradient_transformers = 'list', yin_transformers = 'list', yout_transformers = 'list', objects = "list"),
 
   methods = list(
@@ -59,6 +47,19 @@ MODEL = setRefClass('MODEL',
         }
       }
 
+      reserved_words <<- c('keep_columns', 'keep_features', 
+                         'max_train', 'max_domain', 
+                         'cv.ntrain', 'cv.ntest', 'cv.test_ratio','cv.train_ratio', 'cv.split_method', 'cv.performance_metric', 'cv.reset_transformer', 'cv.restore_model', 'cv.set',
+                         'sfs.enabled', 
+                         'fe.enabled','fe.recursive', 'fe.importance_threshold', 'fe.quantile',
+                         'pp.remove_invariant_features', 'pp.remove_nominal_features', 'pp.remove_numeric_features', 'pp.coerce_integer_features',
+                         'model.class', 'model.config', 'model.module',
+                         'eda.enabled', 
+                         'features.include', 'features.include.at', 'features.exclude', 'features.exclude.at',
+                         'ts.enabled', 'ts.id_col', 'ts.time_col', 
+                         'segmentation_features', 'action_by_original', 'return_features', 'feature_subset_size', 'sig_level', 'gradient_transformers_aggregator', 'save_predictions',
+                         'metric', 'transformers', 'fitted')
+      
       if(is.null(settings$keep_columns)){settings$keep_columns = F}
       if(is.null(settings$keep_features)){settings$keep_features = F}
       if(is.null(settings$cv.ntest)){settings$cv.ntest <- 5}

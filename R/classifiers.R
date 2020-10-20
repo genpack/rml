@@ -12,6 +12,7 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
       config$threshold_determination <<- verify(config$threshold_determination, 'character', lengths = 1,
                                                 domain = c('set_as_config', 'maximum_f1', 'maximum_chi'), default = 'set_as_config')
       # todo: add 'target_precision', 'target_recall', 'ratio_quantile'
+      reserved_words <<- c(reserved_words, 'sig_level', 'return', 'decision_threshold', 'threshold_determination')
       if(is.null(config$metric)){
         config$metric <<- chif(config$return == 'class', 'f1', 'gini')
       }
@@ -70,27 +71,10 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
 )
 
 #' @export CLS.SKLEARN
-CLS.SKLEARN = setRefClass('CLS.SKLEARN', contains = c("CLASSIFIER", "TRM.SKLEARN"),
+CLS.SKLEARN = setRefClass('CLS.SKLEARN', contains = c('TRM.SKLEARN', "CLASSIFIER"),
    methods = list(
-     initialize = function(...){
-       callSuper(...)
-       type <<- 'Classifier'
-     },
-
      model.predict = function(X){
        objects$model$predict_proba(X %>% data.matrix)[,2, drop = F] %>% as.data.frame
-     },
-
-     # model.fit = function(X, y){
-     #   objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
-     #   X = X[objects$features$fname]
-     #   objects$model$fit(X %>% data.matrix, y)
-     # },
-
-     get.feature.weights = function(){
-       if(fitted){
-         return(objects$model$feature_importances_/sum(objects$model$feature_importances_))
-       }
      }
    )
 )
@@ -127,7 +111,7 @@ CLS.HDPENREG.FLASSO = setRefClass('CLS.FLASSO', contains = 'CLASSIFIER', methods
   model.fit = function(X, y){
     objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
     X = X[objects$features$fname]
-    objects$model <<- do.call(HDPenReg::EMfusedlasso, list(X = X %>% as.matrix, y = y) %<==>% (config %>% list.remove(rml_words)))
+    objects$model <<- do.call(HDPenReg::EMfusedlasso, list(X = X %>% as.matrix, y = y) %<==>% (config %>% list.remove(reserved_words)))
     objects$features$importance <<- objects$model$coefficient
   },
 
@@ -176,7 +160,7 @@ CLS.SKLEARN.LR = setRefClass('CLS.SKLEARN.LR', contains = "CLS.SKLEARN",
         description <<- 'Logistic Regression'
         if(is.empty(name)){name <<- 'SKLR' %>% paste0(sample(10000:99999, 1))}
         module_lm = reticulate::import('sklearn.linear_model')
-        objects$model <<- do.call(module_lm$LogisticRegression, config %>% list.remove(rml_words))
+        objects$model <<- do.call(module_lm$LogisticRegression, config %>% list.remove(reserved_words))
       },
 
       model.fit = function(X, y){
@@ -231,10 +215,27 @@ CLS.SKLEARN.XGB = setRefClass('CLS.SKLEARN.XGB', contains = "CLASSIFIER",
         if(is.empty(name)){name <<- 'SKXGB' %>% paste0(sample(10000:99999, 1))}
         if(!is.null(config$n_jobs)){config$n_jobs <<- as.integer(config$n_jobs)}
         module_xgb = reticulate::import('xgboost')
-        objects$model <<- do.call(module_xgb$XGBClassifier, config %>% list.remove(rml_words))
+        objects$model <<- do.call(module_xgb$XGBClassifier, config %>% list.remove(reserved_words))
 
       },
-
+      
+      model.save = function(path = getwd()){
+        callSuper(path)
+        joblib = reticulate::import('joblib')
+        joblib$dump(objects$model, paste0(path, '/', name, '.joblib'))
+      },
+      
+      model.load = function(path = getwd()){
+        callSuper(path)
+        fn   = paste0(path, '/', name, '.joblib')
+        pass = file.exists(fn)
+        warnif(!pass, paste0('File ', fn , ' does not exist!'))
+        if(pass){
+          joblib = reticulate::import('joblib')
+          objects$model <<- joblib$load(fn)
+        }
+      },
+      
       model.fit = function(X, y){
           objects$model$fit(X %>% data.matrix, y)
           imp = try(objects$model$feature_importances_ %>% as.numeric, silent = T)
@@ -437,7 +438,7 @@ CLS.SPARKLYR.GBT = setRefClass('CLS.SPARKLYR.GBT', contains = 'CLASSIFIER', meth
       X_TBL    = sparklyr::sdf_copy_to(sc = config$connection, x = cbind(X, label = y), name = 'X_TBL', memory = T, repartition = 10)
       features = colnames(X)
       formula  = paste0('label ~ ', paste(features, collapse = ' + ')) %>% as.formula
-      objects$model <<- do.call(sparklyr::ml_gbt_classifier, list(X = X_TBL, formula = formula) %<==>% (config %>% list.remove(rml_words)))
+      objects$model <<- do.call(sparklyr::ml_gbt_classifier, list(X = X_TBL, formula = formula) %<==>% (config %>% list.remove(reserved_words)))
       imp = try(objects$model$model$feature_importances() %>% as.numeric, silent = T)
       if(inherits(imp, 'numeric')) objects$features$importance <<- imp
   },
@@ -563,6 +564,9 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
     if(is.empty(name)){name <<- 'XGB' %>% paste0(sample(10000:99999, 1))}
     assert(require(xgboost), "Package 'xgboost' needs to be installed!")
 
+    reserved_words <<- c(reserved_words, 'nrounds', 'watchlist', 'obj', 'feval', 'verbose', 'print_every_n', 'early_stopping_rounds',
+                       'maximize', 'save_period', 'save_name', 'xgb_model', 'callbacks', 'nthread', 'show_progress')
+    
     # parameter 'nrounds' is equivalent to 'n_estimators' in CLS.SKLEARN.XGB
     config$nrounds       <<- verify(config$nrounds       , c('numeric', 'integer'), lengths = 1, domain = c(0,Inf), default = 100)
     config$nthread       <<- verify(config$nthread       , c('numeric', 'integer'), lengths = 1, domain = c(0,1024), default = 1)
@@ -574,8 +578,6 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
   },
 
   model.fit = function(X, y){
-    reserved_words = c('nrounds', 'watchlist', 'obj', 'feval', 'verbose', 'print_every_n', 'early_stopping_rounds',
-                       'maximize', 'save_period', 'save_name', 'xgb_model', 'callbacks', 'nthread', 'show_progress')
     X = X[objects$features$fname]
     if(ncol(X) == 0){stop('No columns in the input dataset!')}
 
@@ -621,7 +623,7 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
     }
 
     objects$model <<- xgb.train(
-      params    = config %>% list.remove(c(rml_words, reserved_words)),
+      params    = config %>% list.remove(reserved_words),
       data      = dtrain,
       nrounds   = config$nrounds,
       nthread   = config$nthread,
