@@ -48,7 +48,7 @@ MODEL = setRefClass('MODEL',
       }
 
       reserved_words <<- c('keep_columns', 'keep_features', 
-                         'max_train', 'max_domain', 
+                         'max_train',
                          'cv.ntrain', 'cv.ntest', 'cv.test_ratio','cv.train_ratio', 'cv.split_method', 'cv.performance_metric', 'cv.reset_transformer', 'cv.restore_model', 'cv.set',
                          'sfs.enabled', 
                          'fe.enabled','fe.recursive', 'fe.importance_threshold', 'fe.quantile',
@@ -57,7 +57,7 @@ MODEL = setRefClass('MODEL',
                          'eda.enabled', 
                          'features.include', 'features.include.at', 'features.exclude', 'features.exclude.at',
                          'ts.enabled', 'ts.id_col', 'ts.time_col', 
-                         'segmentation_features', 'action_by_original', 'return_features', 'feature_subset_size', 'sig_level', 'gradient_transformers_aggregator', 'save_predictions',
+                         'return_features', 'feature_subset_size', 'gradient_transformers_aggregator', 'save_predictions',
                          'metric', 'transformers', 'fitted')
       
       if(is.null(settings$keep_columns)){settings$keep_columns = F}

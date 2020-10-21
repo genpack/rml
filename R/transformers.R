@@ -90,9 +90,8 @@ TRM.SKLEARN = setRefClass(
       description      <<- 'Superclass Wrapper for sklearn modules'
       package          <<- 'sklearn'
       package_language <<- 'Python'
-      if(is.empty(name)){name <<- 'SKTRM' %>% paste0(sample(10000:99999, 1))}
-      
-      config$model.module <<- verify(config$model.module, 'character', domain = c('preprocessing'), lengths = 1, null_allowed = FALSE)
+
+      config$model.module <<- verify(config$model.module, 'character', lengths = 1, null_allowed = F)
       objects$module <<- reticulate::import(paste('sklearn', config[['model.module']], sep = '.'))
     },
     

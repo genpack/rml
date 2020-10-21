@@ -8,6 +8,8 @@ ENC.FASTDUMMIES.OHE = setRefClass('ENC.FASTDUMMIES.OHE', contains = "MODEL",
       description      <<- 'One Hot Encoder'
       package          <<- 'fastDummies'
       package_language <<- 'R'
+      reserved_words   <<- c(reserved_words, 'max_domain')
+      
       if(is.empty(name)){name <<- 'DMFR' %>% paste0(sample(10000:99999, 1))}
       config$max_domain <<- verify(config$max_domain, c('numeric', 'integer'), default = 25) %>% as.integer
     },
@@ -56,13 +58,11 @@ ENC.SKLEARN.OHE = setRefClass(
   contains = 'TRM.SKLEARN',
   methods = list(
     initialize = function(...){
-      callSuper(...)
+      callSuper(model.module = 'preprocessing', model.class = 'OneHotEncoder', ...)
       type             <<- 'Encoder'
       description      <<- 'One-Hot Encoder'
-      package          <<- 'sklearn'
-      package_language <<- 'Python'
-      config$model.module     <<- 'preprocessing'
-      config$model.class      <<- 'OneHotEncoder'
+      reserved_words   <<- c(reserved_words, 'max_domain')
+      
       config$pp.remove_nominal_features <<- F
       config$pp.remove_numeric_features <<- T
       if(is.empty(name)){name <<- 'SKOHE' %>% paste0(sample(10000:99999, 1))}
@@ -189,6 +189,7 @@ ENC.RML.FE = setRefClass(
       description      <<- 'Feature Encoder'
       package          <<- 'rml'
       package_language <<- 'R'
+      reserved_words   <<- c(reserved_words, 'action_by_original')
       
       config$aggregator <<- verify(config$aggregator, 'character', default = 'mean')
       
@@ -283,6 +284,7 @@ ENC.RML.ME = setRefClass('ENC.RML.ME', contains = 'MODEL',
                              description      <<- 'Model Encoder'
                              package          <<- 'rml'
                              package_language <<- 'R'
+                             reserved_words   <<- c(reserved_words, 'segmentation_features')
                              
                              config$model.class  <<- verify(config$model.class, 'character', default = 'CLS.SKLEARN.XGB')
                              config$model.config <<- verify(config$model.config, 'list', default = list(predict_probabilities = T))

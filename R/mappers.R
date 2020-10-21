@@ -3,16 +3,12 @@ MAP.SKLEARN.NRM = setRefClass(
   'MAP.SKLEARN.NRM',
   contains = 'TRM.SKLEARN',
   methods = list(
-    initialize = function(...){
+    initialize = function(model.module = 'preprocessing', model.class = 'Normalizer', ...){
       callSuper(...)
       type             <<- 'Mapper'
       description      <<- 'Normalizer'
-      package          <<- 'sklearn'
-      package_language <<- 'Python'
-      config$model.module   <<- 'preprocessing'
-      config$model.class    <<- 'Normalizer'
-      
-      if(is.empty(name)){name <<- 'NRM' %>% paste0(sample(10000:99999, 1))}
+
+      if(is.empty(name)){name <<- 'SKNRM' %>% paste0(sample(10000:99999, 1))}
     }
 ))
 
@@ -22,34 +18,25 @@ MAP.SKLEARN.ZFS = setRefClass(
   'MAP.SKLEARN.ZFS',
   contains = 'MODEL',
   methods = list(
-    initialize = function(...){
+    initialize = function(model.module = 'preprocessing', model.class = 'StandardScaler', ...){
       callSuper(...)
       type             <<- 'Mapper'
       description      <<- 'Z-Factor Standard Scaler'
-      package          <<- 'sklearn'
-      package_language <<- 'Python'
-      config$model.module     <<- 'preprocessing'
-      config$model.class      <<- 'StandardScaler'
-      
-      if(is.empty(name)){name <<- 'ZFS' %>% paste0(sample(10000:99999, 1))}
+
+      if(is.empty(name)){name <<- 'SKZFS' %>% paste0(sample(10000:99999, 1))}
     }
 ))
-
 
 #' @export MAP.SKLEARN.MMS
 MAP.SKLEARN.MMS = setRefClass(
   'MAP.SKLEARN.MMS',
   contains = 'TRM.SKLEARN',
   methods = list(
-    initialize = function(...){
+    initialize = function(model.module = 'preprocessing', model.class = 'MinMaxScaler', ...){
       callSuper(...)
       type             <<- 'Mapper'
       description      <<- 'MinMax Scaler'
-      package          <<- 'sklearn'
-      package_language <<- 'Python'
-      config$model.module     <<- 'preprocessing'
-      config$model.class      <<- 'MinMaxScaler'
-      if(is.empty(name)){name <<- 'MMS' %>% paste0(sample(10000:99999, 1))}
+      if(is.empty(name)){name <<- 'SKMMS' %>% paste0(sample(10000:99999, 1))}
     }
 ))
 
@@ -83,7 +70,7 @@ MAP.STATS.PCA = setRefClass('MAP.STATS.PCA', contains = 'MODEL', methods = list(
   model.predict = function(X){
     XOUT = stats::predict(objects$model, X %>% as.matrix)
     XOUT = XOUT[,sequence(min(ncol(XOUT), config$num_components))] %>% as.data.frame
-    colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
+    # colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
     return(XOUT)
   }
 ))

@@ -83,12 +83,9 @@ CLS.SKLEARN = setRefClass('CLS.SKLEARN', contains = c('TRM.SKLEARN', "CLASSIFIER
 CLS.SKLEARN.KNN = setRefClass('CLS.SKLEARN.KNN', contains = "CLS.SKLEARN",
   methods = list(
     initialize = function(...){
-      callSuper(...)
+      callSuper(model.module = 'neighbors', model.class = 'KNeighborsClassifier', ...)
       description <<- 'K-Nearest Neighbors'
 
-      config$model.module <<- 'neighbors'
-      config$model.class  <<- KNeighborsClassifier
-      
       # config$num_neighbors <<- verify(config$num_neighbors, c('numeric', 'integer'), default = 100) %>% as.integer
     }
   )
@@ -156,11 +153,9 @@ CLS.MLR = setRefClass('CLS.MLR', contains = "CLASSIFIER",
 CLS.SKLEARN.LR = setRefClass('CLS.SKLEARN.LR', contains = "CLS.SKLEARN",
     methods = list(
       initialize = function(...){
-        callSuper(...)
+        callSuper(model.module = 'linear_model', model.class = 'LogisticRegression', ...)
         description <<- 'Logistic Regression'
         if(is.empty(name)){name <<- 'SKLR' %>% paste0(sample(10000:99999, 1))}
-        module_lm = reticulate::import('sklearn.linear_model')
-        objects$model <<- do.call(module_lm$LogisticRegression, config %>% list.remove(reserved_words))
       },
 
       model.fit = function(X, y){
@@ -169,7 +164,6 @@ CLS.SKLEARN.LR = setRefClass('CLS.SKLEARN.LR', contains = "CLS.SKLEARN",
           objects$model$coef_ %>% abs %>% as.numeric -> weights
           # objects$features$importance <<- (weights/(X %>% apply(2, sd))) %>% na2zero %>% {./geomean(.[.>0])} %>% as.numeric
           objects$features$importance <<- (weights/(X %>% apply(2, sd))) %>% na2zero %>% {./geomean(.[.>0])} %>% vect.normalise %>% as.numeric
-
       },
 
       get.function = function(...){
@@ -179,15 +173,12 @@ CLS.SKLEARN.LR = setRefClass('CLS.SKLEARN.LR', contains = "CLS.SKLEARN",
    )
 )
 
-# A simple logistic regression classifier from SKLEARN python package:
-# It extracts only numeric features, does no dummification for categorical columns.
+# A simple decision tree classifier from SKLEARN python package:
 #' @export CLS.SKLEARN.DT
 CLS.SKLEARN.DT = setRefClass('CLS.SKLEARN.DT', contains = "CLS.SKLEARN",
   methods = list(
     initialize = function(...){
-      config$model.module <<- 'tree'
-      config$model.class  <<- 'DecisionTreeClassifier'
-      callSuper(...)
+      callSuper(model.module = 'tree', model.class = 'DecisionTreeClassifier', ...)
       description <<- 'Decision Tree'
       if(is.empty(name)){name <<- 'SKDT' %>% paste0(sample(10000:99999, 1))}
     }
@@ -276,9 +267,7 @@ CLS.SKLEARN.XGB = setRefClass('CLS.SKLEARN.XGB', contains = "CLASSIFIER",
 CLS.SKLEARN.SVM = setRefClass('CLS.SKLEARN.SVM', contains = "CLS.SKLEARN",
    methods = list(
      initialize = function(...){
-       config$model.module <<- 'svm'
-       config$model.class  <<- 'SVC'
-       callSuper(...)
+       callSuper(model.module = 'svm', model.class = 'SVC', ...)
        description <<- 'Support Vector Machine'
        
        if(is.empty(name)){name <<- 'SKSVM' %>% paste0(sample(10000:99999, 1))}
@@ -496,9 +485,7 @@ CLS.RPART.DT = setRefClass('CLS.RPART.DT', contains = 'MODEL', methods = list(
 # Multinominal Naive Bayes Classifier:
 CLS.SKLEARN.MNB = setRefClass('CLS.SKLEARN.MNB', contains = 'CLS.SKLEARN', methods = list(
     initialize = function(...){
-      config$model.module <<- 'naive_bayes'
-      config$model.class  <<- MultinomialNB
-      callSuper(...)
+      callSuper(model.module = 'naive_bayes', model.class = 'MultinomialNB', ...)
       description <<- 'Multinominal Naive Bayes'
       
       if(is.empty(name)){name <<- 'SKMNB' %>% paste0(sample(10000:99999, 1))}

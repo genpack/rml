@@ -29,7 +29,6 @@ FNT.RML.INV = setRefClass('FNT.RML.INV', contains = 'MODEL', methods = list(
   
 ))
 
-
 FNT.RML.LOG = setRefClass('FNT.RML.LOG', contains = "MODEL", methods = list(
   initialize = function(...){
     callSuper(...)

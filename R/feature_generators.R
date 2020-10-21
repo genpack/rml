@@ -3,14 +3,10 @@ FET.SKLEARN.MFG = setRefClass(
   contains = 'TRM.SKLEARN',
   methods = list(
     initialize = function(...){
-      callSuper(...)
+      callSuper(model.module = 'preprocessing', model.class = 'PolynomialFeatures', ...)
       type             <<- 'Feature Generator'
       description      <<- 'Multiplicative Feature Generator'
-      package          <<- 'sklearn'
-      package_language <<- 'Python'
-      config$model.module     <<- 'preprocessing'
-      config$model.class      <<- 'PolynomialFeatures'
-      
+
       if(is.empty(name)){name <<- 'SKMFG' %>% paste0(sample(10000:99999, 1))}
     }
 ))

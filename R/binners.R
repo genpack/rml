@@ -165,34 +165,21 @@ BIN.RML.OBB = setRefClass('BIN.RML.OBB', contains = "MODEL", methods = list(
 ))
 
 
+#' @export BIN.SKLEARN.KMC
 BIN.SKLEARN.KMC = setRefClass(
   'BIN.SKLEARN.KMC',
-  contains = 'MODEL',
+  contains = 'TRM.SKLEARN',
   methods = list(
     initialize = function(...){
-      callSuper(...)
+      callSuper(model.module = 'cluster', model.class = 'k_means', ...)
       type             <<- 'Binner'
       description      <<- 'KMeans Clustering'
-      package          <<- 'sklearn'
-      package_language <<- 'Python'
+      
+      config[['pp.remove_nominal_features']] <<- T
+      config[['pp.remove_numeric_features']] <<- F
       
       if(is.empty(name)){name <<- 'KMC' %>% paste0(sample(10000:99999, 1))}
-      config$n_clusters <<- verify(config$n_clusters, c('integer', 'numeric'), lengths = 1, domain = c(1,1000), default = 3)
-    },
-    
-    model.fit = function(X, y){
-      if(!fitted){
-        objects$features <<- objects$features %>% filter(fname %in% c('numeric', 'integer'))
-        X = X[objects$features$fname]
-        
-        module = reticulate::import('sklearn.cluster')
-        objects$model <<- do.call(module$k_means, config %>% list.remove(reserved_words))
-        objects$model$fit(X, y)
-      }
-    },
-    
-    model.predict = function(X){
-      objects$model$transform(X)
+      config$n_clusters <<- verify(config$n_clusters, c('integer', 'numeric'), lengths = 1, domain = c(1,1000), default = 3) %>% as.integer
     }
-  ))
+))
 

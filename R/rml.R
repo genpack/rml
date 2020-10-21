@@ -8,6 +8,7 @@
 # 0.1.3 (13 October 2014)  - Forth Issue
 # 0.2.2 (15 October 2014)  - Fundamental Changes: transformers transferred to separate files. Super classes created for sklearn and category_encoders packages.
 # 0.2.3 (21 October 2014)  - reserved_words added to class MODEL
+# 0.2.4 (21 October 2014)  - All sklearn modules inherit from TRM.SKLEARN
 
 
 # Description for Roxygen
@@ -27,6 +28,8 @@
 # yaml::read_yaml('data/default_templates.yaml') -> default_templates
 # save(default_templates, file = 'data/default_templates.RData')
 
+#' @import magrittr
+#' 
 #' @include abstract.R
 #' @include mltools.R
 #' @include transformers.R
