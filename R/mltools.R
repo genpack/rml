@@ -913,36 +913,36 @@ model_features = function(model){
 #' @export
 model_update = function(model){
   
-  model_copy = new(class(model)[1], config = model$config)
+  mcopy = new(class(model)[1], config = model$config)
   
-  model_copy$name <- model$name
-  model_copy$type <- model$type
-  model_copy$package <- model$package 
-  model_copy$fitted  <- model$fitted
-  model_copy$description      <- model$description
-  model_copy$package_language <- model$package_language 
+  mcopy$name <- model$name
+  mcopy$type <- model$type
+  mcopy$package <- model$package 
+  mcopy$fitted  <- model$fitted
+  mcopy$description      <- model$description
+  mcopy$package_language <- model$package_language 
 
   for (i in sequence(length(model$objects))){
-    model_copy$objects[[i]] <- model$objects[[i]]
+    mcopy$objects[[i]] <- model$objects[[i]]
   }
   
   for (i in sequence(length(model$transformers))){
-    model_copy$transformers[[i]] <- model_update(model$transformers[[i]])
+    mcopy$transformers[[i]] <- model_update(model$transformers[[i]])
   }
   
   for (i in sequence(length(model$gradient_transformers))){
-    model_copy$gradient_transformers[[i]] <- model_update(model$gradient_transformers[[i]])
+    mcopy$gradient_transformers[[i]] <- model_update(model$gradient_transformers[[i]])
   }
   
   for (i in sequence(length(model$yin_transformers))){
-    model_copy$yin_transformers[[i]] <- model$yin_transformers[[i]]
+    mcopy$yin_transformers[[i]] <- model$yin_transformers[[i]]
   }
   
   for (i in sequence(length(model$yout_transformers))){
-    model_copy$yout_transformers[[i]] <- model$yout_transformers[[i]]
+    mcopy$yout_transformers[[i]] <- model$yout_transformers[[i]]
   }
   
-  return(model_copy)
+  return(mcopy)
 }
 
 #' Changes duplicated transformer names of a given model to ensure all transformers have distinct names 
