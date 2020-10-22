@@ -259,9 +259,7 @@ CLS.SKLEARN.XGB = setRefClass('CLS.SKLEARN.XGB', contains = "CLASSIFIER",
           out$name = paste('FN', name, sep = '_')
         }
         return(out)
-      },
-      
-      ghablame = function(x){ x + 1}
+      }
     )
 )
 

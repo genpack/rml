@@ -738,35 +738,6 @@ predict_map = function(X, maplist){
   return(X %>% pull(target))
 }
 
-model_update = function(model){
-  
-  model_copy = new(class(model)[1], config = model$config, name = model$name, type = model$type, description = model$description,
-                 package = model$package, package_language = model$package_language, 
-                 fitted = model$fitted)
-  
-  for (i in sequence(length(model$objects))){
-    model_copy$objects[[i]] <- model$objects[[i]]
-  }
-  
-  for (i in sequence(length(model$transformers))){
-    model_copy$transformers[[i]] <- model_update(model$transformers[[i]])
-  }
-  
-  for (i in sequence(length(model$gradient_transformers))){
-    model_copy$gradient_transformers[[i]] <- model_update(model$gradient_transformers[[i]])
-  }
-  
-  for (i in sequence(length(model$yin_transformers))){
-    model_copy$yin_transformers[[i]] <- model$yin_transformers[[i]]
-  }
-  
-  for (i in sequence(length(model$yout_transformers))){
-    model_copy$yout_transformers[[i]] <- model$yout_transformers[[i]]
-  }
-  
-  return(model_copy)
-}
-
 predict_glm_fit <- function(glmfit, newmatrix, addintercept=TRUE){
   newmatrix %<>% as.matrix
   if (addintercept)
@@ -884,7 +855,7 @@ sfs.regression <- function (D, tt_ratio = 0.7, yfun = function(x){x}, yfun.inv =
 }
 
 #' @export
-save_model = function(model, path = getwd()){
+model_save = function(model, path = getwd()){
   if(!file.exists(path)) {dir.create(path)}
   path %<>% paste(model$name, sep = '/')
   model$model.save(path)
@@ -892,7 +863,7 @@ save_model = function(model, path = getwd()){
 }
 
 #' @export
-load_model = function(model_name, path = getwd()){
+model_load = function(model_name, path = getwd()){
   path %<>% paste(model_name, sep = '/')
   assert(file.exists(path), paste0('No folder named as ', model_name, ' found in the given path!'))
   model = readRDS(path %>% paste0('/', model_name, '.rds'))
@@ -939,6 +910,71 @@ model_features = function(model){
   return(fet %>% unique)
 }
 
+#' @export
+model_update = function(model){
+  
+  model_copy = new(class(model)[1], config = model$config)
+  
+  model_copy$name <- model$name
+  model_copy$type <- model$type
+  model_copy$package <- model$package 
+  model_copy$fitted  <- model$fitted
+  model_copy$description      <- model$description
+  model_copy$package_language <- model$package_language 
+
+  for (i in sequence(length(model$objects))){
+    model_copy$objects[[i]] <- model$objects[[i]]
+  }
+  
+  for (i in sequence(length(model$transformers))){
+    model_copy$transformers[[i]] <- model_update(model$transformers[[i]])
+  }
+  
+  for (i in sequence(length(model$gradient_transformers))){
+    model_copy$gradient_transformers[[i]] <- model_update(model$gradient_transformers[[i]])
+  }
+  
+  for (i in sequence(length(model$yin_transformers))){
+    model_copy$yin_transformers[[i]] <- model$yin_transformers[[i]]
+  }
+  
+  for (i in sequence(length(model$yout_transformers))){
+    model_copy$yout_transformers[[i]] <- model$yout_transformers[[i]]
+  }
+  
+  return(model_copy)
+}
+
+#' Changes duplicated transformer names of a given model to ensure all transformers have distinct names 
+#' 
+#' @field model Any object inheriting from class \code{MODEL} 
+#' @return None
+#' @export 
+model_make_unique_transformer_names = function(model){
+  model$transformers %>% lapply(function(x) x$name) %>% unlist -> tnames
+  wdp = which(duplicated(tnames))
+  while(length(wdp) > 0){
+    for(i in wdp){
+      model$transformers[[i]]$name <- model$transformers[[i]]$name %>% paste(i, sep = '_')
+    }
+    model$transformers %>% lapply(function(x) x$name) %>% unlist -> tnames
+    wdp = which(duplicated(tnames))
+  }
+}
+
+#' Returns model type and types of its transformers recursively
+#' 
+#' @field model Any object inheriting from class \code{MODEL} 
+#' @return \code{character} vector containing model type and all its transformer types
+
+#' @export
+model_types = function(model){
+  mdlns = model$type
+  for(tr in model$transformers){
+    mdlns = c(mdlns, transformer_types(tr))
+  }
+  return(mdlns %>% unique)
+}
 
 # converts given categorical columns to integer
 # take to gener
@@ -1013,19 +1049,6 @@ extract_informative_features = function(X, y, subset_size = 200, cumulative_gain
   return(ifet)
 }
 
-#' Returns model type and types of its transformers recursively
-#' 
-#' @field model Any object inheriting from class \code{MODEL} 
-#' @return \code{character} vector containing model type and all its transformer types
-
-#' @export
-model_types = function(model){
-  mdlns = model$type
-  for(tr in model$transformers){
-    mdlns = c(mdlns, transformer_types(tr))
-  }
-  return(mdlns %>% unique)
-}
 
 
 #' Returns desired moments of a given numeric vector
@@ -1116,23 +1139,6 @@ smart_divide = function(x, y, gain = 0.1, tolerance = .Machine$double.eps){
     }
   }
   return(x/y)
-}
-
-#' Changes duplicated transformer names of a given model to ensure all transformers have distinct names 
-#' 
-#' @field model Any object inheriting from class \code{MODEL} 
-#' @return None
-#' @export 
-model_make_unique_transformer_names = function(model){
-  model$transformers %>% lapply(function(x) x$name) %>% unlist -> tnames
-  wdp = which(duplicated(tnames))
-  while(length(wdp) > 0){
-    for(i in wdp){
-      model$transformers[[i]]$name <- model$transformers[[i]]$name %>% paste(i, sep = '_')
-    }
-    model$transformers %>% lapply(function(x) x$name) %>% unlist -> tnames
-    wdp = which(duplicated(tnames))
-  }
 }
 
 # Given two models A and B, if we want to have an ensemble model,
