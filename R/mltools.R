@@ -738,6 +738,34 @@ predict_map = function(X, maplist){
   return(X %>% pull(target))
 }
 
+model_update = function(model){
+  
+  model_copy = new(class(model)[1], config = model$config, name = model$name, type = model$type, description = model$description,
+                 package = model$package, package_language = model$package_language, 
+                 fitted = model$fitted)
+  
+  for (i in sequence(length(model$objects))){
+    model_copy$objects[[i]] <- model$objects[[i]]
+  }
+  
+  for (i in sequence(length(model$transformers))){
+    model_copy$transformers[[i]] <- model_update(model$transformers[[i]])
+  }
+  
+  for (i in sequence(length(model$gradient_transformers))){
+    model_copy$gradient_transformers[[i]] <- model_update(model$gradient_transformers[[i]])
+  }
+  
+  for (i in sequence(length(model$yin_transformers))){
+    model_copy$yin_transformers[[i]] <- model$yin_transformers[[i]]
+  }
+  
+  for (i in sequence(length(model$yout_transformers))){
+    model_copy$yout_transformers[[i]] <- model$yout_transformers[[i]]
+  }
+  
+  return(model_copy)
+}
 
 predict_glm_fit <- function(glmfit, newmatrix, addintercept=TRUE){
   newmatrix %<>% as.matrix

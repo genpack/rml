@@ -9,6 +9,7 @@
 # 0.2.2 (15 October 2014)  - Fundamental Changes: transformers transferred to separate files. Super classes created for sklearn and category_encoders packages.
 # 0.2.3 (21 October 2014)  - reserved_words added to class MODEL
 # 0.2.4 (21 October 2014)  - All sklearn modules inherit from TRM.SKLEARN
+# 0.2.5 (22 October 2014)  - function model_update added to mltools
 
 
 # Description for Roxygen

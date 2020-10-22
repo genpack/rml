@@ -259,7 +259,9 @@ CLS.SKLEARN.XGB = setRefClass('CLS.SKLEARN.XGB', contains = "CLASSIFIER",
           out$name = paste('FN', name, sep = '_')
         }
         return(out)
-      }
+      },
+      
+      ghablame = function(x){ x + 1}
     )
 )
 
@@ -269,6 +271,7 @@ CLS.SKLEARN.SVM = setRefClass('CLS.SKLEARN.SVM', contains = "CLS.SKLEARN",
      initialize = function(...){
        callSuper(model.module = 'svm', model.class = 'SVC', ...)
        description <<- 'Support Vector Machine'
+       config$probability <<- T
        
        if(is.empty(name)){name <<- 'SKSVM' %>% paste0(sample(10000:99999, 1))}
      }
