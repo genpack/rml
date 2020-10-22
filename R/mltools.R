@@ -553,6 +553,12 @@ scorer = function(tbl, prediction_col, actual_col){
   FN = scores %>% filter(!x, y)  %>% pull('count')
   FP = scores %>% filter(x, !y)  %>% pull('count')
   TN = scores %>% filter(!x, !y) %>% pull('count')
+  
+  if(is.empty(TP)) TP = 0
+  if(is.empty(FN)) FN = 0
+  if(is.empty(FP)) FP = 0
+  if(is.empty(TN)) TN = 0
+  
   prc = TP/(TP + FP)
   rcl = TP/(TP + FN)
   list(
@@ -923,10 +929,8 @@ model_update = function(model){
   mcopy$description      <- model$description
   mcopy$package_language <- model$package_language 
 
-  for (i in sequence(length(model$objects))){
-    mcopy$objects[[i]] <- model$objects[[i]]
-  }
-  
+  mcopy$objects <- model$objects
+
   for (i in sequence(length(model$transformers))){
     mcopy$transformers[[i]] <- model_update(model$transformers[[i]])
   }
