@@ -863,10 +863,11 @@ model_save = function(model, path = getwd()){
 }
 
 #' @export
-model_load = function(model_name, path = getwd()){
+model_load = function(model_name, path = getwd(), update = F){
   path %<>% paste(model_name, sep = '/')
   assert(file.exists(path), paste0('No folder named as ', model_name, ' found in the given path!'))
   model = readRDS(path %>% paste0('/', model_name, '.rds'))
+  if(update) model %<>% model_update
   model$model.load(path)
   return(model)
 }

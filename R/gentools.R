@@ -514,7 +514,7 @@ default_expert_templates = list(
 read_exlist = function(path){
   exl = list()
   for(fn in list.files(path)){
-    exl[[fn]] <- load_model(fn, path)
+    exl[[fn]] <- model_load(fn, path)
   }
   return(exl)
 }
@@ -824,7 +824,7 @@ load_experts = function(experts, path = getwd()){
   experts = list(exlog = data.frame(), exlist = list())
   experts$exlog <- read.csv(path %>% paste('exlog.csv', sep = '/'), as.is = T)
   for(fn in list.files(path) %^% rownames(experts$exlog)){
-    experts$exlist[[fn]] <- load_model(fn, path)
+    experts$exlist[[fn]] <- model_load(fn, path)
   }
   for(fn in list.files(path) %-% names(exlist)){
     unlink(path %>% paste(fn, spe = '/'), recursive=TRUE)
@@ -1137,7 +1137,7 @@ train_funlist = function(flist = NULL, champions = list(), X_train, y_train, X_t
 read_models = function(path){
   mlist = list()
   for(dn in list.files(path)){
-    mdl = load_model(dn, path)
+    mdl = model_load(dn, path)
     mlist[[mdl$name]] <- mdl$copy()
   }
   return(mlist)
