@@ -547,7 +547,8 @@ spark.scorer = function(tbl, prediction_col, actual_col){
 #' @export
 scorer = function(tbl, prediction_col, actual_col){
   tbl %>% rename(x = prediction_col, y = actual_col) %>%
-    group_by(x,y) %>% summarise(count = length(x)) -> scores
+    group_by(x,y) %>% summarise(count = length(x)) %>% ungroup %>% 
+    mutate(x = as.logical(x), y = as.logical(y)) -> scores
 
   TP = scores %>% filter(x, y)   %>% pull('count')
   FN = scores %>% filter(!x, y)  %>% pull('count')

@@ -11,7 +11,7 @@
 # 0.2.4 (21 October 2014)  - All sklearn modules inherit from TRM.SKLEARN
 # 0.2.6 (22 October 2014)  - function model_update added to mltools, exported and added to namespace
 # 0.2.8 (22 October 2014)  - argument update added to function model_load
-# 0.2.9 (22 October 2014)  - minor change in function scorer
+# 0.2.11 (22 October 2014)  - minor changes in function scorer
 
 
 # Description for Roxygen
