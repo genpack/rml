@@ -55,6 +55,7 @@ MODEL = setRefClass('MODEL',
                          'pp.remove_invariant_features', 'pp.remove_nominal_features', 'pp.remove_numeric_features', 'pp.coerce_integer_features',
                          'model.class', 'model.config', 'model.module',
                          'eda.enabled', 
+                         'smp.enabled', 'smp.fix_class_ratio', 'smp.num_rows',
                          'features.include', 'features.include.at', 'features.exclude', 'features.exclude.at',
                          'ts.enabled', 'ts.id_col', 'ts.time_col', 
                          'return_features', 'feature_subset_size', 'gradient_transformers_aggregator', 'save_predictions',
@@ -78,6 +79,7 @@ MODEL = setRefClass('MODEL',
       if(is.null(settings$pp.remove_numeric_features)){settings$pp.remove_numeric_features = F}
       if(is.null(settings$pp.coerce_integer_features)){settings$pp.coerce_integer_features = F}
       if(is.null(settings$eda.enabled)){settings$eda.enabled = F}
+      if(is.null(settings$smp.enabled)){settings$smp.enabled = F}
       if(is.null(settings$ts.enabled)){settings$ts.enabled = F}
       if(is.null(settings$ts.id_col)){settings$ts.id_col = 'caseID'}
       if(is.null(settings$ts.time_col)){settings$ts.time_col = 'time'}
@@ -238,18 +240,34 @@ MODEL = setRefClass('MODEL',
     fit = function(X, y = NULL){
       if(!fitted){
         if(inherits(X, 'matrix')){X %<>% as.data.frame}
-        if(!is.null(config$max_train)){
-          mxt = min(config$max_train, nrow(X))
-          ind = nrow(X) %>% sequence %>% sample(mxt)
-          X = X[ind,]
-          y = y[ind]
-        }
+        if(config$smp.enabled){
+          actual_ratio = mean(y)
+          n_train_rows = length(y)
+          
+          if(!is.null(verify(config$smp.fix_class_ratio, 'numeric', domian = c(.Machine$double.eps, 1 - .Machine$double.eps), null_allowed = T))){
+            if(config$fix_class_ratio >= actual_ratio){
+              # downsample negative class, keep all positive class:
+              w1 = which(y == 1)
+              n1 = length(w1)
+              rr = config$fix_class_ratio
+              w0 = which(y == 0) %>% sample(as.integer(n1*(1.0 - rr)/rr))
+            } else {
+              # downsample positive class, keep all negative class:
+              w0 = which(y == 0)
+              n0 = length(w0)
+              rr = config$fix_class_ratio
+              w1 = which(y == 1) %>% sample(as.integer(n0*(1.0 - rr)/rr))
+            }
+            ind = c(w0, w1) %>% sample(length(c(w0, w1))) 
+            X = X[ind,]; y = y[ind]
+            n_train_rows = length(y)
+          }
+          
+          n_rows = verify(config$smp.num_rows, c('numeric', 'integer'), lengths = 1, domain = c(1, Inf), default = n_train_rows) %>% 
+            min(n_train_rows) %>% {.*verify(config$smp.ratio, 'numeric', lengths = 1, domain = c(0, 1), default = 1.0)} %>% as.integer
 
-        if(!is.null(config$upsample)){
-          w1 = which(y == 1)
-          w0 = which(y == 0) %>% sample(length(w1))
-          ww = c(w1, w2) %>% sample(length(w1) + length(w2))
-          X = X[ww,]; y = y[ww]
+          ind = n_train_rows %>% sequence %>% sample(n_rows)
+          X = X[ind,]; y = y[ind]
         }
         y = transform_yin(X, y)
         if(!is.null(config[['features.include']])){X = X[config$features.include %^% colnames(X)]}
