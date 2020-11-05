@@ -12,6 +12,8 @@
 # 0.2.6 (22 October 2014)  - function model_update added to mltools, exported and added to namespace
 # 0.2.8 (22 October 2014)  - argument update added to function model_load
 # 0.2.11 (22 October 2014)  - minor changes in function scorer
+# 0.3.1 (30 October 2014)   - Sampling parameters added to the config: smp.enabled, smp.ratio, smp.num_rows, smp.fix_class_ratio
+# 0.3.2 (04 November 2014)  - rbig and rutils imported as required packages
 
 
 # Description for Roxygen
@@ -32,6 +34,8 @@
 # save(default_templates, file = 'data/default_templates.RData')
 
 #' @import magrittr
+#' @import rutils
+#' @import rbig
 #' 
 #' @include abstract.R
 #' @include mltools.R

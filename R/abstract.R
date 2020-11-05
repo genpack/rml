@@ -244,7 +244,7 @@ MODEL = setRefClass('MODEL',
           actual_ratio = mean(y)
           n_train_rows = length(y)
           
-          if(!is.null(verify(config$smp.fix_class_ratio, 'numeric', domian = c(.Machine$double.eps, 1 - .Machine$double.eps), null_allowed = T))){
+          if(!is.null(verify(config$smp.fix_class_ratio, 'numeric', domain = c(.Machine$double.eps, 1 - .Machine$double.eps), null_allowed = T))){
             if(config$fix_class_ratio >= actual_ratio){
               # downsample negative class, keep all positive class:
               w1 = which(y == 1)
