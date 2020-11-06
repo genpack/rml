@@ -115,11 +115,13 @@ TRM.SKLEARN = setRefClass(
     model.fit = function(X, y){
       if(!fitted){
         objects$model <<- do.call(objects$module[[config[['model.class']]]], args = config %>% list.remove(reserved_words))
+        if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
         objects$model$fit(X, y)
       }
     },
     
     model.predict = function(X){
+      if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
       objects$model$transform(X)
     }
 ))

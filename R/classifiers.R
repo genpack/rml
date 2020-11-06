@@ -74,6 +74,7 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
 CLS.SKLEARN = setRefClass('CLS.SKLEARN', contains = c('TRM.SKLEARN', "CLASSIFIER"),
    methods = list(
      model.predict = function(X){
+       if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
        objects$model$predict_proba(X %>% data.matrix)[,2, drop = F] %>% as.data.frame
      }
    )
@@ -228,12 +229,14 @@ CLS.SKLEARN.XGB = setRefClass('CLS.SKLEARN.XGB', contains = "CLASSIFIER",
       },
       
       model.fit = function(X, y){
+          if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
           objects$model$fit(X %>% data.matrix, y)
           imp = try(objects$model$feature_importances_ %>% as.numeric, silent = T)
           if(inherits(imp, 'numeric')) objects$features$importance <<- imp
       },
 
       model.predict = function(X){
+        if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
         objects$model$predict_proba(X %>% data.matrix)[,2, drop = F] %>% as.data.frame
       },
       
@@ -247,6 +250,7 @@ CLS.SKLEARN.XGB = setRefClass('CLS.SKLEARN.XGB', contains = "CLASSIFIER",
                     inputs        = objects$features$fname %>% as.list %>% {names(.)<-xseq;.},
                     objects       = list(model = objects$model),
                     rule.output   = function(inputs, params, objects){
+                      if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
                       objects$model$predict_proba(inputs %>% as.data.frame %>% data.matrix)[,2] %>% as.numeric
                     },
                     local_dependencies = ldep)
@@ -368,6 +372,7 @@ CLS.KERAS.DNN = setRefClass('CLS.KERAS.DNN', contains = 'CLASSIFIER',
           compile(loss = config$loss, optimizer = optmzr, metrics = list('categorical_accuracy'))
       }
 
+      if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
       if(is.empty(gradient_transformers)){
         objects$model$fit(X %>% data.matrix, target,
                           epochs = config$epochs,
@@ -384,6 +389,7 @@ CLS.KERAS.DNN = setRefClass('CLS.KERAS.DNN', contains = 'CLASSIFIER',
     },
 
     model.predict = function(X){
+      if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
       if(is.empty(gradient_transformers)){
         XOUT = objects$model$predict(X %>% data.matrix) %>% as.data.frame %>% {.[,2, drop = F]}
       } else {
