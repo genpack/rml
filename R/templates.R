@@ -1,5 +1,14 @@
+##### Untility Functions #####
+# Generates a random integer number
+#' @export
+randint = function(n = 1, min = 0, max = 100){
+  min + as.integer(runif(n = n)*(max - min + 1))
+}
+
+
 ##### Builders #####
 
+#' @export
 build_model_instance_from_template = function(model_name = NULL, template){
   stopifnot(inherits(template, 'list'))
   tr  = try(template$class %>% new, silent = T)
@@ -26,7 +35,9 @@ build_model_instance_from_template = function(model_name = NULL, template){
 }
 
 # features is a data frame of features (output of function evaluate_features)
-build_from_template = function(template_name, model_name = NULL, features = NULL, templates = default_templates, metric = 'gini'){
+
+#' @export
+build_model_from_template = function(template_name, model_name = NULL, features = NULL, templates = default_templates, metric = 'gini'){
   stopifnot(inherits(templates, 'list'))
   temp_names = names(templates)
   verify(template_name, 'character', domain = temp_names)
@@ -37,13 +48,16 @@ build_from_template = function(template_name, model_name = NULL, features = NULL
     chance = runif(1)
     if(chance < item$probability){
       nt = length(model$transformers)
-      tn = item$classes %>% sample(size = 1)
-      model$transformers[[nt + 1]] <- build_from_template(template_name = tn, features = features, templates = templates)
+      tn = item$templates %>% sample(size = 1)
+      model$transformers[[nt + 1]] <- build_model_from_template(template_name = tn, features = features, templates = templates)
     }
   }
 
   if(length(model$transformers) == 0){
-    if(!is.null(features)){model$config$features.include <- rownames(features)}
+    
+    if(!is.null(features)){
+      if(inherits(features, 'character')){model$config$features.include <- features} else {model$config$features.include <- rownames(features)}
+    }
 
     if(!is.null(templates[[template_name]]$pass)){
       # Have you specified which features can pass in the template?
@@ -85,7 +99,8 @@ build_from_template = function(template_name, model_name = NULL, features = NULL
         if(inherits(templates[[template_name]]$feature_sample_ratio, 'list')){
           ratio = do.call(templates[[template_name]]$feature_sample_ratio$fun, args = templates[[template_name]]$feature_sample_ratio %>% list.remove('fun') %>% list.add(n = 1))
         } else {ratio = templates[[template_name]]$feature_sample_ratio %>% sample(size = 1)}
-      num_feat = ceiling(length(model$config$features.include)*ratio)
+        num_feat = ceiling(length(model$config$features.include)*ratio)
+      }  
 
       # Respecting property 'feature_sample_size'
       if(!is.null(templates[[template_name]]$feature_sample_size)){
@@ -93,10 +108,13 @@ build_from_template = function(template_name, model_name = NULL, features = NULL
         if(num_feat > length(model$config$features.include)){num_feat = length(model$config$features.include)}
       }
       if(!is.null(num_feat)){
-        model$config$features.include <- model$config$features.include %>%
-          sample(size = num_feat, prob = features[model$config$features.include, 'avgScores'] %>% vect.map %>% vect.normalise)
+        if(inherits(features, 'character')){
+          model$config$features.include <- model$config$features.include %>% sample(size = num_feat)
+        } else {
+          model$config$features.include <- model$config$features.include %>%
+          sample(size = num_feat, prob = features[model$config$features.include, metric] %>% vect.normalise)
+        }
       }
-    }
     }
   }
   return(model)

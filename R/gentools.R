@@ -1133,7 +1133,7 @@ train_funlist = function(flist = NULL, champions = list(), X_train, y_train, X_t
 
 #### Genetic Base & Boost: ####
 
-# Read Existing Models and evaluate them:
+# Read Existing Models and put them in a list:
 read_models = function(path){
   mlist = list()
   for(dn in list.files(path)){

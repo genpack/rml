@@ -14,6 +14,7 @@
 # 0.2.11 (22 October 2014)  - minor changes in function scorer
 # 0.3.1 (30 October 2014)   - Sampling parameters added to the config: smp.enabled, smp.ratio, smp.num_rows, smp.fix_class_ratio
 # 0.3.3 (05 November 2014)  - WIDETABLE is converted to matrix for all sklearn transformers
+# 0.3.4 (11 November 2014)  - templates.R updated: minor issues fixed
 
 
 # Description for Roxygen
@@ -34,6 +35,7 @@
 # save(default_templates, file = 'data/default_templates.RData')
 
 #' @import magrittr
+#' @import rutils
 #' 
 #' @include abstract.R
 #' @include mltools.R
