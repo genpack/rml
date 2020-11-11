@@ -103,7 +103,7 @@ FET.RML.MGB = setRefClass('FET.RML.MGB', contains = 'MODEL',
     
     evaluateFeatures = function(X, y){
       top     = config$cycle_survivors
-      columns = colnames(X)
+      columns = rbig:colnames(X)
       flist   = objects$model
       ns      = rownames(flist)
       
@@ -127,7 +127,7 @@ FET.RML.MGB = setRefClass('FET.RML.MGB', contains = 'MODEL',
       
       top  = min(top, length(ord) - 1)
       
-      flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = colnames(X))
+      flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = rbig:colnames(X))
       
       # keep = which(flist$safety == high_level | (is.na(flist$father) & is.na(flist$mother)))
       keep = which(flist$safety == high_level)
@@ -225,7 +225,7 @@ FNT.RML.POLY = setRefClass('FNT.RML.POLY', contains = 'MODEL', methods = list(
         ns   %<>% c(name %>% paste('_', i, '_T', j))
       }
     }
-    colnames(XOUT) <- ns
+    rbig:colnames(XOUT) <- ns
     return(XOUT %>% as.data.frame)
   }
   
@@ -272,7 +272,7 @@ FET.RML.LGB = setRefClass('FET.RML.LGB', contains = 'MODEL', methods = list(
     for (i in top %>% nrow %>% sequence){
       XOUT %<>% cbind(getFeatureValue(top$fname[i], X))
     }
-    colnames(XOUT) <- top$fname
+    rbig:colnames(XOUT) <- top$fname
     return(XOUT %>% as.data.frame %>% numerize_columns)
   }
 ))
@@ -309,7 +309,7 @@ FET.RML.SFS = setRefClass('FET.RML.SFS', contains = 'MODEL', methods = list(
       objects$features <<- scores %>% rownames2Column('fname') %>%
         filter(score > 0) %>% arrange(desc(score)) %>% mutate(fname = as.character(fname)) %>% select(fname)
     } else {
-      config$feature_order <<- config$feature_order %>% intersect(colnames(X))
+      config$feature_order <<- config$feature_order %>% intersect(rbig:colnames(X))
       objects$features <<- data.frame(fname = config$feature_order, stringsAsFactors = F)
     }
     

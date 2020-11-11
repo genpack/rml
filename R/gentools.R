@@ -48,7 +48,7 @@ getFeatureValue.logical = function(flist, name, dataset){
     return(out)
   }
 
-  if(name %in% colnames(dataset)){return(dataset[, name])}
+  if(name %in% rbig::colnames(dataset)){return(dataset[, name])}
 
   if(name %in% rownames(flist)){
     if(flist[name, 'father'] %in% names(dataset)) {father = dataset[, flist[name, 'father']]} else {father = getFeatureValue.logical(flist, flist[name, 'father'], dataset)}
@@ -67,7 +67,7 @@ getFeatureValue.multiplicative = function(flist, name, dataset){
     return(out)
   }
 
-  if(name %in% colnames(dataset)){return(dataset[, name])}
+  if(name %in% rbig::colnames(dataset)){return(dataset[, name])}
   if(name %in% rownames(flist)){
     if(flist[name, 'father'] %in% names(dataset)) {father = dataset[, flist[name, 'father']]} else {father = getFeatureValue.multiplicative(flist, flist[name, 'father'], dataset)}
     if(flist[name, 'mother'] %in% names(dataset)) {mother = dataset[, flist[name, 'mother']]} else {mother = getFeatureValue.multiplicative(flist, flist[name, 'mother'], dataset)}
@@ -94,7 +94,7 @@ evaluateFeatures.multiplicative = function(flist, X, y, top = 100, cor_fun = cor
 
   top  = min(top, length(ord) - 1)
 
-  flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = colnames(X))
+  flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = rbig::colnames(X))
 
   # keep = which(flist$safety == high_level | (is.na(flist$father) & is.na(flist$mother)))
   keep = which(flist$safety == high_level)
@@ -102,7 +102,7 @@ evaluateFeatures.multiplicative = function(flist, X, y, top = 100, cor_fun = cor
 }
 
 evaluateFeatures.logical = function(flist, X, y, top = 100, cor_fun = cross_accuracy){
-  columns  = colnames(X)
+  columns  = rbig::colnames(X)
   ns       = rownames(flist)
   top      = min(top, length(ns) - 1)
 
@@ -131,7 +131,7 @@ evaluateFeatures.logical = function(flist, X, y, top = 100, cor_fun = cross_accu
 
   high_level = max(flist$safety) + 1
   ord = flist$correlation %>% order(decreasing = T)
-  flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = colnames(X))
+  flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = rbig::colnames(X))
 
   keep = which(flist$safety == high_level)
   return(flist[keep, ])
@@ -139,7 +139,7 @@ evaluateFeatures.logical = function(flist, X, y, top = 100, cor_fun = cross_accu
 
 # Optimal Genetic Binary Feature Combiner
 genBinFeatBoost.fit = function(X, y, target = 0.9, epochs = 10, max_fail = 2, cycle_survivors = 500, cycle_births = 2000, final_survivors = 5, metric = cross_enthropy){
-  columns = colnames(X)
+  columns = rbig::colnames(X)
   flist   = data.frame(name = columns, father = NA, mother = NA, action = NA, correlation = metric(X[, columns], y) %>% as.numeric %>% abs, safety = 0) %>% column2Rownames('name')
   flist   = flist[!is.na(flist$correlation),]
   # nf features are born by random parents:
@@ -236,7 +236,7 @@ createFeatures = function(flist, nf, types, prefix = 'FEAT', X, y){
   for(i in sequence(nf)){
     fname   = prefix %>% paste(lenflist + i, sep = '_')
     parents = features %>% sample(5, replace = F)
-    feature_parents = parents %^% colnames(X)
+    feature_parents = parents %^% rbig::colnames(X)
     trans_parents   = parents %-% feature_parents
     translist       = flist %>% list.extract(trans_parents) %>% list.pull('model', do_unlist = F)
 
@@ -272,7 +272,7 @@ getFeatureValue = function(flist, fnames, X){
     return(out)
   }
 
-  if(fnames %in% colnames(X)){return(X[, fnames])}
+  if(fnames %in% rbig::colnames(X)){return(X[, fnames])}
   if(fnames %in% names(flist)){
     res = try(flist[[fnames]]$model$predict(X), silent = T)
     if(inherits(res, 'try-error')) res = numeric(nrow(X)) %>% as.data.frame
@@ -303,7 +303,7 @@ reduceFeatures = function(flist, X, y, metric = 'pearson_correlation', top = 100
 
   top  = min(top, length(ord) - 1)
 
-  flist %<>% immuneFeatures(ns[ord[sequence(top)]], level = high_level, columns = colnames(X))
+  flist %<>% immuneFeatures(ns[ord[sequence(top)]], level = high_level, columns = rbig::colnames(X))
 
   keep = which(flist %>% list.pull('safety') == high_level)
   return(flist %>% list.extract(ns[keep]))
@@ -344,7 +344,7 @@ default_greedy_templates = list(
   svm1 = list(class = 'CLS.SKLEARN.SVM', weight = 0.05, n_num = c(5:20)        , n_cat = c(0:10)))
 
 create_transformer = function(X, y, types = default_greedy_templates, name = NULL){
-  colnames(X) %>% sapply(function(i) X[,i] %>% class) -> features
+  rbig::colnames(X) %>% sapply(function(i) X[,i] %>% class) -> features
   num_features = names(features)[features == 'numeric']
   cat_features = names(features)[features == 'integer']
 
@@ -520,8 +520,8 @@ read_exlist = function(path){
 }
 
 create_experts_from_dataset = function(dataset){
-  cls = colnames(dataset) %>% sapply(function(i) dataset[,i] %>% class) %>% unname
-  list(exlog = data.frame(exname = colnames(dataset), father = as.character(NA), mother = as.character(NA), action = as.character(NA), class = cls, correlation = as.numeric(NA), safety = 0, stringsAsFactors = F) %>%
+  cls = rbig::colnames(dataset) %>% sapply(function(i) dataset[,i] %>% class) %>% unname
+  list(exlog = data.frame(exname = rbig::colnames(dataset), father = as.character(NA), mother = as.character(NA), action = as.character(NA), class = cls, correlation = as.numeric(NA), safety = 0, stringsAsFactors = F) %>%
     column2Rownames('exname'), exlist = list())
 }
 
@@ -752,7 +752,7 @@ get_expert_value = function(exlist, exnames, dataset){
     return(out)
   }
 
-  if(exnames %in% colnames(dataset)){return(dataset[, exnames])}
+  if(exnames %in% rbig::colnames(dataset)){return(dataset[, exnames])}
   if(exnames %in% names(exlist)){
     return(exlist[[exnames]]$predict(dataset))
   } else {
@@ -787,7 +787,7 @@ reduce_experts = function(experts, X, y, metric = 'gini', top = 10){
   experts$exlog$mother_score = experts$exlog[experts$exlog$mother, 'correlation']
   experts$exlog$parent_score = ifelse(experts$exlog$father_score > experts$exlog$mother_score, experts$exlog$father_score, experts$exlog$mother_score)
   experts$exlog$parent_score[is.na(experts$exlog$parent_score)] <- -Inf
-  experts$exlog = experts$exlog[experts$exlog$correlation > experts$exlog$parent_score, colnames(experts$exlog) %-% c('father_score', 'mother_score', 'parent_score')] %>%
+  experts$exlog = experts$exlog[experts$exlog$correlation > experts$exlog$parent_score, rbig::colnames(experts$exlog) %-% c('father_score', 'mother_score', 'parent_score')] %>%
     consistent_exlog
 
   exnames    = rownames(experts$exlog)
@@ -1030,8 +1030,8 @@ train_funlist = function(flist = NULL, champions = list(), X_train, y_train, X_t
                          loss_function = loss_sse_gb, function_set = default_function_set){
   best_train = Inf
   best_test  = Inf
-  features   = colnames(X_train)
-  assert(features %<% colnames(X_test), 'columns of X_train must be subset of X_test!')
+  features   = rbig::colnames(X_train)
+  assert(features %<% rbig::colnames(X_test), 'columns of X_train must be subset of X_test!')
 
   for(jj in sequence(depth)){
     # Build loss functions:
@@ -1179,11 +1179,11 @@ evaluate_features = function(X, y, metrics = 'gini', ...){
     }
     return(ef)
   }
-  features <- colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.}
-  features$n_unique  <- colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
-  features$n_missing <- colnames(X) %>% sapply(function(x) X %>% pull(x) %>% is.na %>% sum) %>% unlist
+  features <- rbig::colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.}
+  features$n_unique  <- rbig::colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
+  features$n_missing <- rbig::colnames(X) %>% sapply(function(x) X %>% pull(x) %>% is.na %>% sum) %>% unlist
 
-  for(cn in colnames(X)){
+  for(cn in rbig::colnames(X)){
     for(mtrc in metrics){
       metricval <- try(correlation(X %>% pull(cn), y, metric = mtrc, ...), silent = T)
       if(inherits(metricval, 'numeric')){

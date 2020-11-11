@@ -72,7 +72,7 @@ ENC.SKLEARN.OHE = setRefClass(
     model.fit = function(X, y){
       if(!fitted){
         if(!'n_unique' %in% colnames(objects$features)){
-          objects$features$n_unique <<- colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
+          objects$features$n_unique <<- rbig::colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
         }
         objects$features <<- objects$features %>% filter(fname %in% nominals(X), n_unique <= config$max_domain)
         
@@ -198,10 +198,10 @@ ENC.RML.FE = setRefClass(
     
     model.fit = function(X, y = NULL){
       if(!fitted){
-        catfigs = objects$features %>% filter(fclass %in% c('character', 'integer', 'factor')) %>% pull(fname) %>% intersect(colnames(X))
+        catfigs = objects$features %>% filter(fclass %in% c('character', 'integer', 'factor')) %>% pull(fname) %>% intersect(rbig::colnames(X))
         if(!is.null(config$categoricals)) {catfigs = catfigs %^% config$categoricals}
         
-        numfigs = objects$features %>% filter(fclass %in% c('numeric', 'integer')) %>% pull(fname) %>% intersect(colnames(X)) %>% setdiff(catfigs)
+        numfigs = objects$features %>% filter(fclass %in% c('numeric', 'integer')) %>% pull(fname) %>% intersect(rbig::colnames(X)) %>% setdiff(catfigs)
         assert(length(catfigs) > 0, 'No categorical feature for encoding')
         assert(length(numfigs) > 0, 'No numerical features for feature encoding')
         objects$categoricals <<- catfigs
@@ -257,7 +257,7 @@ ENC.RML.TE = setRefClass('ENC.RML.TE', contains = 'MODEL',
                                X = X[objects$features$fname]
                                stopifnot(ncol(X) > 0, 'No categorical feature for encoding')
                                objects$model <<- list()
-                               for(col in colnames(X)){
+                               for(col in rbig::colnames(X)){
                                  objects$model[[col]] <<- cbind(X, label = y) %>% group_by_(col) %>% summarise(ratio = mean(label))
                                }
                              }

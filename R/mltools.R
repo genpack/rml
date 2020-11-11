@@ -85,7 +85,7 @@ remove_outliers = function(X, sd_threshold = 3){
 #' @export
 int_ordinals = function(X){
   if(inherits(X, 'matrix')) {X %<>% as.data.frame}
-  nms = colnames(X)
+  nms = rbig::colnames(X)
   for (col in nms){
     v = X[[col]]
     if(inherits(v, c('numeric', 'integer', 'integer64'))){
@@ -158,7 +158,7 @@ create_keras_layers = function(config){
 #' @export
 ranker = function(X){
   X %<>% as.data.frame
-  for(col in colnames(X)){
+  for(col in rbig::colnames(X)){
     v = X %>% pull(col)
     if(inherits(v, 'numeric')){
       X[, col %>% paste('rank', sep = '_')] <-  order(v)
