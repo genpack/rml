@@ -55,7 +55,9 @@ MODEL = setRefClass('MODEL',
                          'pp.remove_invariant_features', 'pp.remove_nominal_features', 'pp.remove_numeric_features', 'pp.coerce_integer_features',
                          'model.class', 'model.config', 'model.module',
                          'eda.enabled', 
-                         'smp.enabled', 'smp.fix_class_ratio', 'smp.num_rows',
+                         # smp.enabled: boolean parameter. default = FALSE. Should I do any sampling of the training rows at all? If FALSE (Default) 
+                         #              model will be trained by the entire training data table (X) without any changes.
+                         'smp.enabled', 'smp.fix_class_ratio', 'smp.num_rows', 'smp.method',
                          'features.include', 'features.include.at', 'features.exclude', 'features.exclude.at',
                          'ts.enabled', 'ts.id_col', 'ts.time_col', 
                          'return_features', 'feature_subset_size', 'gradient_transformers_aggregator', 'save_predictions',
@@ -80,6 +82,7 @@ MODEL = setRefClass('MODEL',
       if(is.null(settings$pp.coerce_integer_features)){settings$pp.coerce_integer_features = F}
       if(is.null(settings$eda.enabled)){settings$eda.enabled = F}
       if(is.null(settings$smp.enabled)){settings$smp.enabled = F}
+      if(is.null(settings$smp.method)){settings$smp.method = 'upsample'}
       if(is.null(settings$ts.enabled)){settings$ts.enabled = F}
       if(is.null(settings$ts.id_col)){settings$ts.id_col = 'caseID'}
       if(is.null(settings$ts.time_col)){settings$ts.time_col = 'time'}
@@ -245,29 +248,45 @@ MODEL = setRefClass('MODEL',
           n_train_rows = length(y)
           
           if(!is.null(verify(config$smp.fix_class_ratio, 'numeric', domain = c(.Machine$double.eps, 1 - .Machine$double.eps), null_allowed = T))){
-            if(config$fix_class_ratio >= actual_ratio){
-              # downsample negative class, keep all positive class:
-              w1 = which(y == 1)
-              n1 = length(w1)
-              rr = config$fix_class_ratio
-              w0 = which(y == 0) %>% sample(as.integer(n1*(1.0 - rr)/rr))
-            } else {
-              # downsample positive class, keep all negative class:
-              w0 = which(y == 0)
-              n0 = length(w0)
-              rr = config$fix_class_ratio
-              w1 = which(y == 1) %>% sample(as.integer(n0*(1.0 - rr)/rr))
-            }
+            if(smp.method == 'downsample'){
+              if(config$smp.fix_class_ratio >= actual_ratio){
+                # downsample negative class, keep all positive class:
+                w1 = which(y == 1)
+                n1 = length(w1)
+                rr = config$smp.fix_class_ratio
+                w0 = which(y == 0) %>% sample(as.integer(n1*(1.0 - rr)/rr))
+              } else {
+                # downsample positive class, keep all negative class:
+                w0 = which(y == 0)
+                n0 = length(w0)
+                rr = config$smp.fix_class_ratio
+                w1 = which(y == 1) %>% sample(as.integer(n0*(1.0 - rr)/rr))
+              }
+            } else if(smp.method == 'upsample'){
+              if(config$smp.fix_class_ratio >= actual_ratio){
+                # upsample positive class, keep all negative class:
+                w0 = which(y == 0)
+                n0 = length(w0)
+                rr = config$smp.fix_class_ratio
+                w1 = which(y == 1) %>% sample(as.integer(n0*rr/(1.0 - rr)), replace = T)
+              } else {
+                # upsample negative class, keep all positive class:
+                w1 = which(y == 1)
+                n1 = length(w1)
+                rr = config$smp.fix_class_ratio
+                w0 = which(y == 0) %>% sample(as.integer(n1*(1.0 - rr)/rr), replace = T)
+              }
+            } else {stop('Unknown sampling method specified!')}
             ind = c(w0, w1) %>% sample(length(c(w0, w1))) 
-            X = X[ind,]; y = y[ind]
-            n_train_rows = length(y)
-          }
+            # X = X[ind,]; y = y[ind]
+            n_train_rows = length(ind)
+          } else {ind = sequence(length(y))}
           
           n_rows = verify(config$smp.num_rows, c('numeric', 'integer'), lengths = 1, domain = c(1, Inf), default = n_train_rows) %>% 
             min(n_train_rows) %>% {.*verify(config$smp.ratio, 'numeric', lengths = 1, domain = c(0, 1), default = 1.0)} %>% as.integer
 
-          ind = n_train_rows %>% sequence %>% sample(n_rows)
-          X = X[ind,]; y = y[ind]
+          ind_2 = n_train_rows %>% sequence %>% sample(n_rows)
+          X = X[ind[ind_2],]; y = y[ind[ind_2]]
         }
         y = transform_yin(X, y)
         if(!is.null(config[['features.include']])){X = X[config$features.include %^% rbig::colnames(X)]}
@@ -425,13 +444,9 @@ MODEL = setRefClass('MODEL',
 
     info.model = function(){
       info = list(name = name, type = type, class = class(.self)[1], description = description, package = package,
-                  language = package_language, return = config$return,
-                  fitted = fitted, keep_columns = config$keep_columns, keep_features = config$keep_features,
-                  max_train = config$max_train, fe = config$fe.enabled, metric = config$metric,
-                  outputs = objects$n_output)
-      for(i in names(info)){
-        if(is.null(info[[i]])){ info[[i]] <- 'NULL'}
-      }
+                  language = package_language, outputs = objects$n_output, fitted = fitted) %<==>%
+       list.extract(config, c('keep_columns', 'keep_features', 'smp.enabled', 'smp.fix_class_ratio', 
+                                  'smp.method', 'fe.enabled', 'metric')) %>% list.clean
       return(info)
     },
 

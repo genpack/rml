@@ -15,6 +15,7 @@
 # 0.3.1 (30 October 2014)   - Sampling parameters added to the config: smp.enabled, smp.ratio, smp.num_rows, smp.fix_class_ratio
 # 0.3.3 (05 November 2014)  - WIDETABLE is converted to matrix for all sklearn transformers
 # 0.3.5 (11 November 2014)  - templates.R updated: minor issues fixed
+# 0.3.6 (25 November 2014)  - abstract.R updated: upsampling and downsampling added
 
 
 # Description for Roxygen
