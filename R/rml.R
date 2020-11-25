@@ -2,20 +2,20 @@
 # Filename:       rml.R
 # Description:    A pipeline and toolbox for R programmers useful for building products for machine learning and prediction
 # Version History:
-# 0.0.0 (05 August 2013)   - Initial Issue
-# 0.1.0 (23 February 2014) - Second Issue
-# 0.1.2 (06 August 2014)   - Third Issue
-# 0.1.3 (13 October 2014)  - Forth Issue
-# 0.2.2 (15 October 2014)  - Fundamental Changes: transformers transferred to separate files. Super classes created for sklearn and category_encoders packages.
-# 0.2.3 (21 October 2014)  - reserved_words added to class MODEL
-# 0.2.4 (21 October 2014)  - All sklearn modules inherit from TRM.SKLEARN
-# 0.2.6 (22 October 2014)  - function model_update added to mltools, exported and added to namespace
-# 0.2.8 (22 October 2014)  - argument update added to function model_load
+# 0.0.0 (05 August 2013)    - Initial Issue
+# 0.1.0 (23 February 2014)  - Second Issue
+# 0.1.2 (06 August 2014)    - Third Issue
+# 0.1.3 (13 October 2014)   - Forth Issue
+# 0.2.2 (15 October 2014)   - Fundamental Changes: transformers transferred to separate files. Super classes created for sklearn and category_encoders packages.
+# 0.2.3 (21 October 2014)   - reserved_words added to class MODEL
+# 0.2.4 (21 October 2014)   - All sklearn modules inherit from TRM.SKLEARN
+# 0.2.6 (22 October 2014)   - function model_update added to mltools, exported and added to namespace
+# 0.2.8 (22 October 2014)   - argument update added to function model_load
 # 0.2.11 (22 October 2014)  - minor changes in function scorer
 # 0.3.1 (30 October 2014)   - Sampling parameters added to the config: smp.enabled, smp.ratio, smp.num_rows, smp.fix_class_ratio
 # 0.3.3 (05 November 2014)  - WIDETABLE is converted to matrix for all sklearn transformers
 # 0.3.5 (11 November 2014)  - templates.R updated: minor issues fixed
-# 0.3.6 (25 November 2014)  - abstract.R updated: upsampling and downsampling added
+# 0.3.7 (25 November 2014)  - abstract.R updated: upsampling and downsampling added
 
 
 # Description for Roxygen
