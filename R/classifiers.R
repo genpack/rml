@@ -73,6 +73,10 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
 #' @export CLS.SKLEARN
 CLS.SKLEARN = setRefClass('CLS.SKLEARN', contains = c('TRM.SKLEARN', "CLASSIFIER"),
    methods = list(
+     initialize = function(...){
+       callSuper(...)
+       import(CLASSIFIER(...))
+     },
      model.predict = function(X){
        if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
        objects$model$predict_proba(X %>% data.matrix)[,2, drop = F] %>% as.data.frame

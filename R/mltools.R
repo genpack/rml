@@ -84,8 +84,9 @@ remove_outliers = function(X, sd_threshold = 3){
 # todo: should work for WideTables as well
 #' @export
 int_ordinals = function(X){
+  if(inherits(X, 'WideTable')) {X %<>% rbig::as.data.frame}
   if(inherits(X, 'matrix')) {X %<>% as.data.frame}
-  nms = rbig::colnames(X)
+  nms = colnames(X)
   for (col in nms){
     v = X[[col]]
     if(inherits(v, c('numeric', 'integer', 'integer64'))){

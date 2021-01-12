@@ -57,7 +57,7 @@ MODEL = setRefClass('MODEL',
                          'eda.enabled', 
                          # smp.enabled: boolean parameter. default = FALSE. Should I do any sampling of the training rows at all? If FALSE (Default) 
                          #              model will be trained by the entire training data table (X) without any changes.
-                         'smp.enabled', 'smp.fix_class_ratio', 'smp.num_rows', 'smp.method',
+                         'smp.enabled', 'smp.class_ratio', 'smp.num_rows', 'smp.method', 'smp.config',
                          'features.include', 'features.include.at', 'features.exclude', 'features.exclude.at',
                          'ts.enabled', 'ts.id_col', 'ts.time_col', 
                          'return_features', 'feature_subset_size', 'gradient_transformers_aggregator', 'save_predictions',
@@ -243,39 +243,56 @@ MODEL = setRefClass('MODEL',
     fit = function(X, y = NULL){
       if(!fitted){
         if(inherits(X, 'matrix')){X %<>% as.data.frame}
+        y = transform_yin(X, y)
+        if(!is.null(config[['features.include']])){X = X[config$features.include %^% rbig::colnames(X)]}
+        if(!is.null(config[['features.exclude']])){X = X[rbig::colnames(X) %-% config$features.exclude]}
+        X = transform_x(X, y)
+        if(!is.null(config[['features.include.at']])){X = X[config$features.include.at %^% rbig::colnames(X)]}
+        if(!is.null(config[['features.exclude.at']])){X = X[rbig::colnames(X) %-% config$features.exclude.at]}
         if(config$smp.enabled){
           actual_ratio = mean(y)
           n_train_rows = length(y)
           
-          if(!is.null(verify(config$smp.fix_class_ratio, 'numeric', domain = c(.Machine$double.eps, 1 - .Machine$double.eps), null_allowed = T))){
+          if(!is.null(verify(config$smp.class_ratio, 'numeric', domain = c(.Machine$double.eps, 1 - .Machine$double.eps), null_allowed = T))){
             if(config$smp.method == 'downsample'){
-              if(config$smp.fix_class_ratio >= actual_ratio){
+              if(config$smp.class_ratio >= actual_ratio){
                 # downsample negative class, keep all positive class:
                 w1 = which(y == 1)
                 n1 = length(w1)
-                rr = config$smp.fix_class_ratio
+                rr = config$smp.class_ratio
                 w0 = which(y == 0) %>% sample(as.integer(n1*(1.0 - rr)/rr))
               } else {
                 # downsample positive class, keep all negative class:
                 w0 = which(y == 0)
                 n0 = length(w0)
-                rr = config$smp.fix_class_ratio
+                rr = config$smp.class_ratio
                 w1 = which(y == 1) %>% sample(as.integer(n0*(1.0 - rr)/rr))
               }
             } else if(config$smp.method == 'upsample'){
-              if(config$smp.fix_class_ratio >= actual_ratio){
+              if(config$smp.class_ratio >= actual_ratio){
                 # upsample positive class, keep all negative class:
                 w0 = which(y == 0)
                 n0 = length(w0)
-                rr = config$smp.fix_class_ratio
+                rr = config$smp.class_ratio
                 w1 = which(y == 1) %>% sample(as.integer(n0*rr/(1.0 - rr)), replace = T)
               } else {
                 # upsample negative class, keep all positive class:
                 w1 = which(y == 1)
                 n1 = length(w1)
-                rr = config$smp.fix_class_ratio
+                rr = config$smp.class_ratio
                 w0 = which(y == 0) %>% sample(as.integer(n1*(1.0 - rr)/rr), replace = T)
               }
+            } else if (config$smp.method == 'smote'){
+              sv = reticulate::import('smote_variants')
+              smote_model = verify(config$smp.config[['model']], 'character', domain = names(sv), lengths = 1, default = 'distance_SMOTE')
+              config$smp.config[['proportion']] <<- verify(config$smp.config[['proportion']], 'numeric', lengths = 1, default = config$smp.class_ratio/(1.0 - config$smp.class_ratio))
+              
+              oversampler = do.call(sv[[smote_model]], config$smp.config %>% list.remove('model'))
+              res = oversampler$sample(X %>% as.matrix, y)
+              X  = res[[1]] %>% as.data.frame %>% {colnames(.) <- colnames(X);.}
+              y  = res[[2]] %>% as.numeric
+              w0 = which(y == 0)
+              w1 = which(y == 1)
             } else {stop('Unknown sampling method specified!')}
             ind = c(w0, w1) %>% sample(length(c(w0, w1))) 
             # X = X[ind,]; y = y[ind]
@@ -284,17 +301,11 @@ MODEL = setRefClass('MODEL',
           
           n_rows = verify(config$smp.num_rows, c('numeric', 'integer'), lengths = 1, domain = c(1, Inf), default = n_train_rows) %>% 
             min(n_train_rows) %>% {.*verify(config$smp.ratio, 'numeric', lengths = 1, domain = c(0, 1), default = 1.0)} %>% as.integer
-
+          
           ind_2 = n_train_rows %>% sequence %>% sample(n_rows)
           X = X[ind[ind_2],]; y = y[ind[ind_2]]
         }
-        y = transform_yin(X, y)
-        if(!is.null(config[['features.include']])){X = X[config$features.include %^% rbig::colnames(X)]}
-        if(!is.null(config[['features.exclude']])){X = X[rbig::colnames(X) %-% config$features.exclude]}
-        X = transform_x(X, y)
-        if(!is.null(config[['features.include.at']])){X = X[config$features.include.at %^% rbig::colnames(X)]}
-        if(!is.null(config[['features.exclude.at']])){X = X[rbig::colnames(X) %-% config$features.exclude.at]}
-
+        
         assert(ncol(X) > 0, 'No column found in the training dataset!')
 
         if(config$pp.coerce_integer_features){
@@ -445,7 +456,7 @@ MODEL = setRefClass('MODEL',
     info.model = function(){
       info = list(name = name, type = type, class = class(.self)[1], description = description, package = package,
                   language = package_language, outputs = objects$n_output, fitted = fitted) %<==>%
-       list.extract(config, c('keep_columns', 'keep_features', 'smp.enabled', 'smp.fix_class_ratio', 
+       list.extract(config, c('keep_columns', 'keep_features', 'smp.enabled', 'smp.class_ratio', 
                                   'smp.method', 'fe.enabled', 'metric')) %>% list.clean
       return(info)
     },
@@ -587,7 +598,7 @@ MODEL = setRefClass('MODEL',
 ))
 
 
-COLFILTER = setRefClass('COLFILOTER', contains = 'MODEL', methods = list(
+COLFILTER = setRefClass('COLFILTER', contains = 'MODEL', methods = list(
   fit = function(X, y = NULL){
     if(!fitted){
       callSuper(X, y)

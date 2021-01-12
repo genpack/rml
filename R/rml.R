@@ -16,6 +16,9 @@
 # 0.3.3 (05 November 2014)  - WIDETABLE is converted to matrix for all sklearn transformers
 # 0.3.5 (11 November 2014)  - templates.R updated: minor issues fixed
 # 0.3.7 (25 November 2014)  - abstract.R updated: upsampling and downsampling added
+# 0.4.0 (05 January 2015)   - abstract.R updated: smote upsampling with python package smote_variant added
+# 0.4.5 (06 January 2015)   - abstract.R updated: upsampling engine moved to after transformation. fix_class_ratio renamed to class_ratio
+# 0.5.0 (12 January 2015)   - classifier.R updated: CLS.SKLEARN calls initialize method of its second parent: CLASSIFIER
 
 
 # Description for Roxygen
