@@ -1171,14 +1171,7 @@ evaluate_models = function(modlist, X, y){
 
 evaluate_features = function(X, y, metrics = 'gini', ...){
   if((ncol(X) == 0) | (nrow(X) == 0)) return(NULL)
-  if(inherits(X, 'WIDETABLE')){
-    ef = NULL
-    for(tn in unique(X$meta$table)){
-      cols = X$meta %>% filter(table == tn) %>% pull(column) %>% unique
-      ef = X[cols] %>% as.data.frame %>% evaluate_features(y = y, metrics = metrics) %>% rbind(ef)
-    }
-    return(ef)
-  }
+  
   features <- rbig::colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.}
   features$n_unique  <- rbig::colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
   features$n_missing <- rbig::colnames(X) %>% sapply(function(x) X %>% pull(x) %>% is.na %>% sum) %>% unlist

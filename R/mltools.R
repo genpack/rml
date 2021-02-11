@@ -226,65 +226,76 @@ na2median = function(X){
 
 #' Use this function to get correlation of two vectors with various metrics.
 #' 
-#' @field x \code{vector} first vector
-#' @field x \code{vector} second vector (must have the same number of elements as vector \code{x})
-#' @field metric \code{character} specifying metric. Valid values are
-#' \code{pearson, loss, aurc, gini, 'precision', 'recall', 'f1', 'accuracy', 'sensitivity', 'specificity', 'fp', 'fn', 'tp', 'tn', 'lift'}
-#' @return \code{numeric} the value of correlation between two given vectors by the specified metric
+#' @field x \code{vector or table} first vector. If a table or matrix is passed, correlation is measured for each column of the table.
+#' @field y \code{vector} second vector (must have the same number of elements/rows as vector/table \code{x})
+#' @field metrics \code{character} specifying which metrics you desire to be computed. Valid values are
+#' \code{pearson, log_loss, aurc, gini, tp, fn, fp, tn, tpr, fnr, fpr, tnr, ppv, fdr, npv, pt, ts, csi, ba, 
+#' recall, sensitivity, hit_rate, miss_rate, f1, specificity, selectivity, fall_out, precision, accuracy, fmi, 
+#' informedness, markedness, mcc, for, lift}
+#' @return \code{list} The values of specified correlation metrics between two given vectors by the specified metrics. 
 #' @export
-correlation = function(x, y, metric = 'pearson', threshold = NULL, ratio = NULL){
-  x = as.numeric(x)
-  y = as.numeric(y)
-  if(metric == 'pearson'){
-    return(cor(x, y))
-  }
+correlation = function(x, y, metrics = 'pearson', threshold = quantile(x, prob = 1.0 - mean(y, na.rm = T), na.rm = T), quantiles = NULL){
 
-  ncl = ncol(x)
-  if(!is.null(ncl)){
-    crl = numeric()
-    x %<>% as.data.frame
-    for(col in sequence(ncl)){
-      crl = c(crl, correlation(x[,col] %>% as.numeric, y, metric = metric, threshold = threshold, ratio = ratio))
+  if(inherits(x, c('data.frame', 'WideTable', 'matrix'))){
+    if(!inherits(x, 'WideTable')) {x %<>% as.data.frame}
+    cols = colnames(x)
+    if(is.null(cols)){cols = sequence(ncol(x))}
+    out = list()
+    for(col in cols){
+      out[[col]] <- correlation(x[, col], y, metrics = metrics, threshold = threshold, quantiles = quantiles)
     }
-    return(crl)
-  }
-
-  if(metric != 'loss') x %<>% vect.map
-  if(!is.null(threshold)) x = as.numeric(x > threshold)
-
-  if(metric %in% c('aurc', 'gini')){
-    aurc = AUC::auc(AUC::roc(x, y %>% as.factor))
-    if(metric == 'aurc') return(aurc) else return(2*aurc - 1)
-  }
-
-  if(is.null(ratio)){ratio = mean(y, na.rm = T)}
-
-  if(metric %in% c('precision', 'recall', 'f1', 'accuracy', 'sensitivity', 'specificity', 'fp', 'fn', 'tp', 'tn')){
-    if(metric == 'sensitivity') metric = 'recall'
-    if(unique(x) %==% c(0,1)){
-      score = data.frame(y_pred = x, y_true = y) %>% scorer('y_pred', 'y_true')
-    } else {
-      cut_q = quantile(x, prob = 1 - ratio, na.rm = T)
-      score = data.frame(y_pred = as.logical(x > cut_q), y_true = as.logical(y)) %>% scorer('y_pred', 'y_true')
+  } else {
+    x = as.numeric(x)
+    y = as.numeric(y)
+    
+    out = list()
+    for (metric in metrics %^% 'pearson'){
+      out[[metric]] <- cor(x, y) 
     }
-    return(score[[metric]])
-  }
+    
+    subset = metrics %^% c('aurc', 'gini')
+    if(length(subset) > 0){
+      aurc = AUC::auc(AUC::roc(x %>% vect.map, y %>% as.factor))
+      for (metric in subset){
+        if(metric == 'aurc') out[[metric]] = aurc else out[[metric]] = 2*aurc - 1
+      }
+    }
+    
+    for(metric in metrics %^% 'log_loss'){
+      lossfun = rfun::logistic$copy()
+      lossfun$reset()
+      lossfun$inputs$x = x
+      lossfun$inputs$y = y
+      out[[metric]] <- lossfun$get.output() %>% mean
+    }
+    
+    subset = metrics %^% all_binary_predictive_scores
+    if(length(subset) > 0){
+      if (!is.null(quantiles)){
+        for(q in quantiles){
+          cut_q = quantile(x, prob = 1 - q, na.rm = T)
+          score = data.frame(y_pred = as.logical(x > cut_q), y_true = as.logical(y)) %>% scorer('y_pred', 'y_true')
+          for (metric in subset){
+            out[[paste0(metric, '_', round(100*q), 'pc')]] = score[[metric]]
+          }
+        }
+      } else if (is.null(threshold)){
+        threshold = quantile(x, prob = 1.0 - mean(y, na.rm = T), na.rm = T)
+      }
+      
+      if(!is.null(threshold)){
+        score = data.frame(y_pred = as.logical(x > threshold), y_true = as.logical(y)) %>% scorer('y_pred', 'y_true')
+        for (metric in subset){
+          out[[metric]] = score[[metric]]
+        }
+      }
+    }    
+  }  
 
-  if(metric == 'lift'){
-    cut_q = quantile(x, prob = 1 - ratio, na.rm = T)
-    prec  = y[x >= cut_q] %>% mean(na.rm = T)
-    return(prec/mean(y))
-  }
 
-  if(metric == 'loss'){
-    lossfun = logistic$copy()
-    lossfun$reset()
-    lossfun$inputs$x = x
-    lossfun$inputs$y = y
-    return(lossfun$get.output() %>% mean)
-  }
+  while(inherits(out, 'list') & (length(out) == 1)) out = out[[1]]    
 
-  stop('Unknown metric' %>% paste(metric))
+  return(out)
 }
 
 # Groups features based on count of their unique values
@@ -545,9 +556,37 @@ spark.scorer = function(tbl, prediction_col, actual_col){
   )
 }
 
+
+all_binary_predictive_scores = c('tp', 'fn', 'fp', 'tn', 'tpr', 'fnr', 'fpr', 'tnr', 'ppv', 'fdr', 'npv', 'pt', 'ts', 'csi', 'ba',
+'recall', 'sensitivity', 'hit_rate', 'miss_rate', 'f1',
+'specificity', 'selectivity', 'fall_out', 'precision', 'accuracy',
+'fmi', 'informedness', 'markedness', 'mcc', 'for', 'lift')
+
+#' Computes various predictive performance scores between two binary columns of a table
+#' 
+#' @field df \code{data.frame, tibble, data.table} or \code{matrix}: Input table containing at least two columns with binary data
+#' @field prediction_col \code{character} header of the column containing predicted binary classes
+#' @field actual_col \code{character} header of the column containing actual binary classes
+#' @return \code{list} containing various scores. Returned scores are:
+#' tp (True Positive), tn (True Negative), fp (False Positive), fn (False Negative),
+#' tpr (True Positive Rate) or recall ro sensitivity or hit_rate,
+#' fnr (False Negative Rate) or miss_rate,
+#' tnr (True Negative Rate) or specificity or selectivity
+#' fpr (False Positive Rate) or fall_out,
+#' ppv (Positive Predictive Value) or precision
+#' fdr (False Discovery Rate),
+#' for (False Omission Rate),
+#' pt (Prevalence Threshold),
+#' ts (Threat Score) or csi (Critical Success Index)
+#' accuracy, ba (Balanced Accuracy)
+#' f1 (F1 Score), fmi (Fowlkes–Mallows Index),
+#' informedness, markedness
+#' mcc (Matthews Correlation Coefficient)
+#' lift
 #' @export
-scorer = function(tbl, prediction_col, actual_col){
-  tbl %>% rename(x = prediction_col, y = actual_col) %>%
+scorer = function(df, prediction_col, actual_col){
+  df %>% as.data.frame %>% 
+    rename(x = prediction_col, y = actual_col) %>%
     group_by(x,y) %>% summarise(count = length(x)) %>% ungroup %>% 
     mutate(x = as.logical(x), y = as.logical(y)) -> scores
 
@@ -561,14 +600,39 @@ scorer = function(tbl, prediction_col, actual_col){
   if(is.empty(FP)) FP = 0
   if(is.empty(TN)) TN = 0
   
-  prc = TP/(TP + FP)
-  rcl = TP/(TP + FN)
-  list(
-    precision = prc,
-    recall    = rcl,
+  TPR = TP/(TP + FN)
+  TNR = TN/(TN + FP)
+  PPV = TP/(TP + FP)
+  NPV = TN/(TN + FN)
+  # FDR: False Discovery Rate
+  # NPV: Negative Predictive Value
+  # FOR: False Omission Rate
+  # PT:  Prevalence Threshold,
+  PT  = (sqrt(TPR*(1.0 - TNR)) + TNR - 1.0)/(TPR + TNR - 1.0)
+  # TS: Threat Score
+  # CSI: Critical Success Index
+  TS  = TP/(TP + FN + FP)
+  
+  out = list(
+    tp  = TP, fn  = FN, fp = FP, tn = TN, 
+    tpr = TPR, recall = TPR, sensitivity = TPR, hit_rate = TPR, fnr = 1.0 - TPR, miss_rate = 1.0 - TPR,
+    tnr = TNR, specificity = TNR, selectivity = TNR, fpr = 1.0 - TNR, fall_out = 1.0 - TNR,
+    ppv = PPV, precision = PPV, fdr = 1.0 - PPV,
+    npv = NPV, 
+    pt  = PT, 
+    ts  = TS, csi = TS,
     accuracy  = (TP+TN)/(TP+FN+FP+TN),
-    f1        = 2*prc*rcl/(prc+rcl)
+    ba = (TPR + TNR)/2, # balanced accuracy (BA)
+    f1 = 2*PPV*TPR/(PPV+TPR),
+    fmi = sqrt(PPV*TPR), # Fowlkes–Mallows index
+    informedness = TPR + TNR - 1.0,
+    markedness = PPV + NPV - 1.0,
+    # Matthews correlation coefficient
+    mcc = (TP*TN - FP*FN)/(sqrt(TP + FP)*sqrt(TP + FN)*sqrt(TN + FP)*sqrt(TN + FN))
   )
+  out[['for']]  <- 1.0 - NPV
+  out[['lift']] <- PPV/mean(df[[actual_col]], na.rm = T)
+  return(out)
 }
 
 
@@ -1169,3 +1233,26 @@ ensemble_lift = function(y, yh_A, yh_B, r, r_A){
   sel_B = order(yh_B) %>% setdiff(sel_A) %>% tail(n_req - length(sel_A))
   mean(y[c(sel_A, sel_B)])/mean(y)
 }
+
+
+
+#' @export 
+bucket_moments = function(df, variable_set_1, variable_set_2, ncuts = 100){
+  out   = NULL
+  for(f1 in variable_set_1){
+    for(f2 in variable_set_2){
+      tab = df[c(f1, f2)]
+      colnames(tab) <- c('F1', 'F2')
+      tab %>% mutate(QNT = cut(F1, breaks = quantile(F1, probs = seq(0, 1, 1.0/ncuts)) %>% unique)) %>% 
+        group_by(QNT) %>% summarise(F1 = max(F1), M1_F2 = sum(F2), CNT_F2 = length(F2)) %>% 
+        arrange(F1) %>% mutate(M1_F2_CS = cumsum(M1_F2), CNT_F2_CS = cumsum(CNT_F2)) %>% 
+        select(cutpoint = F1, bucket_sum = M1_F2, bucket_count = CNT_F2, M1 = M1_F2_CS, count = CNT_F2_CS) -> tmp
+      tmp$V1 = f1
+      tmp$V2 = f2
+      out %<>% rbind(tmp)
+    }
+  }
+  return(out)
+}
+
+

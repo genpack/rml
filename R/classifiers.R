@@ -8,11 +8,27 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
       type             <<- 'Binary Classifier'
       config$sig_level <<- verify(config$sig_level, 'numeric', domain = c(0,1), default = 0.1)
       config$return    <<- verify(config$return, 'character', domain = c('probs', 'logit', 'class'), default = 'probs')
-      config$decision_threshold <<- verify(config$decision_threshold, 'numeric', lengths = 1, domain = c(0,1), default = 0.5)
+      config$threshold <<- verify(config$threshold, 'numeric', domain = c(0,1), default = 0.5, lengths = 1)
+      # config$quantiles <<- verify(config$quantiles, 'numeric', domain = c(0,1), default = 0.5)
+      config$threshold_determination <<- verify(config$threshold_determination, 'character', lengths = 1,
+                                                domain = c('set_as_config', 'maximum_f1', 'maximum_chi', 'label_rate_quantile'), default = 'set_as_config')
+      # todo: add 'target_precision', 'target_recall', 
+      reserved_words <<- c(reserved_words, 'sig_level', 'return', 'threshold', 'threshold_determination')
+      if(!('metrics' %in% names(list(...)))){
+        config$metrics <<- chif(config$return == 'class', 'f1', 'gini')
+      }
+    },
+    
+    # Since this class is being used as a second parent class, it requires another init method.
+    init = function(...){
+      type             <<- 'Binary Classifier'
+      config$sig_level <<- verify(config$sig_level, 'numeric', domain = c(0,1), default = 0.1)
+      config$return    <<- verify(config$return, 'character', domain = c('probs', 'logit', 'class'), default = 'probs')
+      config$threshold <<- verify(config$threshold, 'numeric', lengths = 1, domain = c(0,1), default = 0.5)
       config$threshold_determination <<- verify(config$threshold_determination, 'character', lengths = 1,
                                                 domain = c('set_as_config', 'maximum_f1', 'maximum_chi'), default = 'set_as_config')
       # todo: add 'target_precision', 'target_recall', 'ratio_quantile'
-      reserved_words <<- c(reserved_words, 'sig_level', 'return', 'decision_threshold', 'threshold_determination')
+      reserved_words <<- c(reserved_words, 'sig_level', 'return', 'threshold', 'threshold_determination')
       if(is.null(config$metric)){
         config$metric <<- chif(config$return == 'class', 'f1', 'gini')
       }
@@ -25,14 +41,14 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
           objects$features$importance <<- 1.0/nrow(objects$features)
         }
 
-        set_decision_threshold(X, y)
+        set_threshold(X, y)
         objects$n_output <<- as.integer(1)
       }
     },
 
     transform_yout = function(X, Y = NULL){
       has_gradient = length(gradient_transformers) > 0
-      if (config$return == 'class'){for(i in sequence(ncol(Y))) {Y[,i] = as.numeric(Y[,i] > config$decision_threshold)}} else
+      if (config$return == 'class'){for(i in sequence(ncol(Y))) {Y[,i] = as.numeric(Y[,i] > config$threshold)}} else
       if (config$return == 'logit' | has_gradient){Y %<>% as.matrix %>% apply(2, logit_fwd) %>% as.data.frame}
       Y = callSuper(X, Y)
       if (config$return == 'probs' & has_gradient){Y %<>% as.matrix %>% apply(2, logit_inv) %>% as.data.frame}
@@ -40,32 +56,29 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
       return(Y)
     },
 
-    set_decision_threshold = function(X, y){
+    set_threshold = function(X, y){
       if(fitted){
         if(config$threshold_determination == 'maximum_f1'){
           y_prob = predict(X) %>% pull(name %>% paste('out', sep = '_'))
           res = data.frame(y_pred = y_prob, y_true = y) %>% optSplit.f1('y_pred', 'y_true')
-          config$decision_threshold <<- res$split
+          config$threshold <<- res$split
         }
         else if(config$threshold_determination == 'maximum_chi'){
           y_prob = predict(X) %>% pull(name %>% paste('out', sep = '_'))
           res = data.frame(y_pred = y_prob, y_true = y) %>% optSplit.chi('y_pred', 'y_true')
-          config$decision_threshold <<- res$split
+          config$threshold <<- res$split
         }
-        else if(config$threshold_determination == 'ratio_quantile'){
+        else if(config$threshold_determination == 'label_rate_quantile'){
           y_prob = predict(X) %>% pull(name %>% paste('out', sep = '_'))
-          config$decision_threshold <<- quantile(y_prob, probs = 1 - mean(y, na.rm = T))
+          config$threshold <<- quantile(y_prob, probs = 1 - mean(y, na.rm = T))
         }
         #todo: do for other options
       }
     },
 
-    performance = function(X, y, metric = c('gini', 'aurc', 'precision', 'recall', 'f1', 'sensitivity', 'specificity', 'accuracy', 'lift', 'loss'), ratio = NULL){
-      metric = match.arg(metric)
-      # cutoff_free = metric %in% c('aurc', 'gini', 'lift')
+    performance = function(X, y, metrics = config$metrics, ...){
       yp = predict(X)[, 1]
-
-      correlation(yp, y, metric = metric, ratio = ratio)
+      correlation(yp, y, metrics = metrics, ...)
     }
   )
 )
@@ -75,7 +88,7 @@ CLS.SKLEARN = setRefClass('CLS.SKLEARN', contains = c('TRM.SKLEARN', "CLASSIFIER
    methods = list(
      initialize = function(...){
        callSuper(...)
-       import(CLASSIFIER(...))
+       init()
      },
      model.predict = function(X){
        if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}

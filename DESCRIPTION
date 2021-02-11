@@ -1,7 +1,7 @@
 Package: rml
 Type: Package
 Title: A set of Machine Learning and transformer models.
-Version: 0.5.0
+Version: 0.6.2
 Author: Nicholas Berta
 Maintainer: Nichola Berta <nicholas.berta@gmail.com>
 Description: A set of Machine Learning and transformer models.
@@ -23,6 +23,7 @@ Collate:
     'mappers.R'
     'metric_learning.R'
     'mltools.R'
+    'mlvis.R'
     'regressors.R'
     'rml.R'
     'templates.R'

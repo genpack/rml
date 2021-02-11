@@ -48,8 +48,9 @@ MODEL = setRefClass('MODEL',
       }
 
       reserved_words <<- c('keep_columns', 'keep_features', 
-                         'max_train',
-                         'cv.ntrain', 'cv.ntest', 'cv.test_ratio','cv.train_ratio', 'cv.split_method', 'cv.performance_metric', 'cv.reset_transformer', 'cv.restore_model', 'cv.set',
+                         'name_in_output', 'metrics', 
+                         'cv.ntrain', 'cv.ntest', 'cv.test_ratio','cv.train_ratio', 'cv.split_method', 
+                         'cv.reset_transformer', 'cv.restore_model', 'cv.set', 
                          'sfs.enabled', 
                          'fe.enabled','fe.recursive', 'fe.importance_threshold', 'fe.quantile',
                          'pp.remove_invariant_features', 'pp.remove_nominal_features', 'pp.remove_numeric_features', 'pp.coerce_integer_features',
@@ -70,9 +71,9 @@ MODEL = setRefClass('MODEL',
       if(is.null(settings$cv.restore_model)){settings$cv.restore_model <- F}
       if(is.null(settings$cv.train_ratio)){settings$cv.train_ratio <- 0.5}
       if(is.null(settings$cv.test_ratio)){settings$cv.test_ratio <- 0.2}
-      if(is.null(settings$cv.performance_metric)){settings$cv.performance_metric <- 'gini'}
       if(is.null(settings$cv.split_method)){settings$cv.split_method <- 'shuffle'}
       if(is.null(settings$cv.reset_transformer)){settings$cv.reset_transformer = T}
+      if(is.null(settings$metrics)){settings$metrics <- 'pearson'}
       if(is.null(settings$fe.enabled)){settings$fe.enabled = F}
       if(is.null(settings$fe.recursive)){settings$fe.recursive = F}
       if(is.null(settings$fe.importance_threshold)){settings$fe.importance_threshold = 0}
@@ -80,6 +81,7 @@ MODEL = setRefClass('MODEL',
       if(is.null(settings$pp.remove_nominal_features)){settings$pp.remove_nominal_features = T}
       if(is.null(settings$pp.remove_numeric_features)){settings$pp.remove_numeric_features = F}
       if(is.null(settings$pp.coerce_integer_features)){settings$pp.coerce_integer_features = F}
+      if(is.null(settings$name_in_output)){settings$name_in_output = T}
       if(is.null(settings$eda.enabled)){settings$eda.enabled = F}
       if(is.null(settings$smp.enabled)){settings$smp.enabled = F}
       if(is.null(settings$smp.method)){settings$smp.method = 'upsample'}
@@ -162,7 +164,7 @@ MODEL = setRefClass('MODEL',
       }
 
       XOUT = transform_yout(X, XOUT)
-      if(ncol(XOUT) > 0) colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
+      if((ncol(XOUT) > 0) & config$name_in_output) colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
 
       objects$n_output <<- ncol(XOUT)
       treat(XOUT, XFET, XORG)
@@ -526,7 +528,7 @@ MODEL = setRefClass('MODEL',
     },
 
     # todo: add k-fold, chronological shuffle, chronological split
-    performance.cv = function(X, y){
+    performance.cv = function(X, y, metrics = config$metrics, ...){
       if(config$cv.restore_model){
         keep   = list(objects = objects, fitted = fitted, config = config)
       }
@@ -534,7 +536,7 @@ MODEL = setRefClass('MODEL',
       # Split by shuffling: todo: support other splitting methods(i.e.: chronological)
       N       = nrow(X)
 
-      scores = c()
+      scores = list()
 
       for (i in sequence(config$cv.ntrain)){
         ind_train = N %>% sequence %>% sample(size = floor(config$cv.train_ratio*N), replace = F)
@@ -547,15 +549,15 @@ MODEL = setRefClass('MODEL',
 
         if(is.null(config$cv.set)){
           for(j in sequence(config$cv.ntest)){
-            N2 = N - length(ind_train)
+            N2       = N - length(ind_train)
             ind_test = sequence(N) %>% setdiff(ind_train) %>% sample(size = floor(config$cv.test_ratio*N2), replace = F)
-            X_test  = X[ind_test, objects$features$fname, drop = F]
-            y_test  = y[ind_test]
-            scores = c(scores, .self$performance(X_test, y_test, metric = config$cv.performance_metric))
+            X_test   = X[ind_test, , drop = F]
+            y_test   = y[ind_test]
+            scores[[length(scores) + 1]]  <- .self$performance(X_test, y_test, metrics = metrics, ...)
           }
         } else {
           for(vset in config$cv.set){
-            scores = c(scores, .self$performance(vset$X[objects$features$fname], vset$y, metric = config$cv.performance_metric))
+            scores = c(scores, .self$performance(vset$X, vset$y, metrics = config$metrics))
           }
         }
       }
@@ -565,6 +567,12 @@ MODEL = setRefClass('MODEL',
         fitted  <<- keep$fitted
         config  <<- keep$config
       }
+      
+      # while((length(scores) == 1) & inherits(scores, 'list')) scores = scores[[1]]
+      # if(inherits(scores, 'list')) {
+      #   cls = scores %>% lapply(class) %>% unlist
+      #   if(length(unique(cls)) == 1) {scores %<>% unlist}
+      # }
       return(scores)
     },
 
