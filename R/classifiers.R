@@ -223,9 +223,7 @@ CLS.SKLEARN.XGB = setRefClass('CLS.SKLEARN.XGB', contains = "CLASSIFIER",
         callSuper(...)
         if(is.empty(name)){name <<- 'SKXGB' %>% paste0(sample(10000:99999, 1))}
         if(!is.null(config$n_jobs)){config$n_jobs <<- as.integer(config$n_jobs)}
-        module_xgb = reticulate::import('xgboost')
-        objects$model <<- do.call(module_xgb$XGBClassifier, config %>% list.remove(reserved_words))
-
+        objects$module <<- reticulate::import('xgboost')
       },
       
       model.save = function(path = getwd()){
@@ -246,8 +244,9 @@ CLS.SKLEARN.XGB = setRefClass('CLS.SKLEARN.XGB', contains = "CLASSIFIER",
       },
       
       model.fit = function(X, y){
-          if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
-          objects$model$fit(X %>% data.matrix, y)
+        if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
+        objects$model <<- do.call(objects$module$XGBClassifier, config %>% list.remove(reserved_words))
+        objects$model$fit(X %>% data.matrix, y)
           imp = try(objects$model$feature_importances_ %>% as.numeric, silent = T)
           if(inherits(imp, 'numeric')) objects$features$importance <<- imp
       },

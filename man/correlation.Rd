@@ -4,10 +4,11 @@
 \alias{correlation}
 \title{Use this function to get correlation of two vectors with various metrics.}
 \usage{
-correlation(x, y, metric = "pearson", threshold = NULL, ratio = NULL)
+correlation(x, y, metrics = "pearson", threshold = quantile(x, prob = 1
+  - mean(y, na.rm = T), na.rm = T), quantiles = NULL)
 }
 \value{
-\code{numeric} the value of correlation between two given vectors by the specified metric
+\code{list} The values of specified correlation metrics between two given vectors by the specified metrics.
 }
 \description{
 Use this function to get correlation of two vectors with various metrics.
@@ -15,11 +16,13 @@ Use this function to get correlation of two vectors with various metrics.
 \section{Fields}{
 
 \describe{
-\item{\code{x}}{\code{vector} first vector}
+\item{\code{x}}{\code{vector or table} first vector. If a table or matrix is passed, correlation is measured for each column of the table.}
 
-\item{\code{x}}{\code{vector} second vector (must have the same number of elements as vector \code{x})}
+\item{\code{y}}{\code{vector} second vector (must have the same number of elements/rows as vector/table \code{x})}
 
-\item{\code{metric}}{\code{character} specifying metric. Valid values are
-\code{pearson, loss, aurc, gini, 'precision', 'recall', 'f1', 'accuracy', 'sensitivity', 'specificity', 'fp', 'fn', 'tp', 'tn', 'lift'}}
+\item{\code{metrics}}{\code{character} specifying which metrics you desire to be computed. Valid values are
+\code{pearson, log_loss, aurc, gini, tp, fn, fp, tn, tpr, fnr, fpr, tnr, ppv, fdr, npv, pt, ts, csi, ba, 
+recall, sensitivity, hit_rate, miss_rate, f1, specificity, selectivity, fall_out, precision, accuracy, fmi, 
+informedness, markedness, mcc, for, lift}}
 }}
 

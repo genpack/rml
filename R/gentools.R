@@ -1169,25 +1169,27 @@ evaluate_models = function(modlist, X, y){
   return(mlog)
 }
 
+#' @export
+#' Column headers must not be duplicated. Function does not check this and will return error.
 evaluate_features = function(X, y, metrics = 'gini', ...){
   if((ncol(X) == 0) | (nrow(X) == 0)) return(NULL)
-  
-  features <- rbig::colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.}
-  features$n_unique  <- rbig::colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
-  features$n_missing <- rbig::colnames(X) %>% sapply(function(x) X %>% pull(x) %>% is.na %>% sum) %>% unlist
 
-  for(cn in rbig::colnames(X)){
-    for(mtrc in metrics){
-      metricval <- try(correlation(X %>% pull(cn), y, metric = mtrc, ...), silent = T)
-      if(inherits(metricval, 'numeric')){
-        features[cn, mtrc] <- metricval
-      }
-    }
+  pf = correlation(X, y, metrics = metrics, ...)
+  
+  if(inherits(pf[[1]], 'list')){
+    features = pf %>% purrr::reduce(rbind)
+  } else {
+    features = unlist(pf) %>% as.data.frame
+    colnames(features) <- metrics[1]
+  }
+  rownames(features) <- rbig::colnames(X)
+  
+  for(cn in rownames(features)){
+    features[cn, 'n_unique'] = X[[cn]] %>% unique %>% length
+    features[cn, 'fclass'] = X[[cn]] %>% class
+    features[cn, 'n_missing'] = X[[cn]] %>% is.na %>% sum
   }
   features$type = ifelse(features$fclass == 'numeric', 'numeric', ifelse(features$fclass == 'integer', 'ordinal', 'nominal'))
-  features$sumScores <- features[[metrics[1]]]
-  features$numScores <- 1
-  features$avgScores <- features$sumScores
 
   return(features)
 }
@@ -1206,6 +1208,9 @@ add_classifier = function(input = list(fetlog = NULL, modlog = data.frame(), mod
 
   if(is.null(features)){
     features = evaluate_features(X_valid, y_valid, metrics[1])
+    features$sumScores <- features[[metrics[1]]]
+    features$numScores <- 1
+    features$avgScores <- features$sumScores
   }
 
   # Building a base model:

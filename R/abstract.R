@@ -103,6 +103,7 @@ MODEL = setRefClass('MODEL',
     reset               = function(reset_transformers = T, reset_gradient_transformers = T){
       fitted <<- FALSE
       objects$features <<- NULL
+      objects$model    <<- NULL
       objects$saved_pred <<- NULL
       if (reset_transformers & !is.empty(transformers)){
         for (transformer in transformers) transformer$reset(reset_transformers = T, reset_gradient_transformers = reset_gradient_transformers)
