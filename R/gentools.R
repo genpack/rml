@@ -1169,8 +1169,8 @@ evaluate_models = function(modlist, X, y){
   return(mlog)
 }
 
+# Column headers must not be duplicated. Function does not check this and will return error.
 #' @export
-#' Column headers must not be duplicated. Function does not check this and will return error.
 evaluate_features = function(X, y, metrics = 'gini', ...){
   if((ncol(X) == 0) | (nrow(X) == 0)) return(NULL)
 

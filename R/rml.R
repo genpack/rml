@@ -22,7 +22,7 @@
 # 0.5.2 (13 January 2015)   - abstract.R updated: logical parameter 'name_in_output' added to config
 # 0.6.0 (01 February 2015)  - mltools.R updated: functions scorer() and correlation() modified.
 # 0.6.2 (11 February 2015)  - Module mlvis.R added with two functions: binary_class_bar() and binary_class_pie()
-# 0.6.3 (16 March 2015)     - function evaluate_features() in gentools.R updated and exported.
+# 0.6.4 (16 March 2015)     - function evaluate_features() in gentools.R updated and exported.
 
 
 # Description for Roxygen
