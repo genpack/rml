@@ -15,15 +15,25 @@ binary_class_bar = function(X, y, ncuts = 1000, C0_tag = 'C0', C1_tag = 'C1', ro
   reshape2::melt(res, measure.vars = c(C0_tag, C1_tag)) %>% 
     crosstalk::SharedData$new() -> shared_features
   
-  crosstalk::bscols(
-    list(
+  if(ncol(X) == 1){
+    fig = crosstalk::bscols(
       list(
-        crosstalk::filter_select('feature', 'Feature', shared_features, ~feature, multiple = F),
-        crosstalk::filter_slider('cutpoint', 'Threshold', shared_features, ~cutpoint)),
-      shared_features %>% plotly::plot_ly(x = ~value, y = ~variable, type = 'bar')
-    )  
-  )
-  
+        crosstalk::filter_slider('cutpoint', 'Threshold', shared_features, ~cutpoint),
+        shared_features %>% plotly::plot_ly(x = ~value, y = ~variable, type = 'bar')
+      )  
+    )
+    
+  } else {
+    fig = crosstalk::bscols(
+      list(
+        list(
+          crosstalk::filter_select('feature', 'Feature', shared_features, ~feature, multiple = F),
+          crosstalk::filter_slider('cutpoint', 'Threshold', shared_features, ~cutpoint)),
+        shared_features %>% plotly::plot_ly(x = ~value, y = ~variable, type = 'bar')
+      )  
+    )
+  }
+  return(fig)
 }
 
 #' @export 
@@ -47,3 +57,23 @@ binary_class_pie = function(X, y, ncuts = 1000, C0_tag = 'C0', C1_tag = 'C1', ro
   )
   
 }
+
+
+#' This function plots density of vector \code{x} for elements for which \code{y} is 0 in black and
+#' another density plot for elements for which \code{y} is 1 in red.
+#' 
+#' @export
+plot_bindensity = function(x, y){
+  rmv = which(x %>% outlier(recursive = T))
+  if(length(rmv) > 0){
+    x = x[- rmv]
+    y = y[- rmv]
+  }
+  w0 = which(y == 0)
+  w1 = which(y == 1)
+  
+  x[w0] %>% density %>% plot
+  x[w1] %>% density %>% lines(col = 'red')
+}
+
+

@@ -152,6 +152,33 @@ create_keras_layers = function(config){
   return(layers)
 }
 
+#' This function gets a vector and returns a vector of logical which is TRUE if the corresponding value is an outlier
+#' 
+#' @field x \code{numeric} : Input vector
+#' @field sd_threshold \code{numeric} : Standard Deviation threshold as a criteria for outlier determination.
+#' @field recursive \code{logical} : TRUE if the process of outlier detection should continue with eliminated outliers
+#' @return logical vector specifying which element of the given vector \code{x} is outlier.
+#' @export
+outlier = function(x, sd_threshold = 4, recursive = F){
+  avg   = mean(x, na.rm = T)
+  sdv   = sd(x, na.rm = T)
+  isout = (x > avg + sd_threshold*sdv) | (x < avg - sd_threshold*sdv)
+  if(!recursive){
+    return(isout)
+  } else {
+    wout = which(isout)
+    ind  = x %>% length %>% sequence %>% setdiff(isout)
+    while(length(wout) > 0){
+      wout = outlier(x[ind], sd_threshold = sd_threshold, recursive = F) %>% which
+      ind  = ind %-% ind[wout]
+    }
+    out = rep(TRUE, length(x))
+    out[ind] <- FALSE
+    return(out)
+  }
+}
+
+
 #' This function gets a data.frame and replaces each cell with its rank among all the cells in its column.
 #' 
 #' @field X \code{data.frame} or \code{matrix}: Input table to be ranked
@@ -167,6 +194,8 @@ ranker = function(X){
   }
   return(X)
 }
+
+
 
 outliers.old = function(X, sd_threshold = 4){
   if(inherits(X, 'numeric')){X = matrix(X, ncol = 1)}

@@ -1171,23 +1171,43 @@ evaluate_models = function(modlist, X, y){
 
 # Column headers must not be duplicated. Function does not check this and will return error.
 #' @export
-evaluate_features = function(X, y, metrics = 'gini', ...){
-  if((ncol(X) == 0) | (nrow(X) == 0)) return(NULL)
+evaluate_features = function(X, y, metrics = 'gini', extra_info = T, ...){
+  nrwx = nrow(X)
+  
+  if((ncol(X) == 0) | (nrwx == 0)) return(NULL)
 
   pf = correlation(X, y, metrics = metrics, ...)
   
   if(inherits(pf[[1]], 'list')){
-    features = pf %>% purrr::reduce(rbind)
+    features = pf %>% lapply(unlist) %>% purrr::reduce(rbind) %>% as.data.frame
   } else {
     features = unlist(pf) %>% as.data.frame
     colnames(features) <- metrics[1]
   }
   rownames(features) <- rbig::colnames(X)
   
-  for(cn in rownames(features)){
-    features[cn, 'n_unique'] = X[[cn]] %>% unique %>% length
-    features[cn, 'fclass'] = X[[cn]] %>% class
-    features[cn, 'n_missing'] = X[[cn]] %>% is.na %>% sum
+  if(extra_info){
+    for(cn in rownames(features)){
+      features[cn, 'n_unique'] = X[[cn]] %>% unique %>% length
+      features[cn, 'fclass'] = X[[cn]] %>% class
+      features[cn, 'n_missing'] = X[[cn]] %>% is.na %>% sum
+      features[cn, 'n_outliers'] = X[[cn]] %>% outlier %>% sum(na.rm = T)
+      qnt = quantile(X[[cn]], na.rm = T)
+      features[cn, 'minimum'] = qnt[1]
+      features[cn, 'q1'] = qnt[2]
+      features[cn, 'median'] = qnt[3]
+      features[cn, 'q3'] = qnt[4]
+      features[cn, 'maximum'] = qnt[5]
+      features[cn, 'sum'] = X[[cn]] %>% sum(na.rm = T)
+      features[cn, 'mean'] = X[[cn]] %>% mean(na.rm = T)
+      features[cn, 'sd'] = X[[cn]] %>% sd(na.rm = T)
+      
+      # MFV: Most Frequent Value
+      mfv = X[[cn]] %>% most_frequent
+      features[cn, 'mfv'] = mfv
+      features[cn, 'mfv_freq'] = sum(X[[cn]] == mfv)
+      features[cn, 'mfv_rate'] = features[cn, 'mfv_freq']/nrwx
+    }
   }
   features$type = ifelse(features$fclass == 'numeric', 'numeric', ifelse(features$fclass == 'integer', 'ordinal', 'nominal'))
 
