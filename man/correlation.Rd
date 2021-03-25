@@ -4,8 +4,9 @@
 \alias{correlation}
 \title{Use this function to get correlation of two vectors with various metrics.}
 \usage{
-correlation(x, y, metrics = "pearson", threshold = quantile(x, prob = 1
-  - mean(y, na.rm = T), na.rm = T), quantiles = NULL)
+correlation(x, y, metrics = "pearson",
+  threshold = quantile(as.numeric(x), prob = 1 - mean(y, na.rm = T),
+  na.rm = T), quantiles = NULL)
 }
 \value{
 \code{list} The values of specified correlation metrics between two given vectors by the specified metrics.
@@ -23,6 +24,6 @@ Use this function to get correlation of two vectors with various metrics.
 \item{\code{metrics}}{\code{character} specifying which metrics you desire to be computed. Valid values are
 \code{pearson, log_loss, aurc, gini, tp, fn, fp, tn, tpr, fnr, fpr, tnr, ppv, fdr, npv, pt, ts, csi, ba, 
 recall, sensitivity, hit_rate, miss_rate, f1, specificity, selectivity, fall_out, precision, accuracy, fmi, 
-informedness, markedness, mcc, for, lift}}
+informedness, markedness, mcc, for, lift, optsplit.chi, optsplit.f1}}
 }}
 

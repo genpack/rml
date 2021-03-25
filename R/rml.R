@@ -24,6 +24,7 @@
 # 0.6.2 (11 February 2015)  - Module mlvis.R added with two functions: binary_class_bar() and binary_class_pie()
 # 0.6.5 (16 March 2015)     - function evaluate_features() in gentools.R updated and exported.
 # 0.6.6 (17 March 2015)     - functions outlier() and plot_bindensity() added.
+# 0.6.8 (18 March 2015)     - function correlation() changed: optsplit.chi and optsplit.f1 added
 
 
 # Description for Roxygen

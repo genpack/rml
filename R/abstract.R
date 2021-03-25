@@ -202,7 +202,10 @@ MODEL = setRefClass('MODEL',
         fte = fns %-% ftk
         while(length(fte) > 0){
           objects$features <<- objects$features %>% filter(fname %in% ftk)
-          if(is.empty(objects$features)){.self$fit.distribution(X, y); fte = c()} else {
+          if(is.empty(objects$features)){
+            # .self$fit.distribution(X, y); fte = c()
+            stop('No features left for training the model!')
+          } else {
             .self$model.fit(X[objects$features$fname], y)
             fns = objects$features$fname
             ftk = fns[which(objects$features$importance > threshold)] # features to keep

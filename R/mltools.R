@@ -260,10 +260,10 @@ na2median = function(X){
 #' @field metrics \code{character} specifying which metrics you desire to be computed. Valid values are
 #' \code{pearson, log_loss, aurc, gini, tp, fn, fp, tn, tpr, fnr, fpr, tnr, ppv, fdr, npv, pt, ts, csi, ba, 
 #' recall, sensitivity, hit_rate, miss_rate, f1, specificity, selectivity, fall_out, precision, accuracy, fmi, 
-#' informedness, markedness, mcc, for, lift}
+#' informedness, markedness, mcc, for, lift, optsplit.chi, optsplit.f1}
 #' @return \code{list} The values of specified correlation metrics between two given vectors by the specified metrics. 
 #' @export
-correlation = function(x, y, metrics = 'pearson', threshold = quantile(x, prob = 1.0 - mean(y, na.rm = T), na.rm = T), quantiles = NULL){
+correlation = function(x, y, metrics = 'pearson', threshold = quantile(as.numeric(x), prob = 1.0 - mean(y, na.rm = T), na.rm = T), quantiles = NULL){
 
   if(inherits(x, c('data.frame', 'WideTable', 'matrix'))){
     if(!inherits(x, 'WideTable')) {x %<>% as.data.frame}
@@ -274,12 +274,28 @@ correlation = function(x, y, metrics = 'pearson', threshold = quantile(x, prob =
       out[[col]] <- correlation(x[, col], y, metrics = metrics, threshold = threshold, quantiles = quantiles)
     }
   } else {
+    if(inherits(x, 'character')) {x = as.factor(x)}
     x = as.numeric(x)
     y = as.numeric(y)
     
     out = list()
     for (metric in metrics %^% 'pearson'){
       out[[metric]] <- cor(x, y) 
+    }
+
+    for (metric in metrics %^% 'optsplit.chi'){
+      assert(length(unique(y)) == 2, "Only works for binary y")
+      cbind(feature = x, label = y) %>% optSplit.chi(num_col = 'feature', cat_col = 'label') -> res
+      out[[metric]] <- res$correlation
+      out[[metric %>% paste('cutpoint', sep = '.')]] <- res$split
+      out[[metric %>% paste('pvalue', sep = '.')]] <- res$pvalue
+    }
+
+    for (metric in metrics %^% 'optsplit.f1'){
+      assert(length(unique(y)) == 2, "Only works for binary y")
+      cbind(feature = x, label = y) %>% optSplit.f1(num_col = 'feature', cat_col = 'label') -> res
+      out[[metric]] <- res$f1
+      out[[metric %>% paste('cutpoint', sep = '.')]] <- res$split
     }
     
     subset = metrics %^% c('aurc', 'gini')
@@ -404,7 +420,7 @@ optSplit.chi = function(tbl, num_col, cat_col, fun = NULL){
   out <- tbl %>% tail(1) %>% dplyr::select(split = x, correlation = chi) %>% as.list
 
   #out$chisq  <- N*out$chisq
-  #out$pvalue <- pchisq(out$chisq, df = 1, lower.tail = F)
+  out$pvalue <- pchisq(out$correlation, df = 1, lower.tail = F)
   return(out)
 }
 
@@ -557,7 +573,7 @@ dte = function(df, prob_col, label_col, breaks = 1000, fun = NULL){
 #' @export
 optSplit.f1 = function(df, prob_col, label_col, breaks = 1000, fun = NULL){
   df %>% dte(prob_col, label_col, breaks, fun = fun) %>% arrange(desc(f1)) %>%
-    head(1) %>% collect %>% as.list
+    head(1) %>% as.list
 }
 
 # finds the optimal decision threshold to maximize f1 score
