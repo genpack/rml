@@ -7,8 +7,8 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
       callSuper(...)
       type             <<- 'Binary Classifier'
       config$sig_level <<- verify(config$sig_level, 'numeric', domain = c(0,1), default = 0.1)
-      config$return    <<- verify(config$return, 'character', domain = c('probs', 'logit', 'class'), default = 'probs')
-      config$threshold <<- verify(config$threshold, 'numeric', domain = c(0,1), default = 0.5, lengths = 1)
+      config[['return']]    <<- verify(config[['return']], 'character', domain = c('probs', 'logit', 'class'), default = 'probs')
+      config[['threshold']] <<- verify(config[['threshold']], 'numeric', domain = c(0,1), default = 0.5, lengths = 1)
       # config$quantiles <<- verify(config$quantiles, 'numeric', domain = c(0,1), default = 0.5)
       config$threshold_determination <<- verify(config$threshold_determination, 'character', lengths = 1,
                                                 domain = c('set_as_config', 'maximum_f1', 'maximum_chi', 'label_rate_quantile'), default = 'set_as_config')
@@ -239,7 +239,8 @@ CLS.SKLEARN.XGB = setRefClass('CLS.SKLEARN.XGB', contains = "CLASSIFIER",
         warnif(!pass, paste0('File ', fn , ' does not exist!'))
         if(pass){
           joblib = reticulate::import('joblib')
-          objects$model <<- joblib$load(fn)
+          objects$model  <<- joblib$load(fn)
+          objects$module <<- reticulate::import('xgboost')
         }
       },
       

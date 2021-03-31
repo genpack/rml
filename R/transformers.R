@@ -108,7 +108,8 @@ TRM.SKLEARN = setRefClass(
       warnif(!pass, paste0('File ', fn , ' does not exist!'))
       if(pass){
         joblib = reticulate::import('joblib')
-        objects$model <<- joblib$load(fn)
+        objects$model  <<- joblib$load(fn)
+        objects$module <<- reticulate::import(paste('sklearn', config[['model.module']], sep = '.'))
       }
     },
 

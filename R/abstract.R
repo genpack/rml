@@ -533,23 +533,21 @@ MODEL = setRefClass('MODEL',
 
     # todo: add k-fold, chronological shuffle, chronological split
     performance.cv = function(X, y, metrics = config$metrics, ...){
-      if(config$cv.restore_model){
-        keep   = list(objects = objects, fitted = fitted, config = config)
-      }
+      cvmodel = .self$copy()
 
       # Split by shuffling: todo: support other splitting methods(i.e.: chronological)
       N       = nrow(X)
 
       scores = list()
 
-      for (i in sequence(config$cv.ntrain)){
+      for (i in sequence(cvmodel$config$cv.ntrain)){
         ind_train = N %>% sequence %>% sample(size = floor(config$cv.train_ratio*N), replace = F)
 
         X_train = X[ind_train, ,drop = F]
         y_train = y[ind_train]
 
-        reset(config$cv.reset_transformer)
-        .self$fit(X_train, y_train)
+        cvmodel$reset(config$cv.reset_transformer)
+        cvmodel$fit(X_train, y_train)
 
         if(is.null(config$cv.set)){
           for(j in sequence(config$cv.ntest)){
@@ -557,21 +555,15 @@ MODEL = setRefClass('MODEL',
             ind_test = sequence(N) %>% setdiff(ind_train) %>% sample(size = floor(config$cv.test_ratio*N2), replace = F)
             X_test   = X[ind_test, , drop = F]
             y_test   = y[ind_test]
-            scores[[length(scores) + 1]]  <- .self$performance(X_test, y_test, metrics = metrics, ...)
+            scores[[length(scores) + 1]]  <- cvmodel$performance(X_test, y_test, metrics = metrics, ...)
           }
         } else {
           for(vset in config$cv.set){
-            scores = c(scores, .self$performance(vset$X, vset$y, metrics = config$metrics))
+            scores = c(scores, cvmodel$performance(vset$X, vset$y, metrics = config$metrics))
           }
         }
       }
 
-      if(config$cv.restore_model){
-        objects <<- keep$objects
-        fitted  <<- keep$fitted
-        config  <<- keep$config
-      }
-      
       # while((length(scores) == 1) & inherits(scores, 'list')) scores = scores[[1]]
       # if(inherits(scores, 'list')) {
       #   cls = scores %>% lapply(class) %>% unlist

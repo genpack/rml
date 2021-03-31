@@ -1161,14 +1161,6 @@ add_model_to_modlog = function(modlog = data.frame(), model = NULL, performance)
   return(modlog)
 }
 
-evaluate_models = function(modlist, X, y){
-  mlog = data.frame()
-  for(mdl in modlist){
-    mlog %<>% add_model_to_modlog(model = mdl, X = X, y = y)
-  }
-  return(mlog)
-}
-
 # Column headers must not be duplicated. Function does not check this and will return error.
 #' @export
 evaluate_features = function(X, y, metrics = 'gini', extra_info = T, ...){

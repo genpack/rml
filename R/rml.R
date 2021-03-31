@@ -25,6 +25,8 @@
 # 0.6.5 (16 March 2015)     - function evaluate_features() in gentools.R updated and exported.
 # 0.6.6 (17 March 2015)     - functions outlier() and plot_bindensity() added.
 # 0.6.8 (18 March 2015)     - function correlation() changed: optsplit.chi and optsplit.f1 added
+# 0.6.10 (31 March 2015)    - Method model.load() changed for SKLearn models. Module is reloaded.
+# 0.7.1 (1 April 2015)      - Boosters initiated: Function feature_booster(), train_model() and evaluate_models() added.
 
 
 # Description for Roxygen
