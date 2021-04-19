@@ -27,15 +27,9 @@ evaluate_models = function(models, X, y){
     res = try(models[[i]]$performance.cv(X, y), silent = T)
     cat('DONE!', '\n')
     if(inherits(res, 'try-error')){
-      cat('\n', 'Model ', i, ' evaluation failed!', '\n', res %>% as.character, '\n')
+      models[[i]]$objects$performance.cv <- sprintf("Model %s evaluation failed! %s", model$name, res %>% as.character)
     } else {
       models[[i]]$objects$performance.cv <- res
-    }
-  }
-  
-  for(i in names(models)){
-    if(is.null(models[[i]]$objects$performance.cv)){
-      models[[i]] <- NULL
     }
   }
   
@@ -43,8 +37,29 @@ evaluate_models = function(models, X, y){
 }
 
 
-# Given 'X_train' and should contain features of the given 'model'
-# If you want the models to be trained with full X, then:
+#' @export
+evaluate_models_parallel = function(models, X, y, n_jobs = 8){
+  library(doParallel)
+  cl = makeCluster(n_jobs)
+  registerDoParallel(cl)
+  actual_njobs = getDoParWorkers()
+  warnif(actual_njobs < n_jobs, 
+         sprintf('Parallel run is working with %s cores rather than %s. It may take longer than expected!', actual_njobs, n_jobs))
+  
+  foreach(i = names(models), .combine = c, .packages = c('magrittr', 'dplyr','rutils', 'reticulate', 'rml', 'rbig', 'rfun'), .errorhandling = 'remove') %dopar% {
+    model = models[[i]]
+    res = try(model$performance.cv(X, y), silent = T)
+    if(inherits(res, 'try-error')){
+      model$objects$performance.cv = sprintf("Model %s evaluation failed! %s", model$name, res %>% as.character)
+    } else {
+      model$objects$performance.cv <- res
+    }
+    model
+  }
+}
+
+# Given 'X_train' should contain features of the given 'model'
+# If you want the models to be trained with all rows of the training dataset (X,y) in cross validation, then:
 # - set cv.train_ratio = 1
 # - set cv.ntrain = 1
 # - specify a separate validation set in parameter: cv.set
@@ -91,12 +106,17 @@ feature_booster = function(base_model, X, y, n_experiment = 10, subset_size = 10
   
   if(prf_best > prf_base){
     cat('\n', sprintf('Boosting Succeeded. Performance improved from %s to %s', prf_base, prf_best))
-    return(bag[[ord]])
+    boosted = bag[[ord]]
     
   } else {
     cat('\n', sprintf('Boosting Failed. Performance declined from %s to %s', prf_base, prf_best))
+    boosted = NULL
   }
   ##
+  
+  out = list(boosted_model = boosted, models = bag)
+  # todo: variable 'out' should be returned rather than 'boosted'
+  return(boosted)
 }
 
 

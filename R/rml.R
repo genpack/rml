@@ -27,6 +27,7 @@
 # 0.6.8 (18 March 2015)     - function correlation() changed: optsplit.chi and optsplit.f1 added
 # 0.6.10 (31 March 2015)    - Method model.load() changed for SKLearn models. Module is reloaded.
 # 0.7.1 (1 April 2015)      - Boosters initiated: Function feature_booster(), train_model() and evaluate_models() added.
+# 0.7.2 (12 April 2015)     - Minor fix in function correlation(). NULL is passed to argument 'threshold' 
 
 
 # Description for Roxygen

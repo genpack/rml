@@ -263,7 +263,7 @@ na2median = function(X){
 #' informedness, markedness, mcc, for, lift, optsplit.chi, optsplit.f1}
 #' @return \code{list} The values of specified correlation metrics between two given vectors by the specified metrics. 
 #' @export
-correlation = function(x, y, metrics = 'pearson', threshold = quantile(as.numeric(x), prob = 1.0 - mean(y, na.rm = T), na.rm = T), quantiles = NULL){
+correlation = function(x, y, metrics = 'pearson', threshold = NULL, quantiles = NULL){
 
   if(inherits(x, c('data.frame', 'WideTable', 'matrix'))){
     if(!inherits(x, 'WideTable')) {x %<>% as.data.frame}
@@ -567,6 +567,7 @@ dte = function(df, prob_col, label_col, breaks = 1000, fun = NULL){
     mutate(precision = tp/(tp + fp), recall = tp/(tp + fn)) %>%
     mutate(f1 = 2*precision*recall/(precision + recall)) %>%
     mutate(split = mn + xx*hh/breaks) %>%
+    mutate(ratio_right = tp/(tp + fp), ratio_left = fn/(tn + fn)) %>% 
     dplyr::select(split, tp, fp, tn, fn, precision, recall, f1)
 }
 
