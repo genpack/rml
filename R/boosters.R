@@ -38,13 +38,14 @@ evaluate_models = function(models, X, y){
 
 
 #' @export
-evaluate_models_parallel = function(models, X, y, n_jobs = 8){
-  library(doParallel)
-  cl = makeCluster(n_jobs)
-  registerDoParallel(cl)
-  actual_njobs = getDoParWorkers()
-  warnif(actual_njobs < n_jobs, 
-         sprintf('Parallel run is working with %s cores rather than %s. It may take longer than expected!', actual_njobs, n_jobs))
+evaluate_models.multicore = function(models, X, y, n_jobs = 8){
+  cl = rutils::setup_multicore(n_jobs = n_jobs)
+  # library(doParallel)
+  # cl = makeCluster(n_jobs)
+  # registerDoParallel(cl)
+  # actual_njobs = getDoParWorkers()
+  # warnif(actual_njobs < n_jobs, 
+  #        sprintf('Parallel run is working with %s cores rather than %s. It may take longer than expected!', actual_njobs, n_jobs))
   
   foreach(i = names(models), .combine = c, .packages = c('magrittr', 'dplyr','rutils', 'reticulate', 'rml', 'rbig', 'rfun'), .errorhandling = 'remove') %dopar% {
     model = models[[i]]
@@ -56,6 +57,8 @@ evaluate_models_parallel = function(models, X, y, n_jobs = 8){
     }
     model
   }
+  stopCluster(cl)
+  gc()
 }
 
 # Given 'X_train' should contain features of the given 'model'

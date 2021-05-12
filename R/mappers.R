@@ -69,8 +69,8 @@ MAP.STATS.PCA = setRefClass('MAP.STATS.PCA', contains = 'MODEL', methods = list(
   
   model.predict = function(X){
     XOUT = stats::predict(objects$model, X %>% as.matrix)
-    XOUT = XOUT[,sequence(min(ncol(XOUT), config$num_components))] %>% as.data.frame
-    # colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
+    XOUT = XOUT[, sequence(min(ncol(XOUT), config$num_components))] %>% as.data.frame
+    colnames(XOUT) <- paste0('CMP', sequence(ncol(XOUT)))
     return(XOUT)
   }
 ))

@@ -31,7 +31,7 @@ library(magrittr)
 #' @export MODEL
 #' @exportClass MODEL
 MODEL = setRefClass('MODEL',
-  fields = list(name = "character", type = "character", package = "character", package_language = "character", description = "character", reserved_words = "character",
+  fields = list(name = "character", type = "character", package = "character", package_language = "character", packages_required = "character", description = "character", reserved_words = "character",
                 config = "list", fitted = 'logical', transformers = 'list', gradient_transformers = 'list', yin_transformers = 'list', yout_transformers = 'list', objects = "list"),
 
   methods = list(
@@ -46,6 +46,8 @@ MODEL = setRefClass('MODEL',
           settings[[sn]] <- NULL
         }
       }
+      
+      packages_required <<- c('magrittr', 'dplyr', 'rutils', 'rml', 'rbig', 'reticulate')
 
       reserved_words <<- c('keep_columns', 'keep_features', 
                          'name_in_output', 'metrics', 
@@ -53,44 +55,46 @@ MODEL = setRefClass('MODEL',
                          'cv.reset_transformer', 'cv.restore_model', 'cv.set', 
                          'sfs.enabled', 
                          'fe.enabled','fe.recursive', 'fe.importance_threshold', 'fe.quantile',
+                         'mc.enabled', 'mc.num_cores',
+                         'remove_failed_transformers',
                          'pp.remove_invariant_features', 'pp.remove_nominal_features', 'pp.remove_numeric_features', 'pp.coerce_integer_features',
+                         'pp.trim_outliers', 'pp.trim_outliers.adaptive', 'pp.trim_outliers.recursive', 'pp.trim_outliers.sd_threshold',
+                         'pp.mask_missing_values',
                          'model.class', 'model.config', 'model.module',
                          'eda.enabled', 
+                         'silent',
                          # smp.enabled: boolean parameter. default = FALSE. Should I do any sampling of the training rows at all? If FALSE (Default) 
                          #              model will be trained by the entire training data table (X) without any changes.
-                         'smp.enabled', 'smp.class_ratio', 'smp.num_rows', 'smp.method', 'smp.config',
+                         'smp.enabled', 'smp.class_ratio', 'smp.sample_ratio', 'smp.num_rows', 'smp.method', 'smp.config',
                          'features.include', 'features.include.at', 'features.exclude', 'features.exclude.at',
                          'ts.enabled', 'ts.id_col', 'ts.time_col', 
                          'return_features', 'feature_subset_size', 'gradient_transformers_aggregator', 'save_predictions',
                          'metric', 'transformers', 'fitted')
       
-      if(is.null(settings$keep_columns)){settings$keep_columns = F}
-      if(is.null(settings$keep_features)){settings$keep_features = F}
-      if(is.null(settings$cv.ntest)){settings$cv.ntest <- 5}
-      if(is.null(settings$cv.ntrain)){settings$cv.ntrain <- 1}
-      if(is.null(settings$cv.restore_model)){settings$cv.restore_model <- F}
-      if(is.null(settings$cv.train_ratio)){settings$cv.train_ratio <- 0.5}
-      if(is.null(settings$cv.test_ratio)){settings$cv.test_ratio <- 0.2}
-      if(is.null(settings$cv.split_method)){settings$cv.split_method <- 'shuffle'}
-      if(is.null(settings$cv.reset_transformer)){settings$cv.reset_transformer = T}
-      if(is.null(settings$metrics)){settings$metrics <- 'pearson'}
-      if(is.null(settings$fe.enabled)){settings$fe.enabled = F}
-      if(is.null(settings$fe.recursive)){settings$fe.recursive = F}
-      if(is.null(settings$fe.importance_threshold)){settings$fe.importance_threshold = 0}
-      if(is.null(settings$pp.remove_invariant_features)){settings$pp.remove_invariant_features = T}
-      if(is.null(settings$pp.remove_nominal_features)){settings$pp.remove_nominal_features = T}
-      if(is.null(settings$pp.remove_numeric_features)){settings$pp.remove_numeric_features = F}
-      if(is.null(settings$pp.coerce_integer_features)){settings$pp.coerce_integer_features = F}
-      if(is.null(settings$name_in_output)){settings$name_in_output = T}
-      if(is.null(settings$eda.enabled)){settings$eda.enabled = F}
-      if(is.null(settings$smp.enabled)){settings$smp.enabled = F}
-      if(is.null(settings$smp.method)){settings$smp.method = 'upsample'}
-      if(is.null(settings$ts.enabled)){settings$ts.enabled = F}
-      if(is.null(settings$ts.id_col)){settings$ts.id_col = 'caseID'}
-      if(is.null(settings$ts.time_col)){settings$ts.time_col = 'time'}
-      if(is.null(settings$gradient_transformers_aggregator)){settings$gradient_transformers_aggregator = mean}
-      if(is.null(settings$save_predictions)){settings$save_predictions = F}
+      for(pn in c('keep_columns', 'keep_features', 'cv.restore_model', 'fe.enabled', 'mc.enabled', 
+                  'pp.remove_numeric_features', 'pp.coerce_integer_features', 'pp.trim_outliers',
+                  'eda.enabled', 'smp.enabled', 'ts.enabled', 'save_predictions', 'remove_failed_transformers')){
+        settings[[pn]] <- verify(settings[[pn]], 'logical', lengths = 1, domain = c(T,F), default = F)
+      }
       
+      for(pn in c('cv.reset_transformer', 'silent', 'name_in_output', 
+                  'pp.remove_nominal_features', 'pp.remove_invariant_features')){
+        settings[[pn]] <- verify(settings[[pn]], 'logical', lengths = 1, domain = c(T,F), default = T)
+      }
+
+      settings$metrics   <- verify(settings$metrics,  'character', default = 'pearson')
+      settings$cv.split_method <- verify(settings$cv.split_method, lengths = 1, 'character', default = 'shuffle')
+      
+      settings$cv.ntest  <- verify(settings$cv.ntest , c('numeric', 'integer'), lengths = 1, domain = c(1, Inf), default = 5) %>% as.integer
+      settings$cv.ntrain <- verify(settings$cv.ntrain, c('numeric', 'integer'), lengths = 1, domain = c(1, Inf), default = 1) %>% as.integer
+      settings$cv.train_ratio <- verify(settings$cv.train_ratio, c('numeric', 'integer'), lengths = 1, domain = c(0, 1), default = 0.5) %>% as.numeric
+      settings$cv.test_ratio  <- verify(settings$cv.test_ratio, c('numeric', 'integer') , lengths = 1, domain = c(0, 1), default = 0.2) %>% as.numeric
+      settings$fe.importance_threshold  <- verify(settings$fe.importance_threshold, c('numeric', 'integer') , lengths = 1, default = 0) %>% as.numeric
+
+      # if(is.null(settings$ts.id_col)){settings$ts.id_col = 'caseID'}
+      # if(is.null(settings$ts.time_col)){settings$ts.time_col = 'time'}
+      if(is.null(settings$gradient_transformers_aggregator)){settings$gradient_transformers_aggregator = mean}
+
       config       <<- settings
       fitted       <<- FALSE
       transformers <<- transformers %>% {if(inherits(.,'list')) . else list(.)}
@@ -256,11 +260,13 @@ MODEL = setRefClass('MODEL',
         if(!is.null(config[['features.include.at']])){X = X[config$features.include.at %^% rbig::colnames(X)]}
         if(!is.null(config[['features.exclude.at']])){X = X[rbig::colnames(X) %-% config$features.exclude.at]}
         if(config$smp.enabled){
+          smp_method <- verify(config$smp.method, 'character', domain = c('upsample', 'downsample', 'smote'), default = 'upsample') 
+
           actual_ratio = mean(y)
           n_train_rows = length(y)
           
           if(!is.null(verify(config$smp.class_ratio, 'numeric', domain = c(.Machine$double.eps, 1 - .Machine$double.eps), null_allowed = T))){
-            if(config$smp.method == 'downsample'){
+            if(smp_method == 'downsample'){
               if(config$smp.class_ratio >= actual_ratio){
                 # downsample negative class, keep all positive class:
                 w1 = which(y == 1)
@@ -274,7 +280,7 @@ MODEL = setRefClass('MODEL',
                 rr = config$smp.class_ratio
                 w1 = which(y == 1) %>% sample(as.integer(n0*(1.0 - rr)/rr))
               }
-            } else if(config$smp.method == 'upsample'){
+            } else if(smp_method == 'upsample'){
               if(config$smp.class_ratio >= actual_ratio){
                 # upsample positive class, keep all negative class:
                 w0 = which(y == 0)
@@ -288,7 +294,7 @@ MODEL = setRefClass('MODEL',
                 rr = config$smp.class_ratio
                 w0 = which(y == 0) %>% sample(as.integer(n1*(1.0 - rr)/rr), replace = T)
               }
-            } else if (config$smp.method == 'smote'){
+            } else if (smp_method == 'smote'){
               sv = reticulate::import('smote_variants')
               smote_model = verify(config$smp.config[['model']], 'character', domain = names(sv), lengths = 1, default = 'distance_SMOTE')
               config$smp.config[['proportion']] <<- verify(config$smp.config[['proportion']], 'numeric', lengths = 1, default = config$smp.class_ratio/(1.0 - config$smp.class_ratio))
@@ -306,7 +312,7 @@ MODEL = setRefClass('MODEL',
           } else {ind = sequence(length(y))}
           
           n_rows = verify(config$smp.num_rows, c('numeric', 'integer'), lengths = 1, domain = c(1, Inf), default = n_train_rows) %>% 
-            min(n_train_rows) %>% {.*verify(config$smp.ratio, 'numeric', lengths = 1, domain = c(0, 1), default = 1.0)} %>% as.integer
+            min(n_train_rows) %>% {.*verify(config$smp.sample_ratio, 'numeric', lengths = 1, domain = c(0, 1), default = 1.0)} %>% as.integer
           
           ind_2 = n_train_rows %>% sequence %>% sample(n_rows)
           X = X[ind[ind_2],]; y = y[ind[ind_2]]
@@ -334,13 +340,6 @@ MODEL = setRefClass('MODEL',
           objects$features <<- objects$features %>% merge(catinfo, all = T)
         }
 
-        if(config$pp.remove_invariant_features){
-          if(!'n_unique' %in% colnames(objects$features)){
-            objects$features$n_unique <<- rbig::colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
-          }
-          objects$features <<- objects$features %>% filter(n_unique > 1)
-          X = X[objects$features$fname]
-        }
         
         # todo: Add other preprocessing: pp.treat_outliers (remove, trim, adapted trim, ...), ...
         # remove outliers can be considered as a transformer as well
@@ -353,10 +352,41 @@ MODEL = setRefClass('MODEL',
           objects$features <<- objects$features %>% filter(!fclass %in% c('numeric', 'float', 'float64'))
           X = X[objects$features$fname]
         }
+
+        if(config$pp.trim_outliers){
+          adapt = verify(config$pp.trim_outliers.adaptive, 'logical', default = F)
+          recur = verify(config$pp.trim_outliers.recursive, 'logical', default = F)
+          sdcut = verify(config$pp.trim_outliers.sd_threshold, 'numeric', domain = c(0,Inf), default = 4)
+          X %<>% trim_outliers(sd_threshold = sdcut, adaptive = adapt, recursive = recur)
+        }
+
+        # todo: missing values should be treated differently for each column or groups of columns or classes of columns
+        # todo: missing values could be imputed by aggregations of non-missing values like mean, median or most_frequent
+        if(!is.null(config$pp.mask_missing_values)){
+          # This will edit the table, so WideTables cannot be used yet.
+          X %<>% as.data.frame
+          for(i in sequence(ncol(X))){
+            wna = which(is.na(X[[i]]))
+            if(length(wna) > 0){
+              X[wna, i] <- config$pp.mask_missing_values[1] %>% rutils::coerce(class(X[wna, i])[1])
+            }
+          }
+        }
+
+        if(config$pp.remove_invariant_features){
+          if(!'n_unique' %in% colnames(objects$features)){
+            objects$features$n_unique <<- rbig::colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
+          }
+          objects$features <<- objects$features %>% filter(n_unique > 1)
+          X = X[objects$features$fname]
+        }
         
         if(is.empty(objects$features)){fit.distribution(X, y)}
-        else if(config$fe.enabled) {fit.fe(X, y)} else {.self$model.fit(X, y)}
-        # if(config$quad.enabled) {fit.quad(X, y)}
+        else if(config$fe.enabled) {
+          config$fe.recursive <<- verify(config$fe.recursive, 'logical', lengths = 1, domain = c(T,F), default = F)
+          fit.fe(X, y)
+        } else {.self$model.fit(X, y)}
+        # todo: if(config$quad.enabled) {fit.quad(X, y)}
       }
       fitted <<- TRUE
       objects$fitting_time <<- Sys.time()
@@ -365,15 +395,83 @@ MODEL = setRefClass('MODEL',
     transform_x = function(X, y = NULL){
       nt = length(transformers)
       if(nt > 0){
-        for(i in sequence(nt)){
-          transformer = transformers[[i]]
-          if(!transformer$fitted) {transformer$fit(X, y)}
-          if(i == 1){
-            XT = transformer$predict(X)
-          } else {
-            XT = cbind(XT, transformer$predict(X) %>% {.[colnames(.) %-% colnames(XT)]})
-          }
+        ## Fitting:
+        # (uft: unfitted transformers)
+        uft = transformers %>% lapply(function(x) {!x$fitted}) %>% unlist %>% which
+        num_cores = 1
+        if(config$mc.enabled){
+          ncores_available = parallel::detectCores()
+          num_cores <- verify(config$mc.num_cores, c('numeric', 'integer'), lengths = 1, domain = c(1, ncores_available), default = ncores_available - 1) %>% as.integer
         }
+        if(config$mc.enabled & (num_cores > 1) & (length(uft) > 1)){
+          requirements = transformers %>% lapply(function(x) x$packages_required) %>% unlist %>% unique
+          cl  = rutils::setup_multicore(n_jobs = num_cores)
+          if(!config$silent){cat('\n', 'Fitting  %s transformers ... ' %>% sprintf(length(uft)))}
+          transformers <<- foreach(transformer = transformers, 
+                                   .combine = c, .packages = requirements, 
+                                   .errorhandling = rutils::chif(config$remove_failed_transformers, 'remove', 'stop')) %dopar% {
+            if(!transformer$fitted){
+              transformer$fit(X, y)
+            }
+            gc()
+            list(transformer)
+          }
+          stopCluster(cl)
+          gc()
+          if(!config$silent){cat('Done!')}
+        } else {
+          for(i in uft){
+              transformer = transformers[[i]]
+              if(!config$silent){
+                cat('\n', 'Fitting transformer %s of type %s: %s ... ' %>% sprintf(transformer$name, transformer$type, transformer$description))
+              }
+              res = try(transformer$fit(X, y), silent = config$remove_failed_transformers)
+              if(!config$silent){
+                rutils::warnif(inherits(res, 'try-error'), sprintf("Transformer %s failed to fit!", transformer$name), as.character(res))
+                cat('Done!')
+              }
+            }  
+        }
+        ## Remove unfitted transformers:
+        # ft: fitted transformers
+        ft = transformers %>% lapply(function(x) {x$fitted}) %>% unlist %>% which
+        nt = length(ft)
+        warnif(nt < length(transformers), sprintf("%s transformers failed to fit and removed!", length(transformers) - nt))
+        transformers <<- transformers %>% list.extract(ft)
+        assert(nt == length(transformers))
+      }
+      if(nt > 0){
+        ## Prediction:
+        if(config$mc.enabled & (num_cores > 1) & (nt > 1)){
+          requirements = transformers %>% lapply(function(x) x$packages_required) %>% unlist %>% unique
+          cl = rutils::setup_multicore(n_jobs = num_cores)
+          if(!config$silent){cat('\n', 'Generate transformed columns from %s transformers ... ' %>% sprintf(nt))}
+          XT = foreach(transformer = transformers, .combine = cbind, .packages = requirements, 
+                       .errorhandling = rutils::chif(config$remove_failed_transformers, 'remove', 'stop')) %dopar% {
+            gc()
+            transformer$predict(X)
+          }
+          stopCluster(cl)
+          gc()
+          if(!config$silent){
+            cat('Done!')
+          }
+        } else {
+          for(i in sequence(nt)){
+            transformer = transformers[[i]]
+            if(!config$silent){
+              cat('\n', 'Generate transformed columns from transformer %s ... ' %>% sprintf(transformer$name))
+            }
+            if(i == 1){
+              XT = transformer$predict(X)
+            } else {
+              XT = cbind(XT, transformer$predict(X) %>% {.[colnames(.) %-% colnames(XT)]})
+            }
+            if(!config$silent){
+              cat('Done!')
+            }
+          }
+        }      
       } else {XT = X}
       return(XT)
     },
@@ -462,7 +560,7 @@ MODEL = setRefClass('MODEL',
     info.model = function(){
       info = list(name = name, type = type, class = class(.self)[1], description = description, package = package,
                   language = package_language, outputs = objects$n_output, fitted = fitted) %<==>%
-       list.extract(config, c('keep_columns', 'keep_features', 'smp.enabled', 'smp.class_ratio', 
+       list.extract(config, c('keep_columns', 'keep_features', 'smp.enabled', 'smp.class_ratio', 'smp.sample_ratio',
                                   'smp.method', 'fe.enabled', 'metric')) %>% list.clean
       return(info)
     },
@@ -498,7 +596,7 @@ MODEL = setRefClass('MODEL',
         mutate(source = as.character(source), target = as.character(target)) %>%
         left_join(nodes %>% select(source = name, outputs), by = 'source')
 
-      viser::viserPlot(list(nodes = nodes, links = links), source = 'source', target = 'target', linkWidth = 'outputs', key = 'name', label = 'description',
+      rvis::viserPlot(list(nodes = nodes, links = links), source = 'source', target = 'target', linkWidth = 'outputs', key = 'name', label = 'description',
                        color = 'type', config = list(...), linkLabel = 'outputs', type = 'graph', plotter = plotter)
 
     },

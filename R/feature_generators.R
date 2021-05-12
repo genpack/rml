@@ -127,7 +127,7 @@ FET.RML.MGB = setRefClass('FET.RML.MGB', contains = 'MODEL',
       
       top  = min(top, length(ord) - 1)
       
-      flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = rbig:colnames(X))
+      flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = rbig::colnames(X))
       
       # keep = which(flist$safety == high_level | (is.na(flist$father) & is.na(flist$mother)))
       keep = which(flist$safety == high_level)

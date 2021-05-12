@@ -7,6 +7,8 @@ ENC.FASTDUMMIES.OHE = setRefClass('ENC.FASTDUMMIES.OHE', contains = "MODEL",
       type             <<- 'Encoder'
       description      <<- 'One Hot Encoder'
       package          <<- 'fastDummies'
+      packages_required <<- c(packages_required, 'fastDummies')
+      
       package_language <<- 'R'
       reserved_words   <<- c(reserved_words, 'max_domain')
       

@@ -138,13 +138,13 @@ evaluateFeatures.logical = function(flist, X, y, top = 100, cor_fun = cross_accu
 }
 
 # Optimal Genetic Binary Feature Combiner
-genBinFeatBoost.fit = function(X, y, target = 0.9, epochs = 10, max_fail = 2, cycle_survivors = 500, cycle_births = 2000, final_survivors = 5, metric = cross_enthropy){
+genBinFeatBoost.fit = function(X, y, target = 0.9, epochs = 10, max_fails = 2, cycle_survivors = 500, cycle_births = 2000, final_survivors = 5, metric = cross_enthropy){
   columns = rbig::colnames(X)
   flist   = data.frame(name = columns, father = NA, mother = NA, action = NA, correlation = metric(X[, columns], y) %>% as.numeric %>% abs, safety = 0) %>% column2Rownames('name')
   flist   = flist[!is.na(flist$correlation),]
   # nf features are born by random parents:
   i = 0; j = 0; prev_best = -Inf
-  while((i < epochs) & (max(flist$correlation) < target) & (j < max_fail)){
+  while((i < epochs) & (max(flist$correlation) < target) & (j < max_fails)){
     i = i + 1
     flist = createFeatures.logical(flist, cycle_births)
     flist %<>% evaluateFeatures.logical(X, y, cor_fun = metric, top = chif(i == epochs, final_survivors, cycle_survivors))
@@ -503,7 +503,7 @@ default_expert_templates = list(
   fet.d2mul.01 = list(class = 'FET.RML.D2MUL', weight = 0.01, pass = setdiff(models_pass, 'DUMMIFIER'), feature_transformer = 'MAP.RML.MMS'),
   fnt.log.01   = list(class = 'FNT.RML.LOG', weight = 0.01, pass = c('MAP.RML.MMS', 'numeric', classifiers), intercept = 0.1*(0:100), feature_transformer = 'MAP.RML.MMS'),
   enc.ohe.01   = list(class = 'ENC.FASTDUMMIES.OHE', weight = 0.01, pass = encoders_pass, feature_transformer = 'MAP.RML.IDT'),
-  list(class = 'FET.RML.MGB', weight = 0.01, pass = free_numerics, n_survivors = 2, max_fail = 2:3, feature_transformer = 'MAP.RML.MMS'),
+  list(class = 'FET.RML.MGB', weight = 0.01, pass = free_numerics, n_survivors = 2, max_fails = 2:3, feature_transformer = 'MAP.RML.MMS'),
   list(class = 'GENETIC.BOOSTER.LOGICAL', weight = 0.01, pass = c('OPTBINNER', 'DUMMIFIER'), feature_transformer = 'MAP.RML.IDT'),
   list(class = 'BIN.KMEANS.KMC', weight = 0.01, pass = c(free_numerics, bound_numerics), feature_transformer = 'MAP.RML.MMS'),
   list(class = 'MAP.PYLMNN.LMNN', weight = 0.01, pass = c(free_numerics, bound_numerics), max_train = 5000:10000, feature_transformer = 'MAP.RML.MMS'),
@@ -901,7 +901,7 @@ evaluate_funlist = function(funlist, X, y, metric = logloss_sum){
 # }
 
 
-boost_funlist_parallel = function(funlist, X, y, metric = logloss_sum, n_jobs = 8, ...){
+evaluate_models.multicore = function(funlist, X, y, metric = logloss_sum, n_jobs = 8, ...){
 
 
   library(doParallel)
@@ -1073,7 +1073,7 @@ train_funlist = function(flist = NULL, champions = list(), X_train, y_train, X_t
     while(!enough | (!success & chance)){
       grow_funlist(flist, features = features, n_births = n_births, function_set = function_set) -> flist
       # boost_funlist(flist, X = X_train, y = y_train, metric = loss_train, silent = silent)
-      flist = boost_funlist_parallel(flist, X = X_train, y = y_train, metric = loss_train)
+      flist = evaluate_models.multicore(flist, X = X_train, y = y_train, metric = loss_train)
       flist %<>% clean_funlist(X = X_train, y = y_train, metric = loss_train)
       evaluate_funlist(flist, X = X_train, y = y_train, metric = loss_train) -> err_train
       reset_funlist(flist)

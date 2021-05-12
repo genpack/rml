@@ -42,14 +42,18 @@ REGRESSOR = setRefClass('REGRESSOR', contains = "MODEL",
 
 # A simple linear regression model. Features with linear dependency to others, will be removed to avoid singularity.
 # feature importances are based on p-values of coefficients.
-#' @export REG.LM
-REG.LM = setRefClass('REG.LM', contains = "REGRESSOR",
+#' @export REG.STATS.LNR
+REG.STATS.LNR = setRefClass('REG.STATS.LNR', contains = "REGRESSOR",
    methods = list(
      initialize = function(...){
        callSuper(...)
        config$sig_level <<- config$sig_level %>% verify('numeric', domain = c(0,1), default = '0.1')
-       type             <<- 'Linear Regression'
-       if(is.empty(name)){name <<- 'LREG' %>% paste0(sample(1000:9999, 1))}
+       type             <<- 'Regressor'
+       description      <<- 'Linear Regression'
+       package          <<- 'stats'
+       package_language <<- 'R'
+       
+       if(is.empty(name)){name <<- 'LNR' %>% paste0(sample(1000:9999, 1))}
      },
 
      model.fit = function(X, y){
@@ -86,6 +90,7 @@ REG.LM = setRefClass('REG.LM', contains = "REGRESSOR",
      },
 
      model.predict = function(X){
+       if(inherits(X, 'WIDETABLE')){X = rbig::as.data.frame(X)}
        objects$model %>% stats::predict(X %>% na2zero) %>% as.data.frame
      },
 
@@ -138,12 +143,18 @@ REG.LM = setRefClass('REG.LM', contains = "REGRESSOR",
 )
 
 
-#' @export REG.XGB
-REG.XGB = setRefClass('REG.XGB', contains = "REGRESSOR",
+#' @export REG.XGBOOST
+REG.XGBOOST = setRefClass('REG.XGBOOST', contains = "REGRESSOR",
                      methods = list(
                        initialize = function(...){
                          callSuper(...)
-                         type             <<- 'XGBoost Regression'
+                         packages_required <<- c(packages_required, 'xgboost')
+                         type             <<- 'Regressor'
+                         description      <<- 'XGBoost Regression'
+                         package          <<- 'xgboost'
+                         package_language <<- 'R'
+                         
+                         
                          if(is.empty(name)){name <<- 'XGBREG' %>% paste0(sample(1000:9999, 1))}
                          if(is.null(config$nrounds)){config$nrounds <<- 100}
                        },
@@ -168,13 +179,13 @@ REG.XGB = setRefClass('REG.XGB', contains = "REGRESSOR",
 )
 
 
-#' @export REG.SCIKIT.XGB
-REG.SCIKIT.XGB = setRefClass('REG.SCIKIT.XGB', contains = "REGRESSOR",
+#' @export REG.SKLEARN.XGB
+REG.SKLEARN.XGB = setRefClass('REG.SKLEARN.XGB', contains = "REGRESSOR",
                              methods = list(
                                initialize = function(...){
                                  callSuper(...)
                                  type               <<- 'Extreme Gradient Boosting for Regression'
-                                 if(is.empty(name)){name <<- 'SKGBREG' %>% paste0(sample(1000:9999, 1))}
+                                 if(is.empty(name)){name <<- 'SKXGBREG' %>% paste0(sample(1000:9999, 1))}
                                  module_xgb = reticulate::import('xgboost')
                                  objects$model     <<- do.call(module_xgb$XGBRegressor, config %>% list.remove(maler_words))
                                },

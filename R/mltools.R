@@ -68,19 +68,6 @@ logit_inv = function(x){
   return(1.0 - 1.0/(1 + e))
 }
 
-#' @export
-remove_outliers = function(X, sd_threshold = 3){
-  m = ncol(X)
-  Xs = X %>% scale %>% as.data.frame
-  Xs$keep = T
-  for(i in sequence(m)){
-    tbd = (Xs[,i] < sd_threshold) & (Xs[,i] > - sd_threshold)
-    if(sum(!tbd) > 0.1*length(tbd)){cat("-----",i, " ", sum(!tbd))}
-    Xs$keep = Xs$keep & (Xs[,i] < sd_threshold) & (Xs[,i] > -sd_threshold)
-  }
-  X[Xs$keep,]
-}
-
 # todo: should work for WideTables as well
 #' @export
 int_ordinals = function(X){
@@ -195,51 +182,27 @@ ranker = function(X){
   return(X)
 }
 
-
-
-outliers.old = function(X, sd_threshold = 4){
-  if(inherits(X, 'numeric')){X = matrix(X, ncol = 1)}
-  out = integer()
-
-  for(i in ncol(X)){
-    if(inherits(X[,i], 'numeric')){
-      mu = mean(X[,i], na.rm = T)
-      sg = sd(X[,i], na.rm = T)
-      out = c(out, which(abs(X[,i] - mu) > sd_threshold*sg))
+#' @export
+trim_outliers = function(X, adaptive = F, ...){
+  # Since this function will edit the table, WideTable object cannot be passed to it currently.
+  X %<>% as.data.frame()
+  for(i in sequence(ncol(X))){
+    wout = X[[i]]  %>% outlier(...) %>% which
+    if(length(wout) > 0){
+      maxx = X[-wout, i] %>% max(na.rm =  T)
+      minx = X[-wout, i] %>% min(na.rm =  T)
+      imax = which(X[[i]] > maxx)
+      imin = which(X[[i]] < minx)
+      if(adaptive){
+        X[imax, i] <- maxx + log(1.0 + X[imax, i] - maxx)
+        X[imin, i] <- minx - log(1.0 + minx - X[imin, i])
+      } else {
+        X[imax, i] <- maxx
+        X[imin, i] <- minx
+      }
     }
   }
-  return(unique(out))
-}
-
-
-trim_outliers.old = function(X, scale = F, center = F, only_numeric = F){
-  m = ncol(X)
-  for(i in sequence(m)){
-    xi   = unique(X[,i])
-    mni  = mean(xi)
-    sdi  = mean((xi - mni)^2, na.rm = T) %>% sqrt
-    isint = inherits(X[, i], 'integer')
-    if(sdi > 0){
-      xsi  = (X[, i] - mni)/sdi
-      tbch = (xsi >  3)
-      tbcl = (xsi < -3)
-      xh   = mni + 3*sdi + abs(log(X[tbch, i] - mni - 3*sdi))
-      xl   = mni - 3*sdi - abs(log(mni - X[tbcl, i] - 3*sdi))
-
-      if(isint){
-        if(!only_numeric){
-          X[tbch, i] = as.integer(xh)
-          X[tbcl, i] = as.integer(xl)
-        }
-      } else {
-        X[tbch, i] = xh
-        X[tbcl, i] = xl
-      }
-      if(scale) if(center) X[, i] = (X[, i] - mni)/sdi else X[, i] = X[, i]/sdi
-    } else if(scale) if(center) X[, i] = 0 else X[, i] = 1
-    # cat(colnames(X)[i], '\n')
-  }
-  X
+  return(X)
 }
 
 #' Imputes missing values with the median of non-existing values in each column

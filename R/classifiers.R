@@ -29,6 +29,7 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
                                                 domain = c('set_as_config', 'maximum_f1', 'maximum_chi'), default = 'set_as_config')
       # todo: add 'target_precision', 'target_recall', 'ratio_quantile'
       reserved_words <<- c(reserved_words, 'sig_level', 'return', 'threshold', 'threshold_determination')
+      packages_required <<- c(packages_required, 'stats')
       if(is.null(config$metric)){
         config$metric <<- chif(config$return == 'class', 'f1', 'gini')
       }
@@ -110,11 +111,12 @@ CLS.SKLEARN.KNN = setRefClass('CLS.SKLEARN.KNN', contains = "CLS.SKLEARN",
 )
 
 #' @export CLS.HDPENREG.FLASSO
-CLS.HDPENREG.FLASSO = setRefClass('CLS.FLASSO', contains = 'CLASSIFIER', methods = list(
+CLS.HDPENREG.FLASSO = setRefClass('CLS.HDPENREG.FLASSO', contains = 'CLASSIFIER', methods = list(
   initialize = function(...){
     callSuper(...)
     package     <<- 'HDPenReg'
     package_language <<- 'R'
+    packages_required <<- c(packages_required, 'HDPenReg')
     description <<- 'Logistic Regression with Fusion Lasso'
     if(is.empty(name)){name <<- 'FLS' %>% paste0(sample(10000:99999, 1))}
 
@@ -131,7 +133,7 @@ CLS.HDPENREG.FLASSO = setRefClass('CLS.FLASSO', contains = 'CLASSIFIER', methods
   },
 
   model.predict = function(X){
-    X %>% as.matrix %*% objects$model$coefficient %>% logit.inv %>% as.data.frame
+    X %>% as.matrix %*% objects$model$coefficient %>% logit_inv %>% as.data.frame
   }
 ))
 
@@ -144,6 +146,8 @@ CLS.MLR = setRefClass('CLS.MLR', contains = "CLASSIFIER",
         description <<- 'MLR Model'
         package     <<- 'mlr'
         package_language <<- 'R'
+        packages_required <<- c(packages_required, 'mlr')
+        
         config$mlr_classification_models <<- mlr::listLearners('classif')
 
         if(is.empty(name)){name <<- 'MLR' %>% paste0(sample(10000:99999, 1))}
@@ -180,6 +184,7 @@ CLS.SKLEARN.LR = setRefClass('CLS.SKLEARN.LR', contains = "CLS.SKLEARN",
           callSuper(X, y)
           X = X[objects$features$fname]
           objects$model$coef_ %>% abs %>% as.numeric -> weights
+          assert(sum(weights > 0) > 0, "All coefficients are zero. SKLEARN-LR Model training failed!")
           # objects$features$importance <<- (weights/(X %>% apply(2, sd))) %>% na2zero %>% {./geomean(.[.>0])} %>% as.numeric
           objects$features$importance <<- (weights/(X %>% apply(2, sd))) %>% na2zero %>% {./geomean(.[.>0])} %>% vect.normalise %>% as.numeric
       },
@@ -202,6 +207,75 @@ CLS.SKLEARN.DT = setRefClass('CLS.SKLEARN.DT', contains = "CLS.SKLEARN",
     }
   )
 )
+
+#' @export CLS.STATS.LR
+CLS.STATS.LR = setRefClass('CLS.STATS.LR', contains = "CLASSIFIER",
+                         methods = list(
+                           initialize = function(...){
+                             type             <<- 'Classifier'
+                             description      <<- 'Logistic Regression'
+                             package          <<- 'stats'
+                             package_language <<- 'R'
+                             
+                             callSuper(...)
+                             config$family <<- binomial
+                             if(is.empty(name)){name <<- 'GLMLR' %>% paste0(sample(10000:99999, 1))}
+                           },
+                           
+                           get.features.weight = function(){
+                             objects$model.summary <<- summary(objects$model)
+                             pv   = objects$model.summary$coefficients[-1, 'Pr(>|t|)'] %>% na2zero
+                             # Usually NA p-values appear when there is a perfect fit (100% R-squared), so each feature shall be considerd as important!?
+                             keep = (pv < 0.1)
+                             weights = pv
+                             weights[!keep] <- 0
+                             weights[keep]  <- 1.0 - weights[keep]/0.1
+                             return(weights)
+                           },
+                           
+                           model.fit = function(X, y){
+                             arguments = config %>% list.remove(reserved_words)
+                             arguments$data <- X %>% cbind(y = y)
+                             arguments$formula <- "%s ~ %s" %>% sprintf('y', colnames(X) %>% paste(collapse = ' + ')) %>% as.formula
+                             arguments$family <- stats::binomial
+                             objects$model <<- do.call(stats::glm, args = arguments)
+                             # Feature Importances:
+                             gw = get.features.weight()
+                             objects$features$importance <<- gw[objects$features$fname]
+                           },
+                           
+                           model.predict = function(X){
+                             if(inherits(X, 'WIDETABLE')){X = rbig::as.data.frame(X)}
+                             objects$model %>% stats::predict(X %>% na2zero, type = "response") %>% as.data.frame
+                           }
+                           
+                           # get.function = function(...){
+                           #   assert(fitted, 'Model not fitted!')
+                           #   xseq = paste0('x', sequence(nrow(objects$features)))
+                           #   ldep = list(output = objects$features$fname)
+                           #   for(pm in xseq){ldep[[pm]] <- objects$features$fname}
+                           #   if(is.empty(transformers)){
+                           #     fun = new('FUNCTION',
+                           #               inputs        = objects$features$fname %>% as.list %>% {names(.)<-xseq;.},
+                           #               objects       = list(model = objects$model),
+                           #               rule.output   = function(inputs, params, objects){
+                           #                 if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
+                           #                 objects$model$predict_proba(inputs %>% as.data.frame %>% data.matrix)[,2] %>% as.numeric
+                           #               },
+                           #               local_dependencies = ldep)
+                           #     
+                           #     if(config$return== 'logit'){
+                           #       out = logit$copy()
+                           #       out$inputs$x <- fun
+                           #     } else {out = fun}
+                           #     
+                           #     out$name = paste('FN', name, sep = '_')
+                           #   }
+                           #   return(out)
+                           # }
+                         )
+)
+
 
 #' @export CLS.SKLEARN.XGB
 CLS.SKLEARN.XGB = setRefClass('CLS.SKLEARN.XGB', contains = "CLASSIFIER",
@@ -302,9 +376,11 @@ CLS.KERAS.DNN = setRefClass('CLS.KERAS.DNN', contains = 'CLASSIFIER',
   methods = c(
     initialize = function(...){
       callSuper(...)
-      description      <<- 'Deep Neural Network'
-      package          <<- 'keras'
-      package_language <<- 'python'
+      description       <<- 'Deep Neural Network'
+      package           <<- 'keras'
+      package_language  <<- 'python'
+      packages_required <<- c(packages_required, 'keras', 'tensorflow')
+      
 
       library(tensorflow)
       library(keras)
@@ -437,6 +513,8 @@ CLS.SPARKLYR.GBT = setRefClass('CLS.SPARKLYR.GBT', contains = 'CLASSIFIER', meth
     description      <<- 'Gradient Boosted Tree on Spark'
     package          <<- 'sparklyr'
     package_language <<- 'R'
+    packages_required <<- c(packages_required, 'sparklyr')
+    
     if(is.empty(name)){name <<- 'SPRGBT' %>% paste0(sample(1000:9999, 1))}
     config$spark_home <<- verify(config$spark_home, 'character', default = Sys.getenv('SPARK_HOME'))
     if(is.null(config$spark_config)){config$spark_config <<- sparklyr::spark_config()}
@@ -469,6 +547,8 @@ CLS.E1071.NB = setRefClass('CLS.E1071.NB', contains = 'CLASSIFIER', methods = li
       description <<- 'Naive Bayes'
       package <<- 'e1071'
       package_language <<- 'R'
+      packages_required <<- c(packages_required, 'e1071')
+      
 
       if(is.empty(name)){name <<- 'E1071NB' %>% paste0(sample(10000:99999, 1))}
       library(e1071)
@@ -493,6 +573,8 @@ CLS.RPART.DT = setRefClass('CLS.RPART.DT', contains = 'MODEL', methods = list(
       description <<- 'Decision Tree'
       package     <<- 'rpart'
       package_language <<- 'R'
+      packages_required <<- c(packages_required, 'rpart')
+      
       if(is.empty(name)){name <<- 'RPRTDT' %>% paste0(sample(10000:99999, 1))}
       library(rpart)
     },
@@ -571,6 +653,8 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
     callSuper(...)
     package          <<- 'xgboost'
     package_language <<- 'R'
+    packages_required <<- c(packages_required, 'xgboost')
+    
     description      <<- 'Extreme Gradient Boosting'
     if(is.empty(name)){name <<- 'XGB' %>% paste0(sample(10000:99999, 1))}
     assert(require(xgboost), "Package 'xgboost' needs to be installed!")

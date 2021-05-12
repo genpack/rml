@@ -28,6 +28,12 @@
 # 0.6.10 (31 March 2015)    - Method model.load() changed for SKLearn models. Module is reloaded.
 # 0.7.1 (1 April 2015)      - Boosters initiated: Function feature_booster(), train_model() and evaluate_models() added.
 # 0.7.2 (12 April 2015)     - Minor fix in function correlation(). NULL is passed to argument 'threshold' 
+# 0.7.4 (27 April 2015)     - clustering.R transferred from rutils, function cluster_tree() added. 
+# 0.8.5 (06 May 2015)       - multicore transformer training added. 
+# 0.8.7 (07 May 2015)       - function trim_outliers() added and exported. 
+# 0.9.0 (07 May 2015)       - config properties: pp.mask_missing_values and pp.trim_outliers added
+# 0.9.6 (10 May 2015)       - issues in multicore transformer fitting functionality was fixed. method transform_x()
+# 0.10.1 (12 May 2015)      - Class CLS.STATS.LR added.
 
 
 # Description for Roxygen
@@ -61,6 +67,7 @@
 #' @include feature_generators.R
 #' @include function_transformers.R
 #' @include classifiers.R
+#' @include clustering.R
 #' @include gentools.R
 #' @include ensemblers.R
 #' @include boosters.R

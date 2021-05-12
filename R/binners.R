@@ -14,6 +14,7 @@ BIN.KMEANS.KMC = setRefClass('BIN.KMEANS.KMC', contains = 'MODEL', methods = lis
     config$num_clusters <<- verify(config$num_clusters, c('numeric', 'integer'), default = 5)
     
   },
+  
   model.fit = function(X, y = NULL){
     objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
     X = X[objects$features$fname]
@@ -71,6 +72,7 @@ BIN.SMBINNING.OB = setRefClass('BIN.SMBINNING.OB', contains = "MODEL",
        description   <<- 'Optimal Binner'
        package       <<- 'smbinning'
        package_language <<- 'R'
+       packages_required <<- c(packages_required, 'smbinning')
        if(is.empty(name)){name <<- 'SMB' %>% paste0(sample(10000:99999, 1))}
      },
      
