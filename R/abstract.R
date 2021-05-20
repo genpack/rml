@@ -47,6 +47,7 @@ MODEL = setRefClass('MODEL',
         }
       }
       
+      
       packages_required <<- c('magrittr', 'dplyr', 'rutils', 'rml', 'rbig', 'reticulate')
 
       reserved_words <<- c('keep_columns', 'keep_features', 
@@ -57,12 +58,12 @@ MODEL = setRefClass('MODEL',
                          'fe.enabled','fe.recursive', 'fe.importance_threshold', 'fe.quantile',
                          'mc.enabled', 'mc.num_cores',
                          'remove_failed_transformers',
-                         'pp.remove_invariant_features', 'pp.remove_nominal_features', 'pp.remove_numeric_features', 'pp.coerce_integer_features',
+                         'pp.coerce_integer_features',
                          'pp.trim_outliers', 'pp.trim_outliers.adaptive', 'pp.trim_outliers.recursive', 'pp.trim_outliers.sd_threshold',
                          'pp.mask_missing_values',
                          'model.class', 'model.config', 'model.module',
                          'eda.enabled', 
-                         'silent',
+                         'verbose', 'pass_columns', 'remove_columns', 'name', 'column_filter',
                          # smp.enabled: boolean parameter. default = FALSE. Should I do any sampling of the training rows at all? If FALSE (Default) 
                          #              model will be trained by the entire training data table (X) without any changes.
                          'smp.enabled', 'smp.class_ratio', 'smp.sample_ratio', 'smp.num_rows', 'smp.method', 'smp.config',
@@ -72,15 +73,17 @@ MODEL = setRefClass('MODEL',
                          'metric', 'transformers', 'fitted')
       
       for(pn in c('keep_columns', 'keep_features', 'cv.restore_model', 'fe.enabled', 'mc.enabled', 
-                  'pp.remove_numeric_features', 'pp.coerce_integer_features', 'pp.trim_outliers',
+                  'pp.coerce_integer_features', 'pp.trim_outliers',
                   'eda.enabled', 'smp.enabled', 'ts.enabled', 'save_predictions', 'remove_failed_transformers')){
         settings[[pn]] <- verify(settings[[pn]], 'logical', lengths = 1, domain = c(T,F), default = F)
       }
       
-      for(pn in c('cv.reset_transformer', 'silent', 'name_in_output', 
-                  'pp.remove_nominal_features', 'pp.remove_invariant_features')){
+      for(pn in c('cv.reset_transformer', 'name_in_output')){
         settings[[pn]] <- verify(settings[[pn]], 'logical', lengths = 1, domain = c(T,F), default = T)
       }
+      
+      settings$verbose <- verify(config$verbose, c('numeric', 'integer'), lengths = 1, default = 1) %>% as.integer
+      settings$column_filter  <- verify(settings$column_filter, 'list', default = list(n_unique = "> 1"))
 
       settings$metrics   <- verify(settings$metrics,  'character', default = 'pearson')
       settings$cv.split_method <- verify(settings$cv.split_method, lengths = 1, 'character', default = 'shuffle')
@@ -177,7 +180,7 @@ MODEL = setRefClass('MODEL',
 
     treat                = function(out, fet, org){
       if(!is.null(config$pass_columns)) org = org[config$pass_columns]
-      if(!is.null(config$filter_columns)) org = org[colnames(org) %-% config$filter_columns]
+      if(!is.null(config$remove_columns)) org = org[colnames(org) %-% config$remove_columns]
 
       if(config$keep_columns)
         if(config$keep_features) return(cbind(org, out))
@@ -340,19 +343,19 @@ MODEL = setRefClass('MODEL',
           objects$features <<- objects$features %>% merge(catinfo, all = T)
         }
 
-        
-        # todo: Add other preprocessing: pp.treat_outliers (remove, trim, adapted trim, ...), ...
-        # remove outliers can be considered as a transformer as well
-        if(config$pp.remove_nominal_features){
-          objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer', 'float', 'float64'))
+        if(!is.null(config$column_filter)){
+          objects$features$n_unique <<- rbig::colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
+          script = 'objects$features'
+          for(ffn in names(config$column_filter)){
+            assert(is.character(config$column_filter[[ffn]]), 
+                   'Feature filter elements must be character. %s was of class %s!' %>% sprintf(ffn, class(config$column_filter[[ffn]])[1]))
+            script %<>% paste("filter(%s %s)" %>% sprintf(ffn, config$column_filter[[ffn]] %>% as.character), sep = " %>% ")
+            objects$features <<- parse(text = script) %>% eval
+          }
           X = X[objects$features$fname]
         }
         
-        if(config$pp.remove_numeric_features){
-          objects$features <<- objects$features %>% filter(!fclass %in% c('numeric', 'float', 'float64'))
-          X = X[objects$features$fname]
-        }
-
+        # todo: remove outliers can be considered as a transformer as well. Add transformers (transformer type: preprocessor)
         if(config$pp.trim_outliers){
           adapt = verify(config$pp.trim_outliers.adaptive, 'logical', default = F)
           recur = verify(config$pp.trim_outliers.recursive, 'logical', default = F)
@@ -373,16 +376,9 @@ MODEL = setRefClass('MODEL',
           }
         }
 
-        if(config$pp.remove_invariant_features){
-          if(!'n_unique' %in% colnames(objects$features)){
-            objects$features$n_unique <<- rbig::colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
-          }
-          objects$features <<- objects$features %>% filter(n_unique > 1)
-          X = X[objects$features$fname]
-        }
+        assert(nrow(objects$features) > 0, 'No features left for training!')
         
-        if(is.empty(objects$features)){fit.distribution(X, y)}
-        else if(config$fe.enabled) {
+        if(config$fe.enabled) {
           config$fe.recursive <<- verify(config$fe.recursive, 'logical', lengths = 1, domain = c(T,F), default = F)
           fit.fe(X, y)
         } else {.self$model.fit(X, y)}
@@ -396,82 +392,85 @@ MODEL = setRefClass('MODEL',
       nt = length(transformers)
       if(nt > 0){
         ## Fitting:
-        # (uft: unfitted transformers)
-        uft = transformers %>% lapply(function(x) {!x$fitted}) %>% unlist %>% which
-        num_cores = 1
-        if(config$mc.enabled){
-          ncores_available = parallel::detectCores()
-          num_cores <- verify(config$mc.num_cores, c('numeric', 'integer'), lengths = 1, domain = c(1, ncores_available), default = ncores_available - 1) %>% as.integer
-        }
-        if(config$mc.enabled & (num_cores > 1) & (length(uft) > 1)){
-          requirements = transformers %>% lapply(function(x) x$packages_required) %>% unlist %>% unique
-          cl  = rutils::setup_multicore(n_jobs = num_cores)
-          if(!config$silent){cat('\n', 'Fitting  %s transformers ... ' %>% sprintf(length(uft)))}
-          transformers <<- foreach(transformer = transformers, 
-                                   .combine = c, .packages = requirements, 
-                                   .errorhandling = rutils::chif(config$remove_failed_transformers, 'remove', 'stop')) %dopar% {
-            if(!transformer$fitted){
-              transformer$fit(X, y)
-            }
-            gc()
-            list(transformer)
-          }
-          stopCluster(cl)
-          gc()
-          if(!config$silent){cat('Done!')}
-        } else {
-          for(i in uft){
-              transformer = transformers[[i]]
-              if(!config$silent){
-                cat('\n', 'Fitting transformer %s of type %s: %s ... ' %>% sprintf(transformer$name, transformer$type, transformer$description))
-              }
-              res = try(transformer$fit(X, y), silent = config$remove_failed_transformers)
-              if(!config$silent){
-                rutils::warnif(inherits(res, 'try-error'), sprintf("Transformer %s failed to fit!", transformer$name), as.character(res))
-                cat('Done!')
-              }
-            }  
-        }
-        ## Remove unfitted transformers:
-        # ft: fitted transformers
-        ft = transformers %>% lapply(function(x) {x$fitted}) %>% unlist %>% which
-        nt = length(ft)
-        warnif(nt < length(transformers), sprintf("%s transformers failed to fit and removed!", length(transformers) - nt))
-        transformers <<- transformers %>% list.extract(ft)
-        assert(nt == length(transformers))
+        transformers <<- fit_models(transformers, X = X, y = y, num_cores = config$mc.num_cores, verbose = config$verbose, 
+                                      remove_failed_models = config$remove_failed_transformers)
+        # # (uft: unfitted transformers)
+        # uft = transformers %>% lapply(function(x) {!x$fitted}) %>% unlist %>% which
+        # num_cores = 1
+        # if(config$mc.enabled){
+        #   ncores_available = parallel::detectCores()
+        #   num_cores <- verify(config$mc.num_cores, c('numeric', 'integer'), lengths = 1, domain = c(1, ncores_available), default = ncores_available - 1) %>% as.integer
+        # }
+        # if(config$mc.enabled & (num_cores > 1) & (length(uft) > 1)){
+        #   requirements = transformers %>% lapply(function(x) x$packages_required) %>% unlist %>% unique
+        #   cl  = rutils::setup_multicore(n_jobs = num_cores)
+        #   if(!config$silent){cat('\n', 'Fitting  %s transformers ... ' %>% sprintf(length(uft)))}
+        #   transformers <<- foreach(transformer = transformers, 
+        #                            .combine = c, .packages = requirements, 
+        #                            .errorhandling = rutils::chif(config$remove_failed_transformers, 'remove', 'stop')) %dopar% {
+        #     if(!transformer$fitted){
+        #       transformer$fit(X, y)
+        #     }
+        #     gc()
+        #     list(transformer)
+        #   }
+        #   stopCluster(cl)
+        #   gc()
+        #   if(!config$silent){cat('Done!')}
+        # } else {
+        #   for(i in uft){
+        #       transformer = transformers[[i]]
+        #       if(!config$silent){
+        #         cat('\n', 'Fitting transformer %s of type %s: %s ... ' %>% sprintf(transformer$name, transformer$type, transformer$description))
+        #       }
+        #       res = try(transformer$fit(X, y), silent = config$remove_failed_transformers)
+        #       if(!config$silent){
+        #         rutils::warnif(inherits(res, 'try-error'), sprintf("Transformer %s failed to fit!", transformer$name), as.character(res))
+        #         cat('Done!')
+        #       }
+        #     }  
+        # }
+        # ## Remove unfitted transformers:
+        # # ft: fitted transformers
+        # ft = transformers %>% lapply(function(x) {x$fitted}) %>% unlist %>% which
+        # nt = length(ft)
+        # warnif(nt < length(transformers), sprintf("%s transformers failed to fit and removed!", length(transformers) - nt))
+        # transformers <<- transformers %>% list.extract(ft)
+        # assert(nt == length(transformers))
+        nt = length(transformers)
       }
       if(nt > 0){
         ## Prediction:
-        if(config$mc.enabled & (num_cores > 1) & (nt > 1)){
-          requirements = transformers %>% lapply(function(x) x$packages_required) %>% unlist %>% unique
-          cl = rutils::setup_multicore(n_jobs = num_cores)
-          if(!config$silent){cat('\n', 'Generate transformed columns from %s transformers ... ' %>% sprintf(nt))}
-          XT = foreach(transformer = transformers, .combine = cbind, .packages = requirements, 
-                       .errorhandling = rutils::chif(config$remove_failed_transformers, 'remove', 'stop')) %dopar% {
-            gc()
-            transformer$predict(X)
-          }
-          stopCluster(cl)
-          gc()
-          if(!config$silent){
-            cat('Done!')
-          }
-        } else {
-          for(i in sequence(nt)){
-            transformer = transformers[[i]]
-            if(!config$silent){
-              cat('\n', 'Generate transformed columns from transformer %s ... ' %>% sprintf(transformer$name))
-            }
-            if(i == 1){
-              XT = transformer$predict(X)
-            } else {
-              XT = cbind(XT, transformer$predict(X) %>% {.[colnames(.) %-% colnames(XT)]})
-            }
-            if(!config$silent){
-              cat('Done!')
-            }
-          }
-        }      
+        XT = predict_models(transformers, X = X, num_cores = config$mc.num_cores, verbose = config$verbose)
+        # if(config$mc.enabled & (num_cores > 1) & (nt > 1)){
+        #   requirements = transformers %>% lapply(function(x) x$packages_required) %>% unlist %>% unique
+        #   cl = rutils::setup_multicore(n_jobs = num_cores)
+        #   if(!config$silent){cat('\n', 'Generate transformed columns from %s transformers ... ' %>% sprintf(nt))}
+        #   XT = foreach(transformer = transformers, .combine = cbind, .packages = requirements, 
+        #                .errorhandling = rutils::chif(config$remove_failed_transformers, 'remove', 'stop')) %dopar% {
+        #     gc()
+        #     transformer$predict(X)
+        #   }
+        #   stopCluster(cl)
+        #   gc()
+        #   if(!config$silent){
+        #     cat('Done!')
+        #   }
+        # } else {
+        #   for(i in sequence(nt)){
+        #     transformer = transformers[[i]]
+        #     if(!config$silent){
+        #       cat('\n', 'Generate transformed columns from transformer %s ... ' %>% sprintf(transformer$name))
+        #     }
+        #     if(i == 1){
+        #       XT = transformer$predict(X)
+        #     } else {
+        #       XT = cbind(XT, transformer$predict(X) %>% {.[colnames(.) %-% colnames(XT)]})
+        #     }
+        #     if(!config$silent){
+        #       cat('Done!')
+        #     }
+        #   }
       } else {XT = X}
       return(XT)
     },

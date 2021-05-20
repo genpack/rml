@@ -34,8 +34,17 @@ build_model_instance_from_template = function(model_name = NULL, template){
   return(tr)
 }
 
-# features is a data frame of features (output of function evaluate_features)
+# 
 
+#' builds a model object from a template which is given in a list of templates.
+#'
+#' @param template_name \code{character}: Specify template name. Must be among the names of the list given via argument \code{templates}
+#' @param model_name \code{character}: Specify the name of the model being generated. Every model object can have a name. If name is not specified, a random name will be generated.
+#' @param features \code{character or data.frame}: Specify feature names from which model will be trained. 
+#' The models's config parameter \code{features.include} will be set accordingly to extract specified features from the training dataset.
+#' features can also be a data frame of features (output of function evaluate_features)
+#' @param templates \code{list}: A named list of templates. Argument \code{template_name} must be among the names of this list.
+#' @return A object inheriting from class \code{MODEL}
 #' @export
 build_model_from_template = function(template_name, model_name = NULL, features = NULL, templates = default_templates, metric = 'gini'){
   stopifnot(inherits(templates, 'list'))

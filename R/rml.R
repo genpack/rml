@@ -34,6 +34,7 @@
 # 0.9.0 (07 May 2015)       - config properties: pp.mask_missing_values and pp.trim_outliers added
 # 0.9.6 (10 May 2015)       - issues in multicore transformer fitting functionality was fixed. method transform_x()
 # 0.10.1 (12 May 2015)      - Class CLS.STATS.LR added.
+# 1.0.5 (20 May 2015)       - Major changes: functions fit_models() and predict_models() added supporting multicore computation. Method transform_x() updated and calls these functions. 
 
 
 # Description for Roxygen

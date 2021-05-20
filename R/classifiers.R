@@ -128,11 +128,15 @@ CLS.HDPENREG.FLASSO = setRefClass('CLS.HDPENREG.FLASSO', contains = 'CLASSIFIER'
   model.fit = function(X, y){
     objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
     X = X[objects$features$fname]
+    if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
+    
     objects$model <<- do.call(HDPenReg::EMfusedlasso, list(X = X %>% as.matrix, y = y) %<==>% (config %>% list.remove(reserved_words)))
     objects$features$importance <<- objects$model$coefficient
   },
 
   model.predict = function(X){
+    if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
+    
     X %>% as.matrix %*% objects$model$coefficient %>% logit_inv %>% as.data.frame
   }
 ))
@@ -673,6 +677,9 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
   },
 
   model.fit = function(X, y){
+    
+    if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
+    
     X = X[objects$features$fname]
     if(ncol(X) == 0){stop('No columns in the input dataset!')}
 
@@ -745,6 +752,8 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
 
   model.predict = function(X){
     X = X[objects$model$feature_names]
+    if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
+    
     stats::predict(objects$model, xgb.DMatrix(as.matrix(X), label = rep(NA, nrow(X)))) %>% logit_inv %>% as.data.frame
   }
 ))

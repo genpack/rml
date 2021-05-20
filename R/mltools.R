@@ -1077,7 +1077,8 @@ numerize_columns = function(x){
 
 # todo: make it parallel
 # should be tested again in order to export
-feature_subset_scorer = function(model, X, y, subset_size = 600){
+# Each feature has only one chance to participate in an experiment
+feature_subset_scorer_fast = function(model, X, y, subset_size = 600){
   features = data.frame(fname = colnames(X), model_number = NA, importance = NA, performance = NA, score = NA, stringsAsFactors = F) %>% column2Rownames('fname')
   nf       = nrow(features); cnt = 0
   tempfeat = rownames(features)
@@ -1264,4 +1265,166 @@ bucket_moments = function(df, variable_set_1, variable_set_2, ncuts = 100){
   return(out)
 }
 
+
+fit_models.old = function(models, X, y){
+  for(i in names(models)){
+    cat('Training model: ', i, ' ...')
+    res = try(models[[i]]$fit(X, y), silent = T)
+    cat('Done!', '\n')
+    if(inherits(res, 'try-error')){
+      cat('\n', 'Model ', i, ' training failed!', '\n', res %>% as.character, '\n')
+    }
+  }
+  
+  for(i in names(models)){
+    if(!models[[i]]$fitted){
+      models[[i]] <- NULL
+    }
+  }
+  
+  return(models)
+}
+
+#' Trains a given list of model objects and returns a trained list of models
+#' @export
+fit_models = function(models, X, y, num_cores = 1, verbose = 1, remove_failed_models = T){
+  # if(is.null(names(models))){names(models) <- paste0('M', sequence(length(models)))}
+  num_cores = verify(num_cores, c('numeric', 'integer'), lengths = 1, domain = c(1, parallel::detectCores()), default = 1)
+  
+  uft = models %>% lapply(function(x) {!x$fitted}) %>% unlist %>% which
+  if((num_cores > 1) & (length(uft) > 1)){
+    requirements = models %>% lapply(function(x) x$packages_required) %>% unlist %>% unique
+    cl = rutils::setup_multicore(n_jobs = num_cores)
+    if(verbose > 0){cat('\n', 'Fitting  %s models ... ' %>% sprintf(length(uft)))}
+    models <- foreach(model = models, .combine = c, .packages = requirements, .errorhandling = 'pass') %dopar% {
+      res = try(model$fit(X, y), silent = T)
+      if(inherits(res, 'try-error')){
+        model$objects$fitting_error <- as.character(res)
+      }
+      gc()
+      list(model)
+    }
+    stopCluster(cl)
+    gc()
+    if(verbose > 0){cat('Done!', '\n')}
+  } else {
+    for(i in uft){
+      if(verbose > 0){
+        cat('\n', 'Fitting model %s of type %s: %s ... ' %>% sprintf(models[[i]]$name, models[[i]]$type, models[[i]]$description))
+      }
+      res = try(models[[i]]$fit(X, y), silent = T)
+      if(inherits(res, 'try-error')){
+        models[[i]]$objects$fitting_error <- as.character(res)
+        if(verbose > 0){cat('Failed!')}
+      } else {
+        if(verbose > 0){cat('Done!')}
+      }
+    }  
+  }
+  
+  ## Remove unfitted (failed) models:
+  if(remove_failed_models){
+    fitted = models %>% lapply(function(x) {x$fitted}) %>% unlist %>% which
+    failed = models %>% length %>% sequence %>% setdiff(fitted)
+    
+    nt = length(fitted)
+    if(verbose > 0) {
+      warnif(nt < length(models), sprintf("%s models failed to fit and removed!", length(models) - nt))
+    }  
+    models <- models %>% list.extract(fitted)
+    assert(nt == length(models), "This must not happen!")
+  }
+  
+  return(models)
+}
+
+#' Calls \code{predict} method of each model in the given list and retunrs results in a data.frame
+#' @export
+predict_models = function(models, X, num_cores = 1, verbose = 1){
+  num_cores = verify(num_cores, c('numeric', 'integer'), lengths = 1, domain = c(1, parallel::detectCores()), default = 1)
+  
+  fitted = models %>% lapply(function(x) {x$fitted}) %>% unlist %>% which
+  failed = models %>% length %>% sequence %>% setdiff(fitted)
+  
+  if(verbose > 0 & length(failed) > 0){
+    print("%s models are not fitted! No columns will be generated from these models.")
+  }
+  
+  models %<>% list.extract(fitted)
+  nt = length(models)
+  if((num_cores > 1) & (nt > 1)){
+    requirements = models %>% lapply(function(x) x$packages_required) %>% unlist %>% unique
+    cl = rutils::setup_multicore(n_jobs = num_cores)
+    if(verbose > 0){cat('\n', 'Generating output from %s models ... ' %>% sprintf(nt))}
+    XT = foreach(model = models, .combine = cbind, .packages = requirements, 
+                 .errorhandling = 'remove') %dopar% {
+                  gc()
+                  model$predict(X)
+                 }
+    stopCluster(cl)
+    gc()
+    if(verbose > 0){
+      cat('Done!', '\n')
+    }
+  } else {
+    for(i in sequence(nt)){
+      model = models[[i]]
+      if(verbose > 0){
+        cat('\n', 'Generate output column(s) from model %s ... ' %>% sprintf(model$name))
+      }
+      if(i == 1){
+        XT = model$predict(X)
+      } else {
+        XT = cbind(XT, model$predict(X) %>% {.[colnames(.) %-% colnames(XT)]})
+      }
+      if(verbose > 0){
+        cat('Done!', '\n')
+      }
+    }
+  }
+  
+  return(XT)
+}
+
+# Runs cross validation for each model in the baglist:
+#' @export
+evaluate_models = function(models, X, y){
+  for(i in names(models)){
+    cat('Evaluating model: ', i, ' ...')
+    res = try(models[[i]]$performance.cv(X, y), silent = T)
+    cat('Done!', '\n')
+    if(inherits(res, 'try-error')){
+      models[[i]]$objects$performance.cv <- sprintf("Model %s evaluation failed! %s", model$name, res %>% as.character)
+    } else {
+      models[[i]]$objects$performance.cv <- res
+    }
+  }
+  
+  return(models)
+}
+
+
+#' @export
+evaluate_models.multicore = function(models, X, y, n_jobs = parallel::detectCores() - 1){
+  cl = rutils::setup_multicore(n_jobs = n_jobs)
+  # library(doParallel)
+  # cl = makeCluster(n_jobs)
+  # registerDoParallel(cl)
+  # actual_njobs = getDoParWorkers()
+  # warnif(actual_njobs < n_jobs, 
+  #        sprintf('Parallel run is working with %s cores rather than %s. It may take longer than expected!', actual_njobs, n_jobs))
+  
+  foreach(i = names(models), .combine = c, .packages = c('magrittr', 'dplyr','rutils', 'reticulate', 'rml', 'rbig', 'rfun'), .errorhandling = 'remove') %dopar% {
+    model = models[[i]]
+    res = try(model$performance.cv(X, y), silent = T)
+    if(inherits(res, 'try-error')){
+      model$objects$performance.cv = sprintf("Model %s evaluation failed! %s", model$name, res %>% as.character)
+    } else {
+      model$objects$performance.cv <- res
+    }
+    model
+  }
+  stopCluster(cl)
+  gc()
+}
 
