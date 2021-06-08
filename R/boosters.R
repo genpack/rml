@@ -18,7 +18,7 @@ feature_booster = function(base_model, X, y, n_experiment = 10, subset_size = 10
   # build model bag:
   bag = list()
   for(i in sequence(n_experiment)){
-    model = base_model$copy()
+    model = base_model$deep_copy(i)
     model$reset()
     model$name <- base_model$name %>% paste('boost', i, sep = '_')
     # fetsubset: random subset of features to be added to the exisiting features:
@@ -63,6 +63,20 @@ feature_booster = function(base_model, X, y, n_experiment = 10, subset_size = 10
 
 
 # hp_boost: Changes hyper-parameters one-by-one or randomly from a list of given hyper-parameters
+hp_booster = function(base, parameter, values, ...){
+  
+  bag = list()
+  for(i in sequenc(length(values))){
+    model = base&deep_copy(i)
+    model$config[[parameter]] <- values[i]
+    model$name %<>% paste('_HPB', i)
+    model$reset()
+    bag[[model$name]] <- model
+  }
+  
+  service_models(bag, ...)
+}
+
 
 # t_boost: transformer booster (Adds transformers one by one from a list of given transformers)
 # gt_boost: Gradient Transformer boost (switches one-by-one among a given list of models)

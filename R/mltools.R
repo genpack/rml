@@ -982,7 +982,13 @@ model_size = function(model){
 
 #' @export
 model_features = function(model){
-  fet = model$objects$features$fname %U% model$config$features.include
+  if(model$fitted){
+    fet = model$objects$features$fname
+  } else if (!is.null(model$config$features.include)){
+    fet = model$config$features.include
+  } else {
+    fet = character()
+  }
   for(tr in model$transformers){
     fet  = c(fet, model_features(tr))
   }
@@ -1428,3 +1434,32 @@ evaluate_models.multicore = function(models, X, y, n_jobs = parallel::detectCore
   gc()
 }
 
+#' @export
+service_models = function(modlist, X_train, y_train, X_test, y_test, num_cores = 1, metrics = 'gini', quantiles = NULL, reported_parameters = character()){
+  modlist %<>% fit_models(X = X_train, y = y_train, num_cores = num_cores, verbose = 1)
+  names(modlist) <- modlist %>% rutils::list.pull('name')
+  
+  yy = predict_models(modlist, X = X_test, num_cores = num_cores, verbose = 1)
+  pf = correlation(yy, y_test, metrics = metrics, quantiles = quantiles)
+  
+  assert(length(pf) == length(modlist), 'Some models failed to predict!')
+  
+  pfdf = pf %>% lapply(unlist) %>% purrr::reduce(rbind) %>% as.data.frame %>% {rownames(.)<-names(modlist);.}
+  print(pfdf)
+  
+  
+  modlist %>% lapply(function(x) x$objects$features %>% dplyr::mutate(model = x$name, fitting_time = as.character(x$objects$fitting_time))) %>% 
+    purrr::reduce(dplyr::bind_rows) %>% 
+    dplyr::left_join(pfdf %>% rutils::rownames2Column('model')) -> ptab
+  
+  for(i in sequence(nrow(ptab))){
+    cfg = modlist[[ptab$model[i]]]$config
+    for(j in reported_parameters){
+      ptab[i, j] <- cfg[[j]]
+    }
+  }
+  
+  ord = order(ptab[[names(pf[[1]])[1]]], decreasing = T)[1]
+  
+  return(list(best_model = modlist[[ptab$model[ord]]], best_performance = max(ptab[[names(pf[[1]])[1]]]), results = ptab))
+}

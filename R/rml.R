@@ -34,8 +34,15 @@
 # 0.9.0 (07 May 2015)       - config properties: pp.mask_missing_values and pp.trim_outliers added
 # 0.9.6 (10 May 2015)       - issues in multicore transformer fitting functionality was fixed. method transform_x()
 # 0.10.1 (12 May 2015)      - Class CLS.STATS.LR added.
-# 1.0.5 (20 May 2015)       - Major changes: functions fit_models() and predict_models() added supporting multicore computation. Method transform_x() updated and calls these functions. 
-
+# 1.0.6 (21 May 2015)       - Major changes: functions fit_models() and predict_models() and service_models() added supporting multicore computation. Method transform_x() updated and calls these functions. 
+# 1.0.8 (25 May 2015)       - Minor change in xgb classifiers, method fit.model(): Conversion from WideTable to matrix moved to after feature selection. 
+# 1.0.9 (02 June 2015)      - Minor change in SKLearn Transformers: Converts X to data.matrix in the superClass. 
+# 1.0.10 (02 June 2015)     - config property column_filters updated. 
+# 1.1.1 (02 June 2015)      - Method deep_copy() added to abstract. 
+# 1.1.3 (03 June 2015)      - Minor bug in mappers and encoders fixed. 
+# 1.2.1 (04 June 2015)      - preprocessing relocated from method fit() to transform_x(). They are now called  for both fit and predict.
+# 1.2.4 (07 June 2015)      - Minor bugs in encoders fixed.
+# 1.2.6 (08 June 2015)      - reset now can set features.include in the config when there are no transformers. (todo: feature elimination embedding to transformers does not work yet!)
 
 # Description for Roxygen
 

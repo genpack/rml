@@ -115,15 +115,22 @@ TRM.SKLEARN = setRefClass(
 
     model.fit = function(X, y){
       if(!fitted){
-        objects$model <<- do.call(objects$module[[config[['model.class']]]], args = config %>% list.remove(reserved_words))
+        objects$model <<- do.call(objects$module[[config[['model.class']]]], args = config %>% rutils::list.remove(reserved_words))
         if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
-        objects$model$fit(X, y)
+        objects$model$fit(X %>% data.matrix, y)
       }
     },
     
     model.predict = function(X){
       if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
-      objects$model$transform(X)
+      out = objects$model$transform(X %>% data.matrix) %>% as.data.frame()
+      
+      # Important note: column headers in the output are default for mappers (same as input column names). 
+      # If your naming strategy is different, write your own model.predict() method for any wrapper inheriting from this class.
+      if(ncol(out) == nrow(objects$features)){
+        colnames(out) <- objects$features$fname
+      }
+      return(out)
     }
 ))
 

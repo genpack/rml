@@ -228,7 +228,7 @@ CLS.STATS.LR = setRefClass('CLS.STATS.LR', contains = "CLASSIFIER",
                            
                            get.features.weight = function(){
                              objects$model.summary <<- summary(objects$model)
-                             pv   = objects$model.summary$coefficients[-1, 'Pr(>|t|)'] %>% na2zero
+                             pv   = objects$model.summary$coefficients[-1, 'Pr(>|z|)'] %>% na2zero
                              # Usually NA p-values appear when there is a perfect fit (100% R-squared), so each feature shall be considerd as important!?
                              keep = (pv < 0.1)
                              weights = pv
@@ -678,12 +678,12 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
 
   model.fit = function(X, y){
     
+    X = X[objects$features$fname]
     if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
     
-    X = X[objects$features$fname]
     if(ncol(X) == 0){stop('No columns in the input dataset!')}
 
-    dtrain = xgb.DMatrix(as.matrix(X), label = y)
+    dtrain = xgboost::xgb.DMatrix(as.matrix(X), label = y)
 
     need_eval = config$show_progress | !is.null(config$early_stopping_rounds)
     if(need_eval){
@@ -693,7 +693,7 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
         # nvs: Number of Validation Sets
         nvs = length(dvalidation)
         grd = y_gradient(X = vp$X, y = vp$y)
-        dvalidation[["Validation_" %++% nvs]] <- vp$X[objects$features$fname] %>% as.matrix %>% xgb.DMatrix(label = vp$y)
+        dvalidation[["Validation_" %++% nvs]] <- vp$X[objects$features$fname] %>% as.matrix %>% xgboost::xgb.DMatrix(label = vp$y)
         if(sum(abs(grd)) > .Machine$double.eps){
           attr(dvalidation[["Validation_" %++% nvs]], 'gradient') <- grd
         }
@@ -744,7 +744,7 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
     imp = try(xgb.importance(model = objects$model) %>% select(fname = Feature, importance = Gain), silent = T)
     if(!inherits(imp, 'try-error')){
       if(!is.null(objects$features$importance)) objects$features$importance <<- NULL
-      objects$features %>% left_join(imp, by = 'fname') %>% na2zero ->> objects$features
+      objects$features %>% dplyr::left_join(imp, by = 'fname') %>% na2zero ->> objects$features
     } else if(is.null(objects$features$importance)){
       objects$features$importance <<- 1.0/nrow(objects$features)
     }
@@ -754,6 +754,7 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
     X = X[objects$model$feature_names]
     if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
     
-    stats::predict(objects$model, xgb.DMatrix(as.matrix(X), label = rep(NA, nrow(X)))) %>% logit_inv %>% as.data.frame
+    stats::predict(objects$model, xgboost::xgb.DMatrix(as.matrix(X), label = rep(NA, nrow(X)))) %>% 
+      logit_inv %>% as.data.frame
   }
 ))

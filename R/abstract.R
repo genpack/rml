@@ -63,7 +63,7 @@ MODEL = setRefClass('MODEL',
                          'pp.mask_missing_values',
                          'model.class', 'model.config', 'model.module',
                          'eda.enabled', 
-                         'verbose', 'pass_columns', 'remove_columns', 'name', 'column_filter',
+                         'verbose', 'pass_columns', 'remove_columns', 'name', 'column_filters',
                          # smp.enabled: boolean parameter. default = FALSE. Should I do any sampling of the training rows at all? If FALSE (Default) 
                          #              model will be trained by the entire training data table (X) without any changes.
                          'smp.enabled', 'smp.class_ratio', 'smp.sample_ratio', 'smp.num_rows', 'smp.method', 'smp.config',
@@ -83,7 +83,7 @@ MODEL = setRefClass('MODEL',
       }
       
       settings$verbose <- verify(config$verbose, c('numeric', 'integer'), lengths = 1, default = 1) %>% as.integer
-      settings$column_filter  <- verify(settings$column_filter, 'list', default = list(n_unique = "> 1"))
+      settings$column_filters  <- verify(settings$column_filters, 'list', default = list(list(column = 'n_unique', filter = ' > 1')))
 
       settings$metrics   <- verify(settings$metrics,  'character', default = 'pearson')
       settings$cv.split_method <- verify(settings$cv.split_method, lengths = 1, 'character', default = 'shuffle')
@@ -107,16 +107,19 @@ MODEL = setRefClass('MODEL',
       objects$pupils        <<- pupils
     },
 
-    reset               = function(reset_transformers = T, reset_gradient_transformers = T){
+    reset               = function(reset_transformers = T, reset_gradient_transformers = T, set_features.include = T){
       fitted <<- FALSE
+      if(set_features.include & (length(transformers) == 0)){
+        config$features.include <<- objects$features$fname
+      }
       objects$features <<- NULL
       objects$model    <<- NULL
       objects$saved_pred <<- NULL
       if (reset_transformers & !is.empty(transformers)){
-        for (transformer in transformers) transformer$reset(reset_transformers = T, reset_gradient_transformers = reset_gradient_transformers)
+        for (transformer in transformers) transformer$reset(reset_transformers = T, reset_gradient_transformers = reset_gradient_transformers, set_features.include = set_features.include)
       }
       if (reset_gradient_transformers & !is.empty(gradient_transformers)){
-        for (transformer in gradient_transformers) transformer$reset(reset_transformers = reset_transformers, reset_gradient_transformers = T)
+        for (transformer in gradient_transformers) transformer$reset(reset_transformers = reset_transformers, reset_gradient_transformers = T, set_features.include = set_features.include)
       }
     },
 
@@ -219,7 +222,6 @@ MODEL = setRefClass('MODEL',
             fte = chif(config$fe.recursive, fns %-% ftk, c())
           }
         }
-        config$features.include <<- objects$features$fname
 
         if(is.empty(objects$features)){
           cat(name, ': ', 'No features left after elimination! Distribution fitted for output variable.', '\n')
@@ -323,10 +325,6 @@ MODEL = setRefClass('MODEL',
         
         assert(ncol(X) > 0, 'No column found in the training dataset!')
 
-        if(config$pp.coerce_integer_features){
-          X %<>% int_ordinals
-        }
-        
         if(inherits(X, 'WIDETABLE')){
           objects$features <<- X$meta %>% distinct(column, .keep_all = T) %>% select(fname = column, fclass = class, n_unique = n_unique)
         } else {
@@ -343,39 +341,21 @@ MODEL = setRefClass('MODEL',
           objects$features <<- objects$features %>% merge(catinfo, all = T)
         }
 
-        if(!is.null(config$column_filter)){
-          objects$features$n_unique <<- rbig::colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
-          script = 'objects$features'
-          for(ffn in names(config$column_filter)){
-            assert(is.character(config$column_filter[[ffn]]), 
-                   'Feature filter elements must be character. %s was of class %s!' %>% sprintf(ffn, class(config$column_filter[[ffn]])[1]))
-            script %<>% paste("filter(%s %s)" %>% sprintf(ffn, config$column_filter[[ffn]] %>% as.character), sep = " %>% ")
+        if(inherits(config$column_filters, 'list')){
+          for(fitem in config$column_filters){
+            verify(fitem, 'list', names_include = c('column', 'filter'))
+            assert(is.character(fitem$column), "Element 'column' must be character. %s was of class %s!" %>% sprintf(fitem$column, class(fitem$column)[1]))
+            assert(is.character(fitem$filter), "Element 'filter' must be character. %s was of class %s!" %>% sprintf(fitem$filter, class(fitem$filter)[1]))
+            if((fitem$column == 'n_unique') & !('n_unique' %in% colnames(objects$features))){
+              objects$features$n_unique <<- rbig::colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
+            }
+            script = 'objects$features'
+            script %<>% paste("filter(%s %s)" %>% sprintf(fitem$column, fitem$filter), sep = " %>% ")
             objects$features <<- parse(text = script) %>% eval
           }
           X = X[objects$features$fname]
         }
         
-        # todo: remove outliers can be considered as a transformer as well. Add transformers (transformer type: preprocessor)
-        if(config$pp.trim_outliers){
-          adapt = verify(config$pp.trim_outliers.adaptive, 'logical', default = F)
-          recur = verify(config$pp.trim_outliers.recursive, 'logical', default = F)
-          sdcut = verify(config$pp.trim_outliers.sd_threshold, 'numeric', domain = c(0,Inf), default = 4)
-          X %<>% trim_outliers(sd_threshold = sdcut, adaptive = adapt, recursive = recur)
-        }
-
-        # todo: missing values should be treated differently for each column or groups of columns or classes of columns
-        # todo: missing values could be imputed by aggregations of non-missing values like mean, median or most_frequent
-        if(!is.null(config$pp.mask_missing_values)){
-          # This will edit the table, so WideTables cannot be used yet.
-          X %<>% as.data.frame
-          for(i in sequence(ncol(X))){
-            wna = which(is.na(X[[i]]))
-            if(length(wna) > 0){
-              X[wna, i] <- config$pp.mask_missing_values[1] %>% rutils::coerce(class(X[wna, i])[1])
-            }
-          }
-        }
-
         assert(nrow(objects$features) > 0, 'No features left for training!')
         
         if(config$fe.enabled) {
@@ -389,6 +369,7 @@ MODEL = setRefClass('MODEL',
     },
 
     transform_x = function(X, y = NULL){
+      
       nt = length(transformers)
       if(nt > 0){
         ## Fitting:
@@ -472,6 +453,31 @@ MODEL = setRefClass('MODEL',
         #     }
         #   }
       } else {XT = X}
+      
+      # Apply preprocessing:
+      # todo: missing values should be treated differently for each column or groups of columns or classes of columns
+      # todo: missing values could be imputed by aggregations of non-missing values like mean, median or most_frequent
+      if(!is.null(config$pp.mask_missing_values)){
+        # This will edit the table, so WideTables cannot be used yet.
+        if(inherits(XT, 'WIDETABLE')){XT = rbig::as.data.frame(XT)}
+        for(i in sequence(ncol(XT))){
+          wna = which(is.na(XT[[i]]))
+          if(length(wna) > 0){
+            XT[wna, i] <- config$pp.mask_missing_values[1] %>% rutils::coerce(class(XT[wna, i])[1])
+          }
+        }
+      }
+      if(config$pp.coerce_integer_features){
+        XT %<>% int_ordinals
+      }
+      # todo: remove outliers can be considered as a transformer as well. Add transformers (transformer type: preprocessor)
+      if(config$pp.trim_outliers){
+        adapt = verify(config$pp.trim_outliers.adaptive, 'logical', default = F)
+        recur = verify(config$pp.trim_outliers.recursive, 'logical', default = F)
+        sdcut = verify(config$pp.trim_outliers.sd_threshold, 'numeric', domain = c(0,Inf), default = 4)
+        XT %<>% trim_outliers(sd_threshold = sdcut, adaptive = adapt, recursive = recur)
+      }
+      
       return(XT)
     },
 
@@ -628,6 +634,19 @@ MODEL = setRefClass('MODEL',
       }
     },
 
+    # if name_suffix is specified, it will be added to the model names and all its transformers and gradient transformers
+    deep_copy = function(name_suffix = NULL){
+      obj = .self$copy()
+      if(!is.null(name_suffix)){obj$name = obj$name %>% paste0(name_suffix)}
+      for (i in sequence(length(transformers))){
+        obj$transformers[[i]] <- transformers[[i]]$deep_copy(name_suffix = name_suffix)
+      }
+      for (i in sequence(length(gradient_transformers))){
+        obj$gradient_transformers[[i]] <- gradient_transformers[[i]]$deep_copy(name_suffix = name_suffix)
+      }
+      return(obj)
+    },
+    
     # todo: add k-fold, chronological shuffle, chronological split
     performance.cv = function(X, y, metrics = config$metrics, ...){
       cvmodel = .self$copy()
@@ -698,20 +717,3 @@ MODEL = setRefClass('MODEL',
     get.expert.features  = function(){}
 ))
 
-
-COLFILTER = setRefClass('COLFILTER', contains = 'MODEL', methods = list(
-  fit = function(X, y = NULL){
-    if(!fitted){
-      callSuper(X, y)
-    }
-    fitted <<- T
-  },
-
-  predict = function(X, prob){
-    XORG = callSuper(X)
-    XFET = XORG[objects$features$fname]
-    XOUT = XFET[character()]
-    treat(XOUT, XFET, XORG)
-  }
-
-))

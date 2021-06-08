@@ -65,8 +65,6 @@ ENC.SKLEARN.OHE = setRefClass(
       description      <<- 'One-Hot Encoder'
       reserved_words   <<- c(reserved_words, 'max_domain')
       
-      config$pp.remove_nominal_features <<- F
-      config$pp.remove_numeric_features <<- T
       if(is.empty(name)){name <<- 'SKOHE' %>% paste0(sample(10000:99999, 1))}
       config$max_domain <<- verify(config$max_domain, c('numeric', 'integer'), default = 25) %>% as.integer
     },
@@ -100,9 +98,7 @@ ENC.CATEGORY_ENCODERS = setRefClass(
       description      <<- 'Superclass Wrapper for encoders from Python package category_encoders'
       package          <<- 'category_encoders'
       package_language <<- 'Python'
-      config$pp.remove_nominal_features <<- F
-      config$pp.remove_numeric_features <<- T
-      
+
       config$model.module <<- verify(config$model.module, 'character', lengths = 1, null_allowed = F)
       config$model.class  <<- verify(config$model.class, 'character' , lengths = 1, null_allowed = F)
 
@@ -134,7 +130,7 @@ ENC.CATEGORY_ENCODERS.CATB = setRefClass(
   contains = 'ENC.CATEGORY_ENCODERS',
   methods = list(
     initialize = function(...){
-      callSuper(...)
+      callSuper(model.module = 'cat_boost', model.class = 'CatBoostEncoder', ...)
       type             <<- 'Encoder'
       description      <<- 'CatBoost Encoder'
       package          <<- 'category_encoders'
@@ -146,19 +142,36 @@ ENC.CATEGORY_ENCODERS.CATB = setRefClass(
     }
 ))
 
+#' @export ENC.CATEGORY_ENCODERS.TE
+ENC.CATEGORY_ENCODERS.TE = setRefClass(
+  'ENC.CATEGORY_ENCODERS.TE',
+  contains = 'ENC.CATEGORY_ENCODERS',
+  methods = list(
+    initialize = function(...){
+      callSuper(model.module = 'target_encoder', model.class = 'TargetEncoder', ...)
+      type             <<- 'Encoder'
+      description      <<- 'Target Encoder'
+      package          <<- 'category_encoders'
+      package_language <<- 'Python'
+
+      if(is.empty(name)){name <<- 'CETE' %>% paste0(sample(10000:99999, 1))}
+    }
+  ))
+
+
+
+#' @export ENC.CATEGORY_ENCODERS.JSTN
 ENC.CATEGORY_ENCODERS.JSTN = setRefClass(
   'ENC.CATEGORY_ENCODERS.JSTN',
   contains = 'ENC.CATEGORY_ENCODERS',
   methods = list(
     initialize = function(...){
-      callSuper(...)
+      callSuper(model.module = 'james_stein', model.class = 'JamesSteinEncoder', ...)
       type             <<- 'Encoder'
       description      <<- 'James Stein Encoder'
       package          <<- 'category_encoders'
       package_language <<- 'Python'
-      config$model.module     <<- 'james_stein'
-      config$model.class      <<- 'JamesSteinEncoder'
-      
+
       if(is.empty(name)){name <<- 'CEJSTN' %>% paste0(sample(10000:99999, 1))}
     }
 ))
@@ -166,18 +179,16 @@ ENC.CATEGORY_ENCODERS.JSTN = setRefClass(
 
 #' @export ENC.CATEGORY_ENCODERS.HLMRT
 ENC.CATEGORY_ENCODERS.HLMRT = setRefClass(
-  'ENC.CATEGORY_ENCODERS',
-  contains = 'MODEL',
+  'ENC.CATEGORY_ENCODERS.HLMRT',
+  contains = 'ENC.CATEGORY_ENCODERS',
   methods = list(
     initialize = function(...){
-      callSuper(...)
+      callSuper(model.module = 'helmert', model.class = 'HelmertEncoder', ...)
       type             <<- 'Encoder'
       description      <<- 'Helmert Encoder'
       package          <<- 'category_encoders'
       package_language <<- 'Python'
-      config$model.module     <<- 'helmert'
-      config$model.class      <<- 'HelmertEncoder'
-      
+
       if(is.empty(name)){name <<- 'CEHLMRT' %>% paste0(sample(10000:99999, 1))}
     }
 ))
@@ -255,11 +266,13 @@ ENC.RML.TE = setRefClass('ENC.RML.TE', contains = 'MODEL',
                            
                            model.fit = function(X, y){
                              if(!fitted){
-                               objects$features <<- objects$features %>% filter(fname %in% nominals(X))
+                               # todo: remove this conversion when widetable supports cbind, group_by and summarise
+                               if(inherits(X, 'WIDETABLE')){X = rbig::as.data.frame(X)}
+                               objects$features <<- objects$features %>% filter(fclass %in% c('integer', 'character', 'factor'))
                                X = X[objects$features$fname]
-                               stopifnot(ncol(X) > 0, 'No categorical feature for encoding')
+                               rutils::assert(ncol(X) > 0, "No nominal or ordinal features left for encoding!")
                                objects$model <<- list()
-                               for(col in rbig::colnames(X)){
+                               for(col in colnames(X)){
                                  objects$model[[col]] <<- cbind(X, label = y) %>% group_by_(col) %>% summarise(ratio = mean(label))
                                }
                              }

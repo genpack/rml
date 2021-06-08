@@ -3,8 +3,8 @@ MAP.SKLEARN.NRM = setRefClass(
   'MAP.SKLEARN.NRM',
   contains = 'TRM.SKLEARN',
   methods = list(
-    initialize = function(model.module = 'preprocessing', model.class = 'Normalizer', ...){
-      callSuper(...)
+    initialize = function(...){
+      callSuper(model.module = 'preprocessing', model.class = 'Normalizer', ...)
       type             <<- 'Mapper'
       description      <<- 'Normalizer'
 
@@ -18,8 +18,8 @@ MAP.SKLEARN.ZFS = setRefClass(
   'MAP.SKLEARN.ZFS',
   contains = 'MODEL',
   methods = list(
-    initialize = function(model.module = 'preprocessing', model.class = 'StandardScaler', ...){
-      callSuper(...)
+    initialize = function(...){
+      callSuper(model.module = 'preprocessing', model.class = 'StandardScaler', ...)
       type             <<- 'Mapper'
       description      <<- 'Z-Factor Standard Scaler'
 
@@ -32,8 +32,8 @@ MAP.SKLEARN.MMS = setRefClass(
   'MAP.SKLEARN.MMS',
   contains = 'TRM.SKLEARN',
   methods = list(
-    initialize = function(model.module = 'preprocessing', model.class = 'MinMaxScaler', ...){
-      callSuper(...)
+    initialize = function(...){
+      callSuper(model.module = 'preprocessing', model.class = 'MinMaxScaler', ...)
       type             <<- 'Mapper'
       description      <<- 'MinMax Scaler'
       if(is.empty(name)){name <<- 'SKMMS' %>% paste0(sample(10000:99999, 1))}
@@ -203,12 +203,12 @@ MAP.SKLEARN.QT = setRefClass(
         
         module = reticulate::import('sklearn.preprocessing')
         objects$model <<- do.call(module$QuantileTransformer, config %>% list.remove(reserved_words))
-        objects$model$fit(X, y)
+        objects$model$fit(X %>% data.matrix, y)
       }
     },
     
     model.predict = function(X){
-      objects$model$transform(X)
+      objects$model$transform(X %>% data.matrix) %>% as.data.frame()
     }
   ))
 
