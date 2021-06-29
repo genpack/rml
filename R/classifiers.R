@@ -5,30 +5,20 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
   methods = list(
     initialize = function(...){
       callSuper(...)
-      type             <<- 'Binary Classifier'
-      config$sig_level <<- verify(config$sig_level, 'numeric', domain = c(0,1), default = 0.1)
-      config[['return']]    <<- verify(config[['return']], 'character', domain = c('probs', 'logit', 'class'), default = 'probs')
-      config[['threshold']] <<- verify(config[['threshold']], 'numeric', domain = c(0,1), default = 0.5, lengths = 1)
-      # config$quantiles <<- verify(config$quantiles, 'numeric', domain = c(0,1), default = 0.5)
-      config$threshold_determination <<- verify(config$threshold_determination, 'character', lengths = 1,
-                                                domain = c('set_as_config', 'maximum_f1', 'maximum_chi', 'label_rate_quantile'), default = 'set_as_config')
-      # todo: add 'target_precision', 'target_recall', 
-      reserved_words <<- c(reserved_words, 'sig_level', 'return', 'threshold', 'threshold_determination')
-      if(!('metrics' %in% names(list(...)))){
-        config$metrics <<- chif(config$return == 'class', 'f1', 'gini')
-      }
+      initialize_classifier()
     },
     
-    # Since this class is being used as a second parent class, it requires another init method.
-    init = function(...){
+    # Since this class is being used as a second parent class, it requires another initialize_classifier method.
+    initialize_classifier = function(){
       type             <<- 'Binary Classifier'
       config$sig_level <<- verify(config$sig_level, 'numeric', domain = c(0,1), default = 0.1)
       config$return    <<- verify(config$return, 'character', domain = c('probs', 'logit', 'class'), default = 'probs')
+      config[['return_type_in_output']] <<- verify(config[['return_type_in_output']], 'logical', lengths = 1, domain = c(T,F), default = T)
       config$threshold <<- verify(config$threshold, 'numeric', lengths = 1, domain = c(0,1), default = 0.5)
       config$threshold_determination <<- verify(config$threshold_determination, 'character', lengths = 1,
                                                 domain = c('set_as_config', 'maximum_f1', 'maximum_chi'), default = 'set_as_config')
       # todo: add 'target_precision', 'target_recall', 'ratio_quantile'
-      reserved_words <<- c(reserved_words, 'sig_level', 'return', 'threshold', 'threshold_determination')
+      reserved_words <<- c(reserved_words, 'sig_level', 'return', 'return_type_in_output', 'threshold', 'threshold_determination')
       packages_required <<- c(packages_required, 'stats')
       if(is.null(config$metric)){
         config$metric <<- chif(config$return == 'class', 'f1', 'gini')
@@ -53,7 +43,9 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
       if (config$return == 'logit' | has_gradient){Y %<>% as.matrix %>% apply(2, logit_fwd) %>% as.data.frame}
       Y = callSuper(X, Y)
       if (config$return == 'probs' & has_gradient){Y %<>% as.matrix %>% apply(2, logit_inv) %>% as.data.frame}
-      colnames(Y) <- config$return
+      if(config$return_type_in_output){
+        colnames(Y) <- config$return
+      } else {colnames(Y) <- ''}
       return(Y)
     },
 
@@ -89,13 +81,28 @@ CLS.SKLEARN = setRefClass('CLS.SKLEARN', contains = c('TRM.SKLEARN', "CLASSIFIER
    methods = list(
      initialize = function(...){
        callSuper(...)
-       init()
+       initialize_classifier()
      },
+     
      model.predict = function(X){
        if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
+       retrieve_model()
        objects$model$predict_proba(X %>% data.matrix)[,2, drop = F] %>% as.data.frame
-     }
-   )
+     },
+     
+     # Class does not inherit methods of the second parent (CLASSIFIER)!!!! So we need to repeat those that we need here:
+     transform_yout = function(X, Y = NULL){
+       has_gradient = length(gradient_transformers) > 0
+       if (config$return == 'class'){for(i in sequence(ncol(Y))) {Y[,i] = as.numeric(Y[,i] > config$threshold)}} else
+         if (config$return == 'logit' | has_gradient){Y %<>% as.matrix %>% apply(2, logit_fwd) %>% as.data.frame}
+       Y = callSuper(X, Y)
+       if (config$return == 'probs' & has_gradient){Y %<>% as.matrix %>% apply(2, logit_inv) %>% as.data.frame}
+       if(config$return_type_in_output){
+         colnames(Y) <- config$return
+       } else {colnames(Y) <- ''}
+       return(Y)
+     }   
+  )
 )
 
 #' @export CLS.SKLEARN.KNN
@@ -195,7 +202,7 @@ CLS.SKLEARN.LR = setRefClass('CLS.SKLEARN.LR', contains = "CLS.SKLEARN",
 
       get.function = function(...){
         assert(fitted, 'Model not fitted!')
-        build_lincomb(name = name, length(objects$features$fname), features = objects$features$fname, parameter_values = c(as.numeric(objects$model$intercept_), as.numeric(objects$model$coef_)), ...)
+        rfun::build_lincomb(name = name, length(objects$features$fname), features = objects$features$fname, parameter_values = c(as.numeric(objects$model$intercept_), as.numeric(objects$model$coef_)), ...)
       }
    )
 )
@@ -306,28 +313,53 @@ CLS.SKLEARN.XGB = setRefClass('CLS.SKLEARN.XGB', contains = "CLASSIFIER",
       
       model.save = function(path = getwd()){
         callSuper(path)
-        joblib = reticulate::import('joblib')
-        joblib$dump(objects$model, paste0(path, '/', name, '.joblib'))
+        save_model_object(paste0(path, '/', name, '.joblib'))
+        release_model()
       },
       
       model.load = function(path = getwd()){
         callSuper(path)
         fn   = paste0(path, '/', name, '.joblib')
         pass = file.exists(fn)
-        warnif(!pass, paste0('File ', fn , ' does not exist!'))
-        if(pass){
-          joblib = reticulate::import('joblib')
-          objects$model  <<- joblib$load(fn)
-          objects$module <<- reticulate::import('xgboost')
+        rutils::assert(pass, paste0('File ', fn , ' does not exist!'))
+        if(pass){load_model_object(fn)}
+      },
+      
+      save_model_object = function(filename){
+        joblib = reticulate::import('joblib')
+        joblib$dump(objects$model, filename)
+      },
+      
+      load_model_object = function(filename){
+        joblib = reticulate::import('joblib')
+        objects$module <<- reticulate::import('xgboost')
+        objects$model  <<- joblib$load(filename)
+      },
+      
+      # save model object in a tempfile temporarily
+      keep_model = function(filename){
+        callSuper()
+        objects$model_filename <<- tempfile() %>% gsub(pattern = "\\\\", replacement = "/")
+        save_model_object(objects$model_filename)
+      },
+      
+      retrieve_model = function(){
+        callSuper()
+        if(!is.null(objects$model_filename)){
+          if(file.exists(objects$model_filename)){
+            load_model_object(objects$model_filename)
+          }
         }
       },
       
       model.fit = function(X, y){
         if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
+        objects$module <<- reticulate::import('xgboost')
+
         objects$model <<- do.call(objects$module$XGBClassifier, config %>% list.remove(reserved_words))
         objects$model$fit(X %>% data.matrix, y)
-          imp = try(objects$model$feature_importances_ %>% as.numeric, silent = T)
-          if(inherits(imp, 'numeric')) objects$features$importance <<- imp
+        imp = try(objects$model$feature_importances_ %>% as.numeric, silent = T)
+        if(inherits(imp, 'numeric')) objects$features$importance <<- imp
       },
 
       model.predict = function(X){
@@ -723,8 +755,12 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
       config$eval_metric <<- 'auc'
       config$maximize <<- T
     }
+    
+    if(!is.null(config$feval)){
+      config$eval_metric <<- NULL
+    }
 
-    objects$model <<- xgb.train(
+    objects$model <<- xgboost::xgb.train(
       params    = config %>% list.remove(reserved_words),
       data      = dtrain,
       nrounds   = config$nrounds,

@@ -400,6 +400,7 @@ addTransformer = function(model, transformer, X_train, y_train, X_val, y_val, be
     model$transformers[['I']]   <- idt
   }
   model$transformers[[transformer$name]] <- transformer
+  # check argument set_features.include
   model$reset(reset_transformers = F)
   res = try(model$fit(X_train, y_train), silent = T)
   if(!inherits(res, 'try-error')){
@@ -407,6 +408,7 @@ addTransformer = function(model, transformer, X_train, y_train, X_val, y_val, be
     if(new_perf <= benchmark){
       cat('\n', 'Transformer ', transformer$name, ' Failed!', '\n')
       model$transformers[[transformer$name]] <- NULL
+      # check argument set_features.include
       model$reset(reset_transformers = F)
     } else {
       cat('\n', 'Transformer ', transformer$name, ' successfully improved performance to: ', new_perf, '\n')
@@ -415,6 +417,7 @@ addTransformer = function(model, transformer, X_train, y_train, X_val, y_val, be
   } else {
     cat('\n', res %>% as.character, '\n')
     model$transformers[[transformer$name]] <- NULL
+    # check argument set_features.include
     model$reset(reset_transformers = F)
   }
 }
@@ -429,6 +432,7 @@ join_features = function(father, mother, X_train, y_train, X_val, y_val, benchma
     model$transformers[['I']]   <- idt
   }
   model$transformers[[transformer$name]] <- transformer
+  # check argument set_features.include
   model$reset(reset_transformers = F)
   res = try(model$fit(X_train, y_train), silent = T)
   if(!inherits(res, 'try-error')){
@@ -436,6 +440,7 @@ join_features = function(father, mother, X_train, y_train, X_val, y_val, benchma
     if(new_perf <= benchmark){
       cat('\n', 'Transformer ', transformer$name, ' Failed!', '\n')
       model$transformers[[transformer$name]] <- NULL
+      # check argument set_features.include
       model$reset(reset_transformers = F)
     } else {
       cat('\n', 'Transformer ', transformer$name, ' successfully improved performance to: ', new_perf, '\n')
@@ -444,6 +449,7 @@ join_features = function(father, mother, X_train, y_train, X_val, y_val, benchma
   } else {
     cat('\n', res %>% as.character, '\n')
     model$transformers[[transformer$name]] <- NULL
+    # check argument set_features.include
     model$reset(reset_transformers = F)
   }
 }

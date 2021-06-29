@@ -73,12 +73,25 @@ MODEL = setRefClass('MODEL',
                          'metric', 'transformers', 'fitted')
       
       for(pn in c('keep_columns', 'keep_features', 'cv.restore_model', 'fe.enabled', 'mc.enabled', 
-                  'pp.coerce_integer_features', 'pp.trim_outliers',
-                  'eda.enabled', 'smp.enabled', 'ts.enabled', 'save_predictions', 'remove_failed_transformers')){
+                  'pp.coerce_integer_features', 'pp.trim_outliers', 
+                  'eda.enabled', 'smp.enabled', 'ts.enabled', 'save_predictions')){
         settings[[pn]] <- verify(settings[[pn]], 'logical', lengths = 1, domain = c(T,F), default = F)
       }
       
-      for(pn in c('cv.reset_transformer', 'name_in_output')){
+      # Note: if a transformer fails to fit, config parameter 'remove_failed_transformer' determines if the failed transformer should be removed or not.
+      # if it is set to FALSE, then failed transformer remains among transformers. 
+      # Then as part of the fitting procedure, the predict() method of the failed transformer will be called to transform the training set.
+      # This will fail, but it does not stop the process but no columns will be generated in the transformed output.
+      # Now, if there is another successfully fit transformer, there will be some columns in the transformed table and the main model will be fit based on that.
+      # Now, for test, since the failed transformer still exists and is not fit, it's fit method is called as part of the predict procedure of the main model.
+      # The failed transformer now is being fitted with the test set which is not right, however, 
+      # if it fits successfully, it generates columns in the final output anyway, 
+      # but those columns will not be read by the main model at prediction because it only reads columns which are specified 
+      # in objects$features table. So no problem will happen.
+      # The advantage of setting this parameter to False is that after resetting the model and fitting it with a different dataset
+      # the failed transformer may not fail this time and be used in the main model.
+      
+      for(pn in c('cv.reset_transformer', 'name_in_output', 'remove_failed_transformers')){
         settings[[pn]] <- verify(settings[[pn]], 'logical', lengths = 1, domain = c(T,F), default = T)
       }
       
@@ -106,7 +119,29 @@ MODEL = setRefClass('MODEL',
       objects$features      <<- features
       objects$pupils        <<- pupils
     },
+    
+    retrieve_model = function(){
+      for(tr in transformers){tr$retrieve_model()}
+      for(tr in gradient_transformers){tr$retrieve_model()}
+    },
+    
+    keep_model = function(){
+      for(tr in transformers){tr$keep_model()}
+      for(tr in gradient_transformers){tr$keep_model()}
+    },
 
+    # deletes temporary file if model object is temporarily saved
+    release_model = function(){
+      if(!is.null(objects$model_filename)){
+        if(file.exists(objects$model_filename)){
+          unlink(objects$model_filename)
+        }
+        objects$model_filename <<- NULL
+      }
+      for(tr in transformers){tr$release_model()}
+      for(tr in gradient_transformers){tr$release_model()}
+    },
+    
     reset               = function(reset_transformers = T, reset_gradient_transformers = T, set_features.include = T){
       fitted <<- FALSE
       if(set_features.include & (length(transformers) == 0)){
@@ -114,6 +149,10 @@ MODEL = setRefClass('MODEL',
       }
       objects$features <<- NULL
       objects$model    <<- NULL
+      if(!is.null(objects$model_filename)){
+        unlink(objects$model_filename)
+        objects$model_filename <<- NULL
+      }
       objects$saved_pred <<- NULL
       if (reset_transformers & !is.empty(transformers)){
         for (transformer in transformers) transformer$reset(reset_transformers = T, reset_gradient_transformers = reset_gradient_transformers, set_features.include = set_features.include)
@@ -168,6 +207,19 @@ MODEL = setRefClass('MODEL',
       if(cusp){
         XOUT = objects$saved_pred$XOUT
       } else {
+        # .self$retrieve_model()
+        
+        if(!is.null(config$pp.mask_missing_values)){
+          # This will edit the table, so WideTables cannot be used yet.
+          if(inherits(XFET, 'WIDETABLE')){XFET = rbig::as.data.frame(XFET)}
+          for(i in sequence(ncol(XFET))){
+            wna = which(is.na(XFET[[i]]))
+            if(length(wna) > 0){
+              XFET[wna, i] <- config$pp.mask_missing_values[1] %>% rutils::coerce(class(XFET[wna, i])[1])
+            }
+          }
+        }
+        
         XOUT = .self$model.predict(XFET)
         if(config$save_predictions){
           keep_prediction(XFET, XOUT)
@@ -175,7 +227,7 @@ MODEL = setRefClass('MODEL',
       }
 
       XOUT = transform_yout(X, XOUT)
-      if((ncol(XOUT) > 0) & config$name_in_output) colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
+      if((ncol(XOUT) > 0) & config$name_in_output) colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = ifelse(colnames(XOUT) == '', '', '_'))
 
       objects$n_output <<- ncol(XOUT)
       treat(XOUT, XFET, XORG)
@@ -323,6 +375,10 @@ MODEL = setRefClass('MODEL',
           X = X[ind[ind_2],]; y = y[ind[ind_2]]
         }
         
+        # This code chunk must only be here. Please don't relocate it from here!
+        if(config$pp.coerce_integer_features){
+          X %<>% int_ordinals
+        }
         assert(ncol(X) > 0, 'No column found in the training dataset!')
 
         if(inherits(X, 'WIDETABLE')){
@@ -340,7 +396,7 @@ MODEL = setRefClass('MODEL',
           catinfo = feature_info_categorical(X)
           objects$features <<- objects$features %>% merge(catinfo, all = T)
         }
-
+        
         if(inherits(config$column_filters, 'list')){
           for(fitem in config$column_filters){
             verify(fitem, 'list', names_include = c('column', 'filter'))
@@ -355,9 +411,33 @@ MODEL = setRefClass('MODEL',
           }
           X = X[objects$features$fname]
         }
-        
         assert(nrow(objects$features) > 0, 'No features left for training!')
         
+        # Apply preprocessing: (Don't take preprocessing to the transform_x method again. It causes problems with WideTables. Furthermore, they should not be applied on test. mask_missing_values is an exception which is applied to test in predict method)
+        # todo: missing values should be treated differently for each column or groups of columns or classes of columns
+        # todo: missing values could be imputed by aggregations of non-missing values like mean, median or most_frequent
+        if(!is.null(config$pp.mask_missing_values)){
+          # This will edit the table, so WideTables cannot be used yet.
+          if(inherits(X, 'WIDETABLE')){X = rbig::as.data.frame(X)}
+          for(i in sequence(ncol(X))){
+            wna = which(is.na(X[[i]]))
+            if(length(wna) > 0){
+              X[wna, i] <- config$pp.mask_missing_values[1] %>% rutils::coerce(class(X[wna, i])[1])
+            }
+          }
+        }
+        
+        # todo: remove outliers can be considered as a transformer as well. 
+        # Add transformers (transformer type: preprocessor)
+        # This way of outlier trimming is applied only on the training set and not on the test set
+        # If you use outlier trimmer as a transformer, it will be applied on both test and train
+        if(config$pp.trim_outliers){
+          adapt = verify(config$pp.trim_outliers.adaptive, 'logical', default = F)
+          recur = verify(config$pp.trim_outliers.recursive, 'logical', default = F)
+          sdcut = verify(config$pp.trim_outliers.sd_threshold, 'numeric', domain = c(0,Inf), default = 4)
+          X %<>% trim_outliers(sd_threshold = sdcut, adaptive = adapt, recursive = recur)
+        }
+
         if(config$fe.enabled) {
           config$fe.recursive <<- verify(config$fe.recursive, 'logical', lengths = 1, domain = c(T,F), default = F)
           fit.fe(X, y)
@@ -453,30 +533,6 @@ MODEL = setRefClass('MODEL',
         #     }
         #   }
       } else {XT = X}
-      
-      # Apply preprocessing:
-      # todo: missing values should be treated differently for each column or groups of columns or classes of columns
-      # todo: missing values could be imputed by aggregations of non-missing values like mean, median or most_frequent
-      if(!is.null(config$pp.mask_missing_values)){
-        # This will edit the table, so WideTables cannot be used yet.
-        if(inherits(XT, 'WIDETABLE')){XT = rbig::as.data.frame(XT)}
-        for(i in sequence(ncol(XT))){
-          wna = which(is.na(XT[[i]]))
-          if(length(wna) > 0){
-            XT[wna, i] <- config$pp.mask_missing_values[1] %>% rutils::coerce(class(XT[wna, i])[1])
-          }
-        }
-      }
-      if(config$pp.coerce_integer_features){
-        XT %<>% int_ordinals
-      }
-      # todo: remove outliers can be considered as a transformer as well. Add transformers (transformer type: preprocessor)
-      if(config$pp.trim_outliers){
-        adapt = verify(config$pp.trim_outliers.adaptive, 'logical', default = F)
-        recur = verify(config$pp.trim_outliers.recursive, 'logical', default = F)
-        sdcut = verify(config$pp.trim_outliers.sd_threshold, 'numeric', domain = c(0,Inf), default = 4)
-        XT %<>% trim_outliers(sd_threshold = sdcut, adaptive = adapt, recursive = recur)
-      }
       
       return(XT)
     },

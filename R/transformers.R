@@ -1,26 +1,5 @@
 #' @include abstract.R
 
-# TRANSFORMER = setRefClass('TRANSFORMER', contains = "MODEL", methods = list(
-#
-#
-#   # predict = function(X){
-#   #   if(is.null(colnames(XOUT))){
-#   #     if(ncol(XOUT) == nrow(objects$features)){
-#   #       colnames(XOUT) <- name %>% paste(objects$features$fname, sep = '_')
-#   #     } else if (ncol(XOUT) == 1){
-#   #       colnames(XOUT) <- name
-#   #     } else{
-#   #       colnames(XOUT) <- name %>% paste(sequence(ncol(XOUT)), sep = '_')
-#   #     }
-#   #   } else {
-#   #     colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = '_')
-#   #   }
-#   #
-#   #   treat(XOUT, XFET, XORG)
-#   # }
-#
-# ))
-
 
 ## Legend for transformers
 
@@ -97,24 +76,48 @@ TRM.SKLEARN = setRefClass(
     
     model.save = function(path = getwd()){
       callSuper(path)
-      joblib = reticulate::import('joblib')
-      joblib$dump(objects$model, paste0(path, '/', name, '.joblib'))
+      save_model_object(paste0(path, '/', name, '.joblib'))
+      release_model()
     },
     
     model.load = function(path = getwd()){
       callSuper(path)
       fn   = paste0(path, '/', name, '.joblib')
       pass = file.exists(fn)
-      warnif(!pass, paste0('File ', fn , ' does not exist!'))
-      if(pass){
-        joblib = reticulate::import('joblib')
-        objects$model  <<- joblib$load(fn)
-        objects$module <<- reticulate::import(paste('sklearn', config[['model.module']], sep = '.'))
+      rutils::assert(pass, paste0('File ', fn , ' does not exist!'))
+      if(pass){load_model_object(fn)}
+    },
+    
+    save_model_object = function(filename){
+      joblib = reticulate::import('joblib')
+      joblib$dump(objects$model, filename)
+    },
+    
+    load_model_object = function(filename){
+      joblib = reticulate::import('joblib')
+      objects$module <<- reticulate::import(paste('sklearn', config[['model.module']], sep = '.'))
+      objects$model  <<- joblib$load(filename)
+    },
+    
+    # save model object in a tempfile temporarily
+    keep_model = function(filename){
+      callSuper()
+      objects$model_filename <<- tempfile() %>% gsub(pattern = "\\\\", replacement = "/")
+      save_model_object(objects$model_filename)
+    },
+
+    retrieve_model = function(){
+      callSuper()
+      if(!is.null(objects$model_filename)){
+        if(file.exists(objects$model_filename)){
+          load_model_object(objects$model_filename)
+        }
       }
     },
 
     model.fit = function(X, y){
       if(!fitted){
+        objects$module <<- reticulate::import(paste('sklearn', config[['model.module']], sep = '.'))
         objects$model <<- do.call(objects$module[[config[['model.class']]]], args = config %>% rutils::list.remove(reserved_words))
         if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
         objects$model$fit(X %>% data.matrix, y)
@@ -123,6 +126,7 @@ TRM.SKLEARN = setRefClass(
     
     model.predict = function(X){
       if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
+      retrieve_model()
       out = objects$model$transform(X %>% data.matrix) %>% as.data.frame()
       
       # Important note: column headers in the output are default for mappers (same as input column names). 

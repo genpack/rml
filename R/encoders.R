@@ -109,8 +109,8 @@ ENC.CATEGORY_ENCODERS = setRefClass(
     
     model.fit = function(X, y){
       if(!fitted){
-        module = reticulate::import('category_encoders')
-        objects$model <<- do.call(objects$module[[config$model.class]],
+        objects$module <<- reticulate::import(paste('category_encoders', config[['model.module']], sep = '.'))
+        objects$model  <<- do.call(objects$module[[config$model.class]],
                                   config %>% list.remove(reserved_words) %>% list.add(cols = objects$features$fname))
         objects$model$fit(X, y)
       }
@@ -118,7 +118,52 @@ ENC.CATEGORY_ENCODERS = setRefClass(
     
     model.predict = function(X){
       objects$model$transform(X)
+    },
+    
+    save_model_object = function(filename){
+      pickle = reticulate::import('pickle')
+      handle = "open('%s', 'wb')" %>% sprintf(filename) %>% reticulate::py_eval()
+      pickle$dump(objects$model, handle)
+    },
+    
+    load_model_object = function(filename){
+      pickle = reticulate::import('pickle')
+      handle = "open('%s', 'rb')" %>% sprintf(filename) %>% reticulate::py_eval()
+      objects$module <<- reticulate::import(paste('category_encoders', config[['model.module']], sep = '.'))
+      objects$model  <<- pickle$load(handle)
+    },
+
+    model.save = function(path = getwd()){
+      callSuper(path)
+      save_model_object(paste0(path, '/', name, '.cem'))
+      release_model()
+    },
+    
+    model.load = function(path = getwd()){
+      callSuper(path)
+      fn   = paste0(path, '/', name, '.cem')
+      pass = file.exists(fn)
+      warnif(!pass, paste0('File ', fn , ' does not exist!'))
+      if(pass){load_model_object(fn)}
+    },
+    
+    # save model object in a tempfile temporarily
+    keep_model = function(filename){
+      callSuper()
+      objects$model_filename <<- tempfile() %>% gsub(pattern = "\\\\", replacement = "/")
+      save_model_object(objects$model_filename)
+    },
+    
+    retrieve_model = function(){
+      callSuper()
+      if(!is.null(objects$model_filename)){
+        if(file.exists(objects$model_filename)){
+          load_model_object(objects$model_filename)
+        }
+      }
     }
+    
+    
 ))
 
 

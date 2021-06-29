@@ -71,7 +71,7 @@ logit_inv = function(x){
 # todo: should work for WideTables as well
 #' @export
 int_ordinals = function(X){
-  if(inherits(X, 'WideTable')) {X %<>% rbig::as.data.frame}
+  if(inherits(X, 'WIDETABLE')) {X <- rbig::as.data.frame(X)}
   if(inherits(X, 'matrix')) {X %<>% as.data.frame}
   nms = colnames(X)
   for (col in nms){
@@ -228,9 +228,8 @@ na2median = function(X){
 #' @export
 correlation = function(x, y, metrics = 'pearson', threshold = NULL, quantiles = NULL){
 
-  if(inherits(x, c('data.frame', 'WideTable', 'matrix'))){
-    if(!inherits(x, 'WideTable')) {x %<>% as.data.frame}
-    cols = colnames(x)
+  if(inherits(x, c('data.frame', 'WIDETABLE', 'matrix'))){
+    if(!inherits(x, 'WIDETABLE')){cols = rbig::colnames(x)} else {cols = colnames(x)}
     if(is.null(cols)){cols = sequence(ncol(x))}
     out = list()
     for(col in cols){
@@ -1302,14 +1301,20 @@ fit_models = function(models, X, y, num_cores = 1, verbose = 1, remove_failed_mo
     requirements = models %>% lapply(function(x) x$packages_required) %>% unlist %>% unique
     cl = rutils::setup_multicore(n_jobs = num_cores)
     if(verbose > 0){cat('\n', 'Fitting  %s models ... ' %>% sprintf(length(uft)))}
+    
     models <- foreach(model = models, .combine = c, .packages = requirements, .errorhandling = 'pass') %dopar% {
+      # Save models temporarily before exiting the loop:
       res = try(model$fit(X, y), silent = T)
       if(inherits(res, 'try-error')){
         model$objects$fitting_error <- as.character(res)
+      } else {
+        model$keep_model()
       }
+      
       gc()
       list(model)
     }
+    for(i in sequence(length(models))){models[[i]]$retrieve_model()}
     stopCluster(cl)
     gc()
     if(verbose > 0){cat('Done!', '\n')}
@@ -1340,7 +1345,6 @@ fit_models = function(models, X, y, num_cores = 1, verbose = 1, remove_failed_mo
     models <- models %>% list.extract(fitted)
     assert(nt == length(models), "This must not happen!")
   }
-  
   return(models)
 }
 
@@ -1362,13 +1366,16 @@ predict_models = function(models, X, num_cores = 1, verbose = 1){
     requirements = models %>% lapply(function(x) x$packages_required) %>% unlist %>% unique
     cl = rutils::setup_multicore(n_jobs = num_cores)
     if(verbose > 0){cat('\n', 'Generating output from %s models ... ' %>% sprintf(nt))}
+    for(i in sequence(length(models))){models[[i]]$keep_model()}
     XT = foreach(model = models, .combine = cbind, .packages = requirements, 
                  .errorhandling = 'remove') %dopar% {
                   gc()
+                  model$retrieve_model() 
                   model$predict(X)
                  }
     stopCluster(cl)
     gc()
+    for(i in sequence(length(models))){models[[i]]$release_model()}
     if(verbose > 0){
       cat('Done!', '\n')
     }
@@ -1438,28 +1445,43 @@ evaluate_models.multicore = function(models, X, y, n_jobs = parallel::detectCore
 service_models = function(modlist, X_train, y_train, X_test, y_test, num_cores = 1, metrics = 'gini', quantiles = NULL, reported_parameters = character()){
   modlist %<>% fit_models(X = X_train, y = y_train, num_cores = num_cores, verbose = 1)
   names(modlist) <- modlist %>% rutils::list.pull('name')
-  
+
+  # keep return_type_in_output and name_in_output config properties
+  # we need the column naes to be exactly the same as model names
+  for(mdl in modlist){
+    mdl$objects$return_type_in_output <- mdl$config$return_type_in_output
+    mdl$objects$name_in_output <- mdl$config$name_in_output
+    mdl$config$return_type_in_output <- FALSE
+    mdl$config$name_in_output <- TRUE
+  }
+    
   yy = predict_models(modlist, X = X_test, num_cores = num_cores, verbose = 1)
+  
+  # retrieve return_type_in_output and name_in_output:
+  for(mdl in modlist){
+    mdl$config$return_type_in_output <- mdl$objects$return_type_in_output
+    mdl$config$name_in_output <- mdl$objects$name_in_output
+  }
+  
   pf = correlation(yy, y_test, metrics = metrics, quantiles = quantiles)
   
-  assert(length(pf) == length(modlist), 'Some models failed to predict!')
+  rutils::warnif(length(pf) < length(modlist), 'Some models failed to predict!')
   
-  pfdf = pf %>% lapply(unlist) %>% purrr::reduce(rbind) %>% as.data.frame %>% {rownames(.)<-names(modlist);.}
+  pfdf = pf %>% lapply(unlist) %>% purrr::reduce(rbind) %>% as.data.frame %>% {rownames(.)<-names(pf);.}
   print(pfdf)
   
-  
-  modlist %>% lapply(function(x) x$objects$features %>% dplyr::mutate(model = x$name, fitting_time = as.character(x$objects$fitting_time))) %>% 
+  for(i in rownames(pfdf)){
+    cfg = modlist[[i]]$config
+    for(j in reported_parameters){
+      pfdf[i, j] <- cfg[[j]]
+    }
+  }
+
+  modlist %>% list.extract(rownames(pfdf)) %>% lapply(function(x) x$objects$features %>% dplyr::mutate(model = x$name, fitting_time = as.character(x$objects$fitting_time))) %>% 
     purrr::reduce(dplyr::bind_rows) %>% 
     dplyr::left_join(pfdf %>% rutils::rownames2Column('model')) -> ptab
   
-  for(i in sequence(nrow(ptab))){
-    cfg = modlist[[ptab$model[i]]]$config
-    for(j in reported_parameters){
-      ptab[i, j] <- cfg[[j]]
-    }
-  }
-  
   ord = order(ptab[[names(pf[[1]])[1]]], decreasing = T)[1]
-  
+  for(i in sequence(length(modlist))){modlist[[i]]$release_model()}
   return(list(best_model = modlist[[ptab$model[ord]]], best_performance = max(ptab[[names(pf[[1]])[1]]]), results = ptab))
 }
