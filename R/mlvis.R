@@ -9,8 +9,8 @@ binary_class_bar = function(X, y, ncuts = 1000, C0_tag = 'C0', C1_tag = 'C1', ro
   
   cbind(X, label = y) %>% bucket_moments(colnames(X), 'label', ncuts = ncuts) -> res
   
-  res %<>% mutate(C0 = count - M1, cutpoint = round(cutpoint, round_digits)) %>% 
-    select(V1, cutpoint, C0, C1 = M1)
+  res %<>% mutate(C0 = cumulative_count - cumulative_sum_V2, cutpoint = round(cutpoint_V1, round_digits)) %>% 
+    select(V1, cutpoint, C0, C1 = cumulative_sum_V2)
   colnames(res) <- c('feature', 'cutpoint', C0_tag, C1_tag)
   reshape2::melt(res, measure.vars = c(C0_tag, C1_tag)) %>% 
     crosstalk::SharedData$new() -> shared_features
@@ -22,7 +22,6 @@ binary_class_bar = function(X, y, ncuts = 1000, C0_tag = 'C0', C1_tag = 'C1', ro
         shared_features %>% plotly::plot_ly(x = ~value, y = ~variable, type = 'bar')
       )  
     )
-    
   } else {
     fig = crosstalk::bscols(
       list(

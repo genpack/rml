@@ -1,10 +1,10 @@
 Package: rml
 Type: Package
-Title: A set of Machine Learning and transformer models.
-Version: 1.4.3
-Author: Nicholas Berta
-Maintainer: Nichola Berta <nicholas.berta@gmail.com>
-Description: A set of Machine Learning and transformer models.
+Title: A package for building pipelines of Machine Learning models.
+Version: 1.4.5
+Author: Nima Ramezani
+Maintainer: Nima Ramezani <nima.ramezani@gmail.com>
+Description: Using this package, you can build a pipeline of ML models and combine models from various R/Python packages including sklearn, keras, MLR, H2O and etc.
 License: MIT
 Encoding: UTF-8
 LazyData: true

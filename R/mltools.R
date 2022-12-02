@@ -1249,8 +1249,16 @@ ensemble_lift = function(y, yh_A, yh_B, r, r_A){
   mean(y[c(sel_A, sel_B)])/mean(y)
 }
 
-
-
+# This function cuts the given dataframe into buckets according to the columns in `variable_set_1`
+# and gives the bucket sum and cumulative sum of `variable_set_2` as well as 
+# count and cumulative count of each bucket.
+# Example:
+# df = data.frame(Height = rnorm(10000, 165, 20), 
+#                 Age = sample(15:60, size = 10000, replace = T), 
+#                 Weight = rnorm(10000, 70, 20))
+# bucket_moments(df, 'Age', c('Height', 'Weight'), ncuts = 10)
+# All variables must be numeric
+# todo: Add moments of higher degrees like: sum of squares, sum of cubes, degree 4, 5, ...
 #' @export 
 bucket_moments = function(df, variable_set_1, variable_set_2, ncuts = 100){
   out   = NULL
@@ -1261,7 +1269,7 @@ bucket_moments = function(df, variable_set_1, variable_set_2, ncuts = 100){
       tab %>% mutate(QNT = cut(F1, breaks = quantile(F1, probs = seq(0, 1, 1.0/ncuts)) %>% unique)) %>% 
         group_by(QNT) %>% summarise(F1 = max(F1), M1_F2 = sum(F2), CNT_F2 = length(F2)) %>% 
         arrange(F1) %>% mutate(M1_F2_CS = cumsum(M1_F2), CNT_F2_CS = cumsum(CNT_F2)) %>% 
-        select(cutpoint = F1, bucket_sum = M1_F2, bucket_count = CNT_F2, M1 = M1_F2_CS, count = CNT_F2_CS) -> tmp
+        select(bucket = QNT, cutpoint_V1 = F1, bucket_sum_V2 = M1_F2, bucket_count = CNT_F2, cumulative_sum_V2 = M1_F2_CS, cumulative_count = CNT_F2_CS) -> tmp
       tmp$V1 = f1
       tmp$V2 = f2
       out %<>% rbind(tmp)

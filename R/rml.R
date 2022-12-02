@@ -48,6 +48,7 @@
 # 1.3.8 (15 June 2021)      - preprocessing relocated back from transform_x() to method fit(). They are now called only for fit. only mask_missing_values is called in predict as well.
 # 1.4.2 (18 June 2021)      - parameter 'return_type_in_output' added.
 # 1.4.3 (29 June 2021)      - CLS.XGBOOST() updated: xgb.train replaced by xgboost::xgb.train and config$eval_metric becomes null if config$feval exists
+# 1.4.5 (02 December 2022)  - function bucket_moments() in mltools.R modified.
 
 # Description for Roxygen
 
