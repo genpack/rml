@@ -790,7 +790,8 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
     X = X[objects$model$feature_names]
     if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
     
-    stats::predict(objects$model, xgboost::xgb.DMatrix(as.matrix(X), label = rep(NA, nrow(X)))) %>% 
+    # stats::predict(objects$model, xgboost::xgb.DMatrix(as.matrix(X), label = rep(NA, nrow(X)))) %>% 
+    stats::predict(objects$model, xgboost::xgb.DMatrix(as.matrix(X))) %>% 
       logit_inv %>% as.data.frame
   }
 ))

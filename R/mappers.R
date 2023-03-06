@@ -151,7 +151,7 @@ MAP.RML.MMS = setRefClass('MAP.RML.MMS', contains = 'MODEL',
                             
                             model.predict = function(X){
                               feat  = objects$features %>% column2Rownames('fname')
-                              objects$features$fname %>% sapply(function(i) (X[,i] -  feat[i,'min'])/(feat[i,'max'] - feat[i,'min'])) %>% na2zero %>% as.data.frame
+                              objects$features$fname %>% sapply(function(i) (X[[i]] -  feat[i,'min'])/(feat[i,'max'] - feat[i,'min'])) %>% na2zero %>% as.data.frame
                             }
                           ))
 
