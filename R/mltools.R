@@ -23,9 +23,42 @@ mae = function(y1, y2){
 }
 
 #' @export
+mape = function(actual, pred){
+  assert(length(actual) == length(pred), "Lenghts of the two vectors must be identical!")
+  tk = which(abs(actual) > 0)
+  abs((actual[tk] - pred[tk])/actual[tk]) %>% mean(na.rm = T)
+}
+
+#' @export
+geo_mape = function(actual, pred){
+  assert(length(actual) == length(pred), "Lenghts of the two vectors must be identical!")
+  tk = which(abs(actual) > 0)
+  abs((actual[tk] - pred[tk])/actual[tk]) %>% log %>% mean(na.rm = T) %>% exp
+}
+
+
+#' @export
 medae = function(y1, y2){
   (y1 - y2) %>% abs %>% median(na.rm = T)
 }
+
+accuracy_mae = function(pred, actual){
+  1.0 - mae(actual, pred)/mae(actual, 0)
+}
+
+accuracy_medae = function(pred, actual){
+  1.0 - medae(actual, pred)/medae(actual, 0)
+}
+
+accuracy_rmse = function(pred, actual){
+  1.0 - rmse(actual, pred)/rmse(actual, 0)
+}
+
+r_squared = function(pred, actual){
+  mean_actual = mean(actual, na.rm = T)
+  1.0 - sum((pred - actual)^2, na.rm = T)/sum((actual-mean_actual)^2, na.rm = T)
+}
+
 
 #' @export
 cross_f1 = function(v1, v2){
@@ -274,6 +307,14 @@ correlation = function(x, y, metrics = 'pearson', threshold = NULL, quantiles = 
       lossfun$inputs$x = x
       lossfun$inputs$y = y
       out[[metric]] <- lossfun$get.output() %>% mean
+    }
+    
+    for(metric in metrics %^% c('mae', 'rmse', 'medae', 'r_squared', 'mape', 'geo_mape')){
+      out[[metric]] <- do.call(what = metric, args = list(x,y))
+    }
+
+    for(metric in metrics %^% c('accuracy_mae', 'accuracy_rmse', 'accuracy_medae')){
+      out[[metric]] <- do.call(what = metric, args = list(x,y))
     }
     
     subset = metrics %^% all_binary_predictive_scores
@@ -1492,4 +1533,19 @@ service_models = function(modlist, X_train, y_train, X_test, y_test, num_cores =
   ord = order(ptab[[names(pf[[1]])[1]]], decreasing = T)[1]
   for(i in sequence(length(modlist))){modlist[[i]]$release_model()}
   return(list(best_model = modlist[[ptab$model[ord]]], best_performance = max(ptab[[names(pf[[1]])[1]]]), results = ptab))
+}
+
+
+
+column_rename = function(tbl, ...){
+  ns = c(...) %>% verify('character')
+  lb = names(ns)
+  if(is.null(lb)){return(tbl)}
+  scr = paste0("tbl %>% dplyr::rename(", lb %>% paste(ns, sep = ' = ') %>% paste(collapse = ' , '), ")")
+  parse(text = scr) %>% eval
+}
+
+column_drop = function(tbl, ...){
+  ns = c(...) %>% verify('character') %>% intersect(colnames(tbl))
+  return(tbl[colnames(tbl) %>% setdiff(ns)])
 }

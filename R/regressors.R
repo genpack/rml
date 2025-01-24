@@ -1,3 +1,11 @@
+# Header
+# Filename:     regressors.R
+# Version History:
+# Version   Date                 Action
+# ----------------------------------
+# 1.0.0     16 September 2020    Initial Issue.
+# 1.0.1     26 August 2024       maler_words renamed to reserved_words
+
 REGRESSOR = setRefClass('REGRESSOR', contains = "MODEL",
  methods = list(
    initialize = function(...){
@@ -5,37 +13,29 @@ REGRESSOR = setRefClass('REGRESSOR', contains = "MODEL",
      type               <<- 'Abstract Regressor'
      config$sig_level   <<- config$sig_level   %>% verify('numeric', domain = c(0,1), default = 0.05)
      config$sfs.enabled <<- config$sfs.enabled %>% verify('logical', domain = c(F,T), default = F)
-     if(is.null(config$metric)){
-       config$metric <<- function(y1, y2){
-         err = (y1 - y2)^2 %>% sum
-         # den = (y_test - mean(y_test))^2 %>% sum
-         den = (y2 - mean(y2))^2 %>% sum
-         return(1.0 - min(err/den, 1.0))
-       }
-     }
+     if(is.null(config$metrics)){config$metrics <<- 'mae'}
    },
    
-   predict = function(X){
-     XORG = callSuper(X)
-     XFET = XORG[objects$features$fname]
-     if(ncol(XFET) == 0){XOUT = predict.distribution(X)} else {XOUT = .self$model.predict(XFET)}
-     colnames(XOUT) <- name %>% paste('out', sep = '_')
-     treat(XOUT, XFET, XORG)
+   performance = function(X, y, metrics = config$metrics, ...){
+     yp = predict(X)[, 1]
+     # we transform y only if yin has a transformer function and yout has not. This means the y in training set has been transformed
+     # so the input y needs to have the same transformation to be comparable to the original label.
+     # if yout has transformer function as well, then yp is already transformed and should be compared to y directly not to the transformed y
+     if(!is.null(config$yin_transformer_function) & is.null(config$yout_transformer_function)){
+       y = do.call(what = config$yin_transformer_function, args = list(y, config$yin_transformer_arguments))
+     }
+     correlation(yp, y, metrics = metrics, ...)
    },
    
-   performance = function(X, y, metric = c('rmse', 'mae', 'medae')){
-     metric = match.arg(metric)
-     yp = predict(X) %>% pull(name %>% paste('out', sep = '_')) 
-     if(metric == 'rmse'){
-       return(rmse(yp, y))
+   transform_yin = function(X, y){
+     y = callSuper(X, y)
+     # Apply gradient transformers directly by subtracting from y in regression
+     if(!is.null(attr(y, 'gradient'))){
+       y = y - attr(y, 'gradient')
      }
-     if(metric == 'mae'){
-       return(mae(yp, y))
-     }
-     if(metric == 'medae'){
-       return(medae(yp, y))
-     }
+     return(y)
    }
+   
  )
 )
 
@@ -157,6 +157,9 @@ REG.XGBOOST = setRefClass('REG.XGBOOST', contains = "REGRESSOR",
                          
                          if(is.empty(name)){name <<- 'XGBREG' %>% paste0(sample(1000:9999, 1))}
                          if(is.null(config$nrounds)){config$nrounds <<- 100}
+                         
+                         # nrounds is passed as a separate argument not within argument params:
+                         reserved_words <<- c(reserved_words, 'nrounds', 'sig_level')
                        },
                        
                        model.fit = function(X, y){
@@ -167,8 +170,21 @@ REG.XGBOOST = setRefClass('REG.XGBOOST', contains = "REGRESSOR",
                          if(config$sfs.enabled){
                            # Not supported yet
                          }
+
+                         xgb_train = xgboost::xgb.DMatrix(data = X %>% as.matrix, label = y)
+                         objects$model <<- xgboost::xgb.train(
+                           data = xgb_train, 
+                           nrounds = config$nrounds, 
+                           # watchlist = watchlist,
+                           params = config %>% list.remove(reserved_words))
                          
-                         objects$model <<- xgboost::xgb.train(data = xgboost::xgb.DMatrix(X %>% as.matrix, label = y), nrounds = config$nrounds, params = config %>% list.remove(maler_words))
+                         imp = try(xgb.importance(model = objects$model) %>% select(fname = Feature, importance = Gain), silent = T)
+                         if(!inherits(imp, 'try-error')){
+                           if(!is.null(objects$features$importance)) objects$features$importance <<- NULL
+                           objects$features %>% dplyr::left_join(imp, by = 'fname') %>% na2zero ->> objects$features
+                         } else if(is.null(objects$features$importance)){
+                           objects$features$importance <<- 1.0/nrow(objects$features)
+                         }
                        },
 
                        model.predict = function(X){
@@ -187,7 +203,7 @@ REG.SKLEARN.XGB = setRefClass('REG.SKLEARN.XGB', contains = "REGRESSOR",
                                  type               <<- 'Extreme Gradient Boosting for Regression'
                                  if(is.empty(name)){name <<- 'SKXGBREG' %>% paste0(sample(1000:9999, 1))}
                                  module_xgb = reticulate::import('xgboost')
-                                 objects$model     <<- do.call(module_xgb$XGBRegressor, config %>% list.remove(maler_words))
+                                 objects$model     <<- do.call(module_xgb$XGBRegressor, config %>% list.remove(reserved_words))
                                },
                                
                                model.fit = function(X, y){

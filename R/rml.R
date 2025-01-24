@@ -50,6 +50,7 @@
 # 1.4.3 (29 June 2021)      - CLS.XGBOOST() updated: xgb.train replaced by xgboost::xgb.train and config$eval_metric becomes null if config$feval exists
 # 1.4.5 (02 December 2022)  - function bucket_moments() in mltools.R modified.
 # 1.4.6 (06 March 2023)     - Minor bug fixed in mappers. Used to destroy feature names when a tibble was passed for training.
+# 1.4.7 (08 June 2023)      - clustering.R changed to version 1.2.7
 
 # Description for Roxygen
 

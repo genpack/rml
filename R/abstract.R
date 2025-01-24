@@ -70,6 +70,7 @@ MODEL = setRefClass('MODEL',
                          'features.include', 'features.include.at', 'features.exclude', 'features.exclude.at',
                          'ts.enabled', 'ts.id_col', 'ts.time_col', 
                          'return_features', 'feature_subset_size', 'gradient_transformers_aggregator', 'save_predictions',
+                         'yin_transformer_function', 'yin_transformer_arguments', 'yout_transformer_function', 'yout_transformer_arguments',
                          'metric', 'transformers', 'fitted')
       
       for(pn in c('keep_columns', 'keep_features', 'cv.restore_model', 'fe.enabled', 'mc.enabled', 
@@ -227,6 +228,7 @@ MODEL = setRefClass('MODEL',
       }
 
       XOUT = transform_yout(X, XOUT)
+      colnames(XOUT)[which(colnames(XOUT) %in% c('.'))] <- ''
       if((ncol(XOUT) > 0) & config$name_in_output) colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = ifelse(colnames(XOUT) == '', '', '_'))
 
       objects$n_output <<- ncol(XOUT)
@@ -239,7 +241,7 @@ MODEL = setRefClass('MODEL',
 
       if(config$keep_columns)
         if(config$keep_features) return(cbind(org, out))
-        else return(cbind(org %>% spark.unselect(colnames(fet)), out))
+        else return(cbind(org %>% column_drop(colnames(fet)), out))
       else if (config$keep_features){
         # if(!is.null(config$features.include)){
         #   extra = config$features.include %-% colnames(fet)
@@ -569,10 +571,16 @@ MODEL = setRefClass('MODEL',
       if(sum(abs(grad)) > .Machine$double.eps){
         attr(y, 'gradient') <- grad
       }
+      if(!is.null(config$yin_transformer_function)){
+        y = do.call(what = config$yin_transformer_function, args = list(y, config$yin_transformer_arguments))
+      }
       return(y)
     },
 
     transform_yout = function(X, Y){
+      if(!is.null(config$yout_transformer_function)){
+        Y = do.call(what = config$yout_transformer_function, args = list(Y, config$yout_transformer_arguments))
+      }
       if(length(gradient_transformers) > 0){
         grad = y_gradient(X)
 

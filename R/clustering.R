@@ -15,6 +15,7 @@
 # 1.2.3     28 May 2019          function elbow() modified: for euclidean metric, max.num.cluster now can be equal to nrow(M)
 # 1.2.4     26 March 2021        function elbow() modified: Argument max.num.clusters changed to num.clusters specifying a set of values for number of clusters to be tested
 # 1.2.6     27 April 2021        function cluster_tree() added: runs a hierarchical clustering with optimal selection of depths
+# 1.2.7     08 June 2023         function cluster_tree modified: gives full information for each number of cluster from 1 to number of points
 
 cluster.distances <- function(M, SK){
   # Returns a vector containing the distances of each point from the center of
@@ -180,47 +181,65 @@ best_num_clusters <- function(wss, method =c("jump_threshold", "gain_and_cost", 
   }
 }
 
-# mcsm: Minimum Cluster Size Median (minimum of median of cluster sizes. cluster size is defined as number of members in the cluster)
 #' @export
-cluster_tree <- function(distmat, mcsm = 2, show_progress = T, ...){
+cluster_tree <- function(distmat, max_num_clusters = as.integer(nrow(distmat)/2), show_progress = T){
   # np: number of points
   np = nrow(distmat)
   assert(np == ncol(distmat), "distmat must be a square matrix!")
   
   distmat %>% as.dist %>% hclust -> hc
   ct = cutree(hc, k = sequence(np))
-  # wgmd: within group mean of distances
-  wgmd = list()
+
+  cluster_size = list()
+
+  within_group_mean_distance = list()
+  within_group_median_distance = list()
+  within_group_max_distance = list()
+
+  between_group_mean_distance = list()
+  between_group_median_distance = list()
+  between_group_min_distance = list()
+  
   cols = rownames(ct)
-  # mnc: maximum number of clusters
-  mnc = 1
-  while(median(ct[, mnc] %>% table) > mcsm){mnc = mnc + 1}
-  if(show_progress){pb = txtProgressBar(min = 1, max = mnc, style = 3)}
-  for(i in sequence(mnc)){
+  if(show_progress){pb = txtProgressBar(min = 1, max = max_num_clusters, style = 3)}
+  for(i in sequence(max_num_clusters)){
     itn = paste0('N', i)
     if(show_progress){setTxtProgressBar(pb, i)}
-    wgmd[[itn]] <- numeric(i)
+    
+    cluster_size[[itn]] <- ct[,i] %>% table
+    
+    within_group_mean_distance[[itn]] <- numeric(i)
+    within_group_median_distance[[itn]] <- numeric(i)
+    within_group_max_distance[[itn]] <- numeric(i)
     for(cn in which(table(ct[,i]) > 1)){
       fet = cols[which(ct[, i] == cn)]
-      wgmd[[itn]][cn] <- mean(distmat[fet, fet], na.rm = T)
+      within_group_mean_distance[[itn]][cn] <- mean(distmat[fet, fet], na.rm = T)
+      within_group_median_distance[[itn]][cn] <- median(distmat[fet, fet], na.rm = T)
+      within_group_max_distance[[itn]][cn] <- max(distmat[fet, fet], na.rm = T)
+    }
+    
+    between_group_mean_distance[[itn]] <- matrix(rep(0, i*i), nrow = i)
+    between_group_median_distance[[itn]] <- matrix(rep(0, i*i), nrow = i)
+    between_group_min_distance[[itn]] <- matrix(rep(0, i*i), nrow = i)
+    for(ii in sequence(i)){
+      for(jj in sequence(i)){
+        fet_ii = cols[which(ct[, i] == ii)]
+        fet_jj = cols[which(ct[, i] == jj)]
+        between_group_mean_distance[[itn]][ii,jj] <- mean(distmat[fet_ii, fet_jj])   
+        between_group_median_distance[[itn]][ii,jj] <- median(distmat[fet_ii, fet_jj])   
+        between_group_min_distance[[itn]][ii,jj] <- min(distmat[fet_ii, fet_jj])   
+      }
     }
   }
   if(show_progress){close(pb)}
-  # wgmmd: within-group maximum mean of distances: maximum of within-cluster distances
-  wgmmd = wgmd %>% lapply(max) %>% unlist
-  sdrop = wgmmd[-length(wgmmd)]/wgmmd[-1]
-  steps = sdrop %>% outlier(...) %>% which %>% {.+1}
-  if(length(steps) > 0){
-    trtab = ct[, steps]
-    colnames(trtab) = paste0('N', colnames(trtab))
-  } else {
-    cat('No outliers within the drops!', '\n')
-    trtab = NULL
-  }
-  out = list(tree_table = trtab, 
-             wcmd = wgmd, max_wcmd = wgmmd, 
-             drops = sdrop %>% {names(.)<-paste0('N', 1 + sequence(length(.)));.}, 
-             hc_cutree = ct, 
+  out = list(hc_cutree = ct, 
+             cluster_size = cluster_size,
+             within_group_mean_distance = within_group_mean_distance,
+             within_group_median_distance = within_group_median_distance,
+             within_group_max_distance = within_group_max_distance,
+             between_group_mean_distance = between_group_mean_distance,
+             between_group_median_distance = between_group_median_distance,
+             between_group_min_distance = between_group_min_distance,
              hc_object = hc)
   return(out)
 }

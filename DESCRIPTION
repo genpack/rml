@@ -1,7 +1,7 @@
 Package: rml
 Type: Package
 Title: A package for building pipelines of Machine Learning models.
-Version: 1.4.6
+Version: 1.4.7
 Author: Nima Ramezani
 Maintainer: Nima Ramezani <nima.ramezani@gmail.com>
 Description: Using this package, you can build a pipeline of ML models and combine models from various R/Python packages including sklearn, keras, MLR, H2O and etc.

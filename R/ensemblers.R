@@ -17,8 +17,8 @@ ENS.RML.BS = setRefClass('ENS.RML.BS', contains = "MODEL",
      },
      
      model.fit = function(X, y){
-       Xt = X %>% spark.unselect(objects$pupils)
-       pp = X %>% spark.select(objects$pupils) %>% as.matrix
+       Xt = X %>% column_drop(objects$pupils)
+       pp = X[objects$pupils] %>% as.matrix
        pp %>% apply(1, which.max) -> highest
        pp %>% apply(1, which.min) -> lowest
        

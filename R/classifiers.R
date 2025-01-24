@@ -36,7 +36,7 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
         objects$n_output <<- as.integer(1)
       }
     },
-
+    
     transform_yout = function(X, Y = NULL){
       has_gradient = length(gradient_transformers) > 0
       if (config$return == 'class'){for(i in sequence(ncol(Y))) {Y[,i] = as.numeric(Y[,i] > config$threshold)}} else
@@ -70,7 +70,13 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
     },
 
     performance = function(X, y, metrics = config$metrics, ...){
-      yp = predict(X)[, 1]
+      yp = predict(X)[[1]]
+      # we transform y only if yin has a transformer function and yout has not. This means the y in training set has been transformed
+      # so the input y needs to have the same transformation to be comparable to the original label.
+      # if yout has transformer function as well, then yp is already transformed and should be compared to y directly not to the transformed y
+      if(!is.null(config$yin_transformer_function) & is.null(config$yout_transformer_function)){
+        y = do.call(what = config$yin_transformer_function, args = list(y, config$yin_transformer_arguments))
+      }
       correlation(yp, y, metrics = metrics, ...)
     }
   )
@@ -353,6 +359,8 @@ CLS.SKLEARN.XGB = setRefClass('CLS.SKLEARN.XGB', contains = "CLASSIFIER",
       },
       
       model.fit = function(X, y){
+        objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+        X = X[objects$features$fname]
         if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
         objects$module <<- reticulate::import('xgboost')
 
@@ -710,6 +718,7 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
 
   model.fit = function(X, y){
     
+    objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
     X = X[objects$features$fname]
     if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
     

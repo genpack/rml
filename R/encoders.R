@@ -101,7 +101,10 @@ ENC.CATEGORY_ENCODERS = setRefClass(
 
       config$model.module <<- verify(config$model.module, 'character', lengths = 1, null_allowed = F)
       config$model.class  <<- verify(config$model.class, 'character' , lengths = 1, null_allowed = F)
-
+      
+      config$column_filters <<- config$column_filters %>% 
+        rutils::list.add(list(column = "fclass", filter = " %in% c('character', 'factor', 'integer')"))
+      
       if(is.empty(name)){name <<- 'CEENC' %>% paste0(sample(10000:99999, 1))}
       
       objects$module <<- reticulate::import(paste('category_encoders', config[['model.module']], sep = '.'))
@@ -318,7 +321,7 @@ ENC.RML.TE = setRefClass('ENC.RML.TE', contains = 'MODEL',
                                rutils::assert(ncol(X) > 0, "No nominal or ordinal features left for encoding!")
                                objects$model <<- list()
                                for(col in colnames(X)){
-                                 objects$model[[col]] <<- cbind(X, label = y) %>% group_by_(col) %>% summarise(ratio = mean(label))
+                                 objects$model[[col]] <<- cbind(X, label = y) %>% group_by(!!sym(col)) %>% summarise(ratio = mean(label))
                                }
                              }
                            },
@@ -327,7 +330,7 @@ ENC.RML.TE = setRefClass('ENC.RML.TE', contains = 'MODEL',
                              XOUT  = X
                              for(col in objects$features$fname){
                                cn = 'ratio' %>% {names(.) <- name %>% paste(col, sep = '_');.}
-                               XOUT %<>% left_join(objects$model[[col]], by = col) %>% spark.rename(cn) %>% spark.unselect(col) %>% na2median
+                               XOUT %<>% left_join(objects$model[[col]], by = col) %>% column_rename(cn) %>% column_unselect(col) %>% na2median
                              }
                              return(XOUT)
                            }
@@ -346,8 +349,8 @@ ENC.RML.ME = setRefClass('ENC.RML.ME', contains = 'MODEL',
                              package_language <<- 'R'
                              reserved_words   <<- c(reserved_words, 'segmentation_features')
                              
-                             config$model.class  <<- verify(config$model.class, 'character', default = 'CLS.SKLEARN.XGB')
-                             config$model.config <<- verify(config$model.config, 'list', default = list(predict_probabilities = T))
+                             config$model.class  <<- verify(config$model.class, 'character')
+                             config$model.config <<- verify(config$model.config, 'list')
                              config$min_rows     <<- verify(config$min_rows, c('numeric', 'integer'), lengths = 1, default = 100)
                              if(is.empty(name)){name <<- 'ME' %>% paste0(sample(10000:99999, 1))}
                              objects$model <<- list()
@@ -362,7 +365,7 @@ ENC.RML.ME = setRefClass('ENC.RML.ME', contains = 'MODEL',
                              assert(!is.empty(objects$categoricals), 'No descrete features found!')
                              
                              if(is.null(objects$model[['__global__']])){
-                               objects$model[['__global__']] <<- new(config$model.class, config = config$model.config)
+                               objects$model[['__global__']] <<- do.call(what = config$model.class, args = config$model.config)
                              }
                              
                              objects$model[['__global__']]$fit(X, y)
@@ -374,7 +377,7 @@ ENC.RML.ME = setRefClass('ENC.RML.ME', contains = 'MODEL',
                                  vlc = as.character(val)
                                  www = which(Xcol == val)
                                  if(length(www) > config$min_rows){
-                                   objects$model[[col]][[vlc]] <<- new(config$model.class, config = config$model.config)
+                                   objects$model[[col]][[vlc]] <<- do.call(what = config$model.class, args = config$model.config)
                                    objects$model[[col]][[vlc]]$fit(X[www,], y[www])
                                  }
                                }
@@ -395,7 +398,7 @@ ENC.RML.ME = setRefClass('ENC.RML.ME', contains = 'MODEL',
                                }
                                cn = 'value' %>% {names(.) <- col;.}
                                df = X['__rowid__'] %>%
-                                 left_join(X %>% group_by_(col) %>% do({bibi(.)}), by = '__rowid__') %>% select(value) %>% spark.rename(cn)
+                                 left_join(X %>% group_by(!!sym(col)) %>% do({bibi(.)}), by = '__rowid__') %>% select(value) %>% column_rename(cn)
                                
                                if(is.null(XOUT)){XOUT = df[,1, drop = F]} else {XOUT %<>% cbind(df[,1, drop = F])}
                              }
