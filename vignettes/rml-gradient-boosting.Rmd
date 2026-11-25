@@ -1,0 +1,130 @@
+---
+title: "3. Boosting with gradient transformers"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{3. Boosting with gradient transformers}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+has_xgboost = requireNamespace("xgboost", quietly = TRUE)
+knitr::opts_chunk$set(eval = has_xgboost)
+```
+
+Gradient boosting trains a sequence of models where each one corrects the errors of the ones before it.
+Libraries such as xgboost do this with decision trees only. In rml any model can be the starting point of
+another: a model's `gradient_transformers` are models whose output the model learns to correct.
+
+```{r, message = FALSE}
+library(rml)
+set.seed(11)
+n = 3000
+X = data.frame(x1 = rnorm(n), x2 = rnorm(n), x3 = runif(n), x4 = rnorm(n))
+logit = 1.2*X$x1 - 0.8*X$x2 + 2*(X$x3 > 0.6) + 1.5*X$x1*X$x4
+y = as.numeric(runif(n) < 1/(1 + exp(-logit)))
+train = sample(n, 2000)
+gini = function(m) m$performance(X[-train, ], y[-train], metrics = 'gini')
+```
+
+## Regression: training on the residual
+
+For a regressor, the gradient transformer's prediction g is subtracted from the target, so the model
+learns `y - g`. At prediction the two are added back: `prediction = g + model output`.
+
+```{r regression}
+y_reg = 3*X$x1 + 4*sin(3*X$x3) + rnorm(n, sd = 0.3)
+base = REG.STATS.LNR(name = 'lm')
+boosted = REG.XGBOOST(name = 'xgb_on_lm', nrounds = 100, max_depth = 3, eta = 0.1,
+                      gradient_transformers = list(base))
+boosted$fit(X[train, ], y_reg[train])
+c(linear_model = base$performance(X[-train, ], y_reg[-train], metrics = 'mae'),
+  boosted      = boosted$performance(X[-train, ], y_reg[-train], metrics = 'mae'))
+```
+
+Any regressor gets this behaviour automatically from the `REGRESSOR` base class.
+
+## Binary classification: boosting in log-odds
+
+For a classifier the correction is added on the log-odds (logit) scale:
+`P(y = 1) = sigmoid(g + f(x))`, where g is the gradient transformer's logit and f is what the model
+learns. The model must minimise the logistic loss of `g + f`, so this needs support from the algorithm.
+Today two classifiers support it:
+
+| Class | How g is used during training |
+| --- | --- |
+| `CLS.XGBOOST` | Passed to xgboost as the base margin of the training data, so trees fit the remaining log-odds. |
+| `CLS.KERAS.DNN` | Fed as a second input and added to the network's linear output inside a custom logistic loss. |
+
+A classifier used as a gradient transformer is always read on the logit scale, whatever its `return`
+setting, and it must not use `return = 'class'`.
+
+Boost a logistic regression with xgboost:
+
+```{r classification}
+lr  = CLS.STATS.LR(name = 'lr')
+xgb_alone = CLS.XGBOOST(name = 'xgb', nrounds = 60, max_depth = 3, eta = 0.1)
+xgb_on_lr = CLS.XGBOOST(name = 'xgb_on_lr', nrounds = 60, max_depth = 3, eta = 0.1,
+                        gradient_transformers = list(lr))
+xgb_alone$fit(X[train, ], y[train])
+xgb_on_lr$fit(X[train, ], y[train])
+c(logistic_regression = gini(lr), xgboost = gini(xgb_alone), xgboost_on_lr = gini(xgb_on_lr))
+```
+
+Fitting `xgb_on_lr` also fitted `lr` because it was not yet fitted. A gradient transformer that is
+already fitted is reused as it is.
+
+## Chains: boosting a boosted model
+
+A gradient transformer can have its own gradient transformers, so boosting can be chained across
+algorithms. Here a logistic regression is boosted by a shallow xgboost, which is then boosted by a deeper
+one:
+
+```{r chain}
+step1 = CLS.STATS.LR(name = 'step1')
+step2 = CLS.XGBOOST(name = 'step2', nrounds = 30, max_depth = 2, eta = 0.1, gradient_transformers = list(step1))
+step3 = CLS.XGBOOST(name = 'step3', nrounds = 30, max_depth = 4, eta = 0.05, gradient_transformers = list(step2))
+step3$fit(X[train, ], y[train])
+c(step1 = gini(step1), step2 = gini(step2), step3 = gini(step3))
+```
+
+With keras and tensorflow installed, `CLS.KERAS.DNN` can be used as any step of the chain in the same way.
+
+## Several gradient transformers
+
+When a model has more than one gradient transformer, their outputs are combined row by row with
+`gradient_transformers_aggregator` (default `mean`) before the model learns the correction.
+
+```{r multiple}
+m = CLS.XGBOOST(name = 'multi', nrounds = 40, max_depth = 3,
+  gradient_transformers = list(CLS.STATS.LR(name = 'g1', features.include = c('x1', 'x2')),
+                               CLS.STATS.LR(name = 'g2', features.include = c('x3', 'x4'))))
+m$fit(X[train, ], y[train])
+gini(m)
+```
+
+## A fixed offset column
+
+A gradient transformer can also be the name of a column of `X` holding a known offset (for example the
+log-odds from an existing production model). Exclude it from the features if it should only act as an
+offset.
+
+```{r offset}
+X$prior = qlogis(0.3)
+m_off = CLS.XGBOOST(name = 'offset_model', nrounds = 30, gradient_transformers = list('prior'),
+                    features.exclude = 'prior')
+m_off$fit(X[train, ], y[train])
+gini(m_off)
+```
+
+## Things to know
+
+* Gradient transformers are trained on the same rows as the model they boost.
+* Row sampling (`smp.method = 'upsample'` or `'downsample'`) keeps the gradient aligned with the sampled
+  rows. SMOTE cannot be combined with gradient transformers, because synthetic rows have no
+  gradient transformer output.
+* Other classifiers stop with an error if given gradient transformers, because they cannot yet learn a
+  correction on top of them. A class you write yourself can support them by using
+  `attr(y, 'gradient')` in its `model.fit()` and overriding `supports_gradient_transformers()` to return
+  `TRUE`.

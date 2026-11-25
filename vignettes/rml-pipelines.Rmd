@@ -1,0 +1,174 @@
+---
+title: "2. Pipelines with transformers"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{2. Pipelines with transformers}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+has_xgboost = requireNamespace("xgboost", quietly = TRUE)
+has_sklearn = requireNamespace("reticulate", quietly = TRUE) && reticulate::py_module_available("sklearn")
+```
+
+```{r, message = FALSE}
+library(rml)
+set.seed(7)
+n = 2000
+X = data.frame(x1 = rnorm(n), x2 = rnorm(n), x3 = runif(n),
+               region = sample(c('north', 'south', 'east', 'west'), n, replace = TRUE),
+               stringsAsFactors = FALSE)
+region_effect = c(north = 1, south = -1, east = 0.5, west = 0)[X$region]
+y = as.numeric(runif(n) < 1/(1 + exp(-(X$x1 - X$x2^2 + region_effect))))
+train = sample(n, 1500)
+```
+
+## How transformers work
+
+Every model has a list of `transformers`. A transformer is itself a model. When the parent model is
+fitted, it
+
+1. fits each of its transformers on the same `X` and `y`,
+2. calls their `predict()` and binds the outputs column-wise,
+3. trains itself on those columns.
+
+At prediction the same chain runs again, so a single `predict()` call evaluates the whole network. A
+transformer can have its own transformers, so models can be nested to any depth.
+
+With no transformers a model is trained on the raw columns. With transformers it only sees what they
+output. To keep the raw columns as well, add the identity mapper `MAP.RML.IDT`:
+
+```{r idt}
+model = CLS.STATS.LR(name = 'lr', verbose = 0,
+  transformers = list(MAP.RML.IDT(name = 'I', features.include = c('x1', 'x2', 'x3')),
+                      ENC.RML.TE(name = 'te')))   # target encoder for the categorical column
+model$fit(X[train, ], y[train])
+model$objects$features$fname
+model$performance(X[-train, ], y[-train], metrics = 'gini')
+```
+
+The column names show where each feature came from: `I_x1` is column `x1` passed by transformer `I`,
+and `te_region` is the target-encoded region. Set `verbose = 0` on each model to silence its progress
+messages (the setting is not inherited by transformers).
+
+## Models as features (stacking)
+
+Any classifier or regressor can be a transformer. Its prediction becomes a feature of the parent.
+Use `return = 'logit'` for classifier transformers that feed linear models.
+
+```{r stacking, eval = has_xgboost}
+stack = CLS.STATS.LR(name = 'stack', verbose = 0,
+  transformers = list(
+    CLS.XGBOOST(name = 'xgb', nrounds = 50, max_depth = 3, return = 'logit', verbose = 0,
+                transformers = list(MAP.RML.IDT(name = 'I', features.include = c('x1', 'x2', 'x3')), ENC.RML.TE(name = 'te'))),
+    MAP.RML.IDT(name = 'raw', features.include = c('x1', 'x2'))))
+stack$fit(X[train, ], y[train])
+stack$objects$features
+stack$performance(X[-train, ], y[-train], metrics = 'gini')
+```
+
+`info.transformers()` lists the nodes of the network:
+
+```{r info, eval = has_xgboost}
+stack$info.transformers()[, c('name', 'type', 'class', 'outputs', 'fitted')]
+```
+
+## What a transformer passes on
+
+By default a model's `predict()` returns only its own output columns. Two switches change that:
+
+| Setting | Effect on the output |
+| --- | --- |
+| `keep_columns = TRUE` | Also returns the input columns the model did **not** use. |
+| `keep_features = TRUE` | Also returns the input columns the model **did** use. |
+| `pass_columns` | With either switch on, only these input columns are passed. |
+| `remove_columns` | With either switch on, these input columns are never passed. |
+
+```{r keep}
+scaler = MAP.RML.ZFS(name = 'z', keep_columns = TRUE)
+scaler$fit(X)
+head(scaler$predict(X), 3)
+```
+
+## Choosing columns before and after transformation
+
+* `features.include` / `features.exclude` filter the **input** columns before they reach the transformers.
+* `features.include.at` / `features.exclude.at` filter the columns **after** transformation, just before
+  the model trains.
+* `column_filters` removes features by their statistics. The default removes constant columns:
+  `list(list(column = 'n_unique', filter = ' > 1'))`. With `eda.enabled = TRUE` more statistics
+  (moments, quantiles, missing counts) are available to filter on.
+
+```{r at}
+m = CLS.STATS.LR(name = 'lr_at', verbose = 0,
+  transformers = list(MAP.RML.ZFS(name = 'z'), MAP.RML.MMS(name = 'm')),
+  features.include = c('x1', 'x2', 'x3'),
+  features.exclude.at = c('m_x3'))
+m$fit(X[train, ], y[train])
+m$objects$features$fname
+```
+
+## Building blocks
+
+| Type | Classes | Use |
+| --- | --- | --- |
+| Mappers | `MAP.RML.IDT`, `MAP.RML.ZFS`, `MAP.RML.MMS`, `MAP.STATS.PCA`, `MAP.SKLEARN.*` | Pass, scale or project numeric columns |
+| Encoders | `ENC.RML.TE`, `ENC.RML.FE`, `ENC.RML.ME`, `ENC.SKLEARN.OHE`, `ENC.FASTDUMMIES.OHE`, `ENC.CATEGORY_ENCODERS.*` | Turn categorical columns into numbers |
+| Binners | `BIN.RML.OBB`, `BIN.KMEANS.KMC`, `BIN.SKLEARN.KMC`, `BIN.SMBINNING.OB` | Cut numeric columns into bins or clusters |
+| Feature generators | `FET.RML.D2MUL`, `FET.SKLEARN.MFG` | Pairwise products, polynomial features |
+| Function transformers | `FNT.RML.LOG`, `FNT.RML.INV`, `FNT.RML.LOGIT` | Apply a fixed function to each column |
+| Ensemblers | `ENS.RML.AGGR` | Aggregate inputs, for example the mean of several model outputs |
+
+An ensemble of three models averaged by `ENS.RML.AGGR`:
+
+```{r ensemble, eval = has_xgboost}
+ens = ENS.RML.AGGR(name = 'avg', aggregator = 'mean', verbose = 0,
+  transformers = list(
+    CLS.STATS.LR(name = 'a', features.include = c('x1', 'x2')),
+    CLS.STATS.LR(name = 'b', verbose = 0, transformers = list(ENC.RML.TE(name = 'te'), MAP.RML.IDT(name = 'I', features.include = 'x1'))),
+    CLS.XGBOOST(name = 'c', nrounds = 30, features.include = c('x1', 'x2', 'x3'))))
+ens$fit(X[train, ], y[train])
+ens$performance(X[-train, ], y[-train], metrics = 'gini')
+```
+
+## Python models
+
+Classes with `SKLEARN` in their name wrap scikit-learn through reticulate. Arguments are passed to the
+scikit-learn constructor, so integers must be given as integers (`10L`).
+
+```{r sklearn, eval = has_sklearn}
+knn = CLS.SKLEARN.KNN(name = 'knn', n_neighbors = 25L, verbose = 0,
+                      transformers = list(MAP.RML.ZFS(name = 'z', features.include = c('x1', 'x2', 'x3'))))
+knn$fit(X[train, ], y[train])
+knn$performance(X[-train, ], y[-train], metrics = 'gini')
+```
+
+## Training transformers in parallel
+
+Set `mc.num_cores` on the parent to fit and run its transformers on several cores (requires the
+doParallel package). Each worker loads rml, so it must be installed, not just sourced.
+
+```{r parallel, eval = FALSE}
+model = CLS.STATS.LR(mc.num_cores = 4, transformers = list(...))
+```
+
+## Failed transformers
+
+If a transformer fails to fit, the parent prints a warning and removes it (`remove_failed_transformers =
+TRUE`, the default), then trains on the remaining outputs. The error is kept in
+`transformer$objects$fitting_error`.
+
+## Random model search with templates
+
+`build_model_from_template()` creates a random model from a named list of templates. A template gives
+the class, value ranges for its arguments, and which transformers it may get and how likely each is.
+The package ships `default_templates`.
+
+```{r templates, eval = has_xgboost}
+set.seed(1)
+candidate = build_model_from_template('CLS.XGBOOST', templates = default_templates)
+candidate$config[c('nrounds', 'max_depth', 'eta')]
+length(candidate$transformers)
+```

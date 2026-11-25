@@ -6,16 +6,16 @@ Author: Nima Ramezani
 Maintainer: Nima Ramezani <nima.ramezani@gmail.com>
 Description: Using this package, you can build a pipeline of ML models and combine models from various R/Python packages including sklearn, keras, MLR, H2O and etc.
 Depends:
-    R (>= 4.0.0)
-Imports:
+    R (>= 4.0.0),
     methods,
+    magrittr,
+    dplyr,
+    rutils
+Imports:
     stats,
     utils,
     parallel,
-    magrittr,
-    dplyr,
-    foreach,
-    rutils
+    foreach
 Suggests:
     xgboost,
     reticulate,

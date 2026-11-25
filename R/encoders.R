@@ -344,8 +344,8 @@ ENC.RML.TE = setRefClass('ENC.RML.TE', contains = 'MODEL',
                            model.predict = function(X){
                              XOUT  = X
                              for(col in objects$features$fname){
-                               cn = 'ratio' %>% {names(.) <- name %>% paste(col, sep = '_');.}
-                               XOUT %<>% left_join(objects$model[[col]], by = col) %>% column_rename(cn) %>% column_drop(col) %>% na2median
+                               cn = 'ratio' %>% {names(.) <- col;.}
+                               XOUT %<>% left_join(objects$model[[col]], by = col) %>% column_drop(col) %>% column_rename(cn) %>% na2median
                              }
                              return(XOUT)
                            }

@@ -314,8 +314,18 @@ MODEL = setRefClass('MODEL',
       rep(objects$model$mean, N) %>% as.data.frame
     },
 
+    # TRUE if the model's training uses the output of its gradient transformers.
+    # Regressors and non-classifier models always can (the residual is computed in transform_yin).
+    # Classifiers need algorithm-specific loss changes; override this method in your own class once supported.
+    supports_gradient_transformers = function(){
+      !inherits(.self, 'CLASSIFIER') || inherits(.self, gb_supporting_classifiers)
+    },
+
     fit = function(X, y = NULL){
       if(!fitted){
+        if(length(gradient_transformers) > 0){
+          assert(supports_gradient_transformers(), sprintf("Model %s of class %s does not support gradient transformers yet. Supported classifiers: %s", name, class(.self)[1], paste(gb_supporting_classifiers, collapse = ', ')))
+        }
         if(inherits(X, 'matrix')){X %<>% as.data.frame}
         y = transform_yin(X, y)
         if(!is.null(config[['features.include']])){X = X[config$features.include %^% wt_colnames(X)]}
@@ -647,14 +657,13 @@ MODEL = setRefClass('MODEL',
       return(info)
     },
 
+    # One row per model in the network (this model and all its transformers and gradient transformers, recursively)
     info.transformers = function(){
       tbl = do.call(data.frame, info.model() %>% list.add(stringsAsFactors = F))
-
-      for(tr in transformers){
-        tbl_tr = do.call(data.frame, tr$info.model() %>% list.add(stringsAsFactors = F))
-        tbl %<>% rbind(tbl_tr)
+      for(tr in c(transformers, gradient_transformers)){
+        if(inherits(tr, 'MODEL')){tbl = dplyr::bind_rows(tbl, tr$info.transformers())}
       }
-      return(tbl)
+      return(tbl %>% dplyr::distinct(name, .keep_all = TRUE))
     },
 
     plot.network = function(plotter = 'visNetwork', ...){

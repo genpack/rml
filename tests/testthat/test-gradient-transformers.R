@@ -63,3 +63,9 @@ test_that("regressors are trained on the residual of the gradient transformer", 
   expect_lt(mean(abs(pred - d$y)), mean(abs(base - d$y)))
   expect_equal(pred, base + m$model.predict(d$X)[[1]], tolerance = 1e-6)
 })
+
+test_that("classifiers without gradient support refuse gradient transformers", {
+  d = make_binary_data()
+  m = CLS.STATS.LR(gradient_transformers = list(CLS.STATS.LR(return = 'logit')))
+  expect_error(m$fit(d$X, d$y), 'does not support gradient transformers')
+})

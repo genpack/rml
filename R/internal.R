@@ -1,4 +1,6 @@
-# Internal helpers shared by all modules.
+# Helpers shared by all modules.
+# They are exported because methods inherited by model classes defined outside rml run in the user's environment
+# and can only see exported functions.
 #
 # WIDETABLE objects used to come from package 'rbig', which has since been renamed to 'rwidetable'.
 # 'rbig' exported S4 methods colnames(), as.matrix() and as.data.frame() while 'rwidetable' registers
