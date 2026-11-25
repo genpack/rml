@@ -48,7 +48,8 @@ MODEL = setRefClass('MODEL',
       }
       
       
-      packages_required <<- c('magrittr', 'dplyr', 'rutils', 'rml', 'rbig', 'reticulate')
+      # Packages loaded on parallel workers (rml loads its own imports):
+      packages_required <<- c('rml')
 
       reserved_words <<- c('keep_columns', 'keep_features', 
                          'name_in_output', 'metrics', 
@@ -229,6 +230,9 @@ MODEL = setRefClass('MODEL',
       }
 
       XOUT = transform_yout(X, XOUT)
+      if(is.null(colnames(XOUT))){
+        colnames(XOUT) <- chif(ncol(XOUT) == nrow(objects$features), objects$features$fname, chif(ncol(XOUT) == 1, '', as.character(sequence(ncol(XOUT)))))
+      }
       colnames(XOUT)[which(colnames(XOUT) %in% c('.'))] <- ''
       if((ncol(XOUT) > 0) & config$name_in_output) colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = ifelse(colnames(XOUT) == '', '', '_'))
 

@@ -54,6 +54,14 @@ ENC.FASTDUMMIES.OHE = setRefClass('ENC.FASTDUMMIES.OHE', contains = "MODEL",
 )
 
 
+# Converts categorical columns to a character matrix (same text values at fit and predict time)
+ohe_input = function(X){
+  if(inherits(X, 'WIDETABLE')){X = wt_as_data_frame(X)}
+  X = as.data.frame(X)
+  for(i in sequence(ncol(X))){X[[i]] <- as.character(X[[i]])}
+  as.matrix(X)
+}
+
 #' @export ENC.SKLEARN.OHE
 ENC.SKLEARN.OHE = setRefClass(
   'ENC.SKLEARN.OHE',
@@ -63,7 +71,7 @@ ENC.SKLEARN.OHE = setRefClass(
       callSuper(model.module = 'preprocessing', model.class = 'OneHotEncoder', ...)
       type             <<- 'Encoder'
       description      <<- 'One-Hot Encoder'
-      reserved_words   <<- c(reserved_words, 'max_domain')
+      reserved_words   <<- c(reserved_words, 'max_domain', 'model.module', 'model.class')
       
       if(is.empty(name)){name <<- 'SKOHE' %>% paste0(sample(10000:99999, 1))}
       config$max_domain <<- verify(config$max_domain, c('numeric', 'integer'), default = 25) %>% as.integer
@@ -72,17 +80,24 @@ ENC.SKLEARN.OHE = setRefClass(
     model.fit = function(X, y){
       if(!fitted){
         if(!'n_unique' %in% colnames(objects$features)){
-          objects$features$n_unique <<- wt_colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
+          objects$features$n_unique <<- vapply(objects$features$fname, function(x) length(unique(X[[x]])), integer(1), USE.NAMES = F)
         }
         objects$features <<- objects$features %>% filter(fname %in% nominals(X), n_unique <= config$max_domain)
-        
-        X = X[objects$features$fname]
-        callSuper(X, y)
+        assert(nrow(objects$features) > 0, 'No categorical columns with few enough distinct values for one-hot encoding!')
+        args = config %>% rutils::list.remove(reserved_words)
+        if(is.null(args$handle_unknown)){args$handle_unknown <- 'ignore'}
+        if(is.null(args$sparse_output)){args$sparse_output <- FALSE}
+        objects$module <<- reticulate::import('sklearn.preprocessing')
+        objects$model  <<- do.call(objects$module$OneHotEncoder, args)
+        objects$model$fit(ohe_input(X[objects$features$fname]))
       }
     },
-    
+
     model.predict = function(X){
-      objects$model$transform(X) %>% as.matrix %>% as.data.frame
+      retrieve_model()
+      out = objects$model$transform(ohe_input(X[objects$features$fname])) %>% as.matrix %>% as.data.frame
+      colnames(out) <- as.character(objects$model$get_feature_names_out(objects$features$fname))
+      return(out)
     }
 ))
 
@@ -330,7 +345,7 @@ ENC.RML.TE = setRefClass('ENC.RML.TE', contains = 'MODEL',
                              XOUT  = X
                              for(col in objects$features$fname){
                                cn = 'ratio' %>% {names(.) <- name %>% paste(col, sep = '_');.}
-                               XOUT %<>% left_join(objects$model[[col]], by = col) %>% column_rename(cn) %>% column_unselect(col) %>% na2median
+                               XOUT %<>% left_join(objects$model[[col]], by = col) %>% column_rename(cn) %>% column_drop(col) %>% na2median
                              }
                              return(XOUT)
                            }

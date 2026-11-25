@@ -173,15 +173,23 @@ BIN.SKLEARN.KMC = setRefClass(
   contains = 'TRM.SKLEARN',
   methods = list(
     initialize = function(...){
-      callSuper(model.module = 'cluster', model.class = 'k_means', ...)
+      callSuper(model.module = 'cluster', model.class = 'KMeans', ...)
       type             <<- 'Binner'
       description      <<- 'KMeans Clustering'
-      
-      config[['pp.remove_nominal_features']] <<- T
-      config[['pp.remove_numeric_features']] <<- F
-      
+
       if(is.empty(name)){name <<- 'KMC' %>% paste0(sample(10000:99999, 1))}
       config$n_clusters <<- verify(config$n_clusters, c('integer', 'numeric'), lengths = 1, domain = c(1,1000), default = 3) %>% as.integer
+    },
+
+    model.fit = function(X, y = NULL){
+      objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+      callSuper(X[objects$features$fname], y)
+    },
+
+    # Returns the cluster number of each row
+    model.predict = function(X){
+      if(inherits(X, 'WIDETABLE')){X = wt_as_matrix(X)}
+      retrieve_model()
+      data.frame(cluster = as.integer(objects$model$predict(X %>% data.matrix)))
     }
 ))
-

@@ -16,7 +16,7 @@ MAP.SKLEARN.NRM = setRefClass(
 #' @export MAP.SKLEARN.ZFS
 MAP.SKLEARN.ZFS = setRefClass(
   'MAP.SKLEARN.ZFS',
-  contains = 'MODEL',
+  contains = 'TRM.SKLEARN',
   methods = list(
     initialize = function(...){
       callSuper(model.module = 'preprocessing', model.class = 'StandardScaler', ...)
