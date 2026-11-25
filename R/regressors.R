@@ -17,7 +17,7 @@ REGRESSOR = setRefClass('REGRESSOR', contains = "MODEL",
    },
    
    performance = function(X, y, metrics = config$metrics, ...){
-     yp = predict(X)[, 1]
+     yp = predict(X) %>% {.[[ncol(.)]]}
      # we transform y only if yin has a transformer function and yout has not. This means the y in training set has been transformed
      # so the input y needs to have the same transformation to be comparable to the original label.
      # if yout has transformer function as well, then yp is already transformed and should be compared to y directly not to the transformed y
@@ -90,7 +90,7 @@ REG.STATS.LNR = setRefClass('REG.STATS.LNR', contains = "REGRESSOR",
      },
 
      model.predict = function(X){
-       if(inherits(X, 'WIDETABLE')){X = rbig::as.data.frame(X)}
+       if(inherits(X, 'WIDETABLE')){X = wt_as_data_frame(X)}
        objects$model %>% stats::predict(X %>% na2zero) %>% as.data.frame
      },
 
@@ -159,7 +159,7 @@ REG.XGBOOST = setRefClass('REG.XGBOOST', contains = "REGRESSOR",
                          if(is.null(config$nrounds)){config$nrounds <<- 100}
                          
                          # nrounds is passed as a separate argument not within argument params:
-                         reserved_words <<- c(reserved_words, 'nrounds', 'sig_level')
+                         reserved_words <<- c(reserved_words, 'nrounds', 'sig_level', 'sfs.enabled')
                        },
                        
                        model.fit = function(X, y){
@@ -171,14 +171,10 @@ REG.XGBOOST = setRefClass('REG.XGBOOST', contains = "REGRESSOR",
                            # Not supported yet
                          }
 
-                         xgb_train = xgboost::xgb.DMatrix(data = X %>% as.matrix, label = y)
-                         objects$model <<- xgboost::xgb.train(
-                           data = xgb_train, 
-                           nrounds = config$nrounds, 
-                           # watchlist = watchlist,
-                           params = config %>% list.remove(reserved_words))
+                         params = config %>% list.remove(reserved_words)
+                         objects$model <<- xgb_train(params = params, data = xgb_dmatrix(X, label = as.numeric(y)), nrounds = config$nrounds, verbose = 0)
                          
-                         imp = try(xgb.importance(model = objects$model) %>% select(fname = Feature, importance = Gain), silent = T)
+                         imp = try(xgboost::xgb.importance(model = objects$model) %>% as.data.frame %>% select(fname = Feature, importance = Gain), silent = T)
                          if(!inherits(imp, 'try-error')){
                            if(!is.null(objects$features$importance)) objects$features$importance <<- NULL
                            objects$features %>% dplyr::left_join(imp, by = 'fname') %>% na2zero ->> objects$features
@@ -188,7 +184,8 @@ REG.XGBOOST = setRefClass('REG.XGBOOST', contains = "REGRESSOR",
                        },
 
                        model.predict = function(X){
-                         objects$model %>% stats::predict(X %>% as.matrix) %>% as.data.frame
+                         X = X[objects$features$fname] %>% na2zero
+                         stats::predict(objects$model, xgb_dmatrix(X)) %>% as.data.frame
                        }
                        
                      )

@@ -1,15 +1,51 @@
 Package: rml
 Type: Package
 Title: A package for building pipelines of Machine Learning models.
-Version: 1.4.7
+Version: 1.5.0
 Author: Nima Ramezani
 Maintainer: Nima Ramezani <nima.ramezani@gmail.com>
 Description: Using this package, you can build a pipeline of ML models and combine models from various R/Python packages including sklearn, keras, MLR, H2O and etc.
+Depends:
+    R (>= 4.0.0)
+Imports:
+    methods,
+    stats,
+    utils,
+    parallel,
+    magrittr,
+    dplyr,
+    foreach,
+    rutils
+Suggests:
+    xgboost,
+    reticulate,
+    keras,
+    tensorflow,
+    mlr,
+    e1071,
+    rpart,
+    HDPenReg,
+    sparklyr,
+    fastDummies,
+    smbinning,
+    purrr,
+    doParallel,
+    rwidetable,
+    rvis,
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0)
+Remotes:
+    genpack/rutils,
+    genpack/rbig,
+    genpack/rvis
+VignetteBuilder: knitr
 License: MIT
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 6.1.1
 Collate: 
+    'internal.R'
     'abstract.R'
     'transformers.R'
     'binners.R'

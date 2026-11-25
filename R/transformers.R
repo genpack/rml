@@ -119,13 +119,13 @@ TRM.SKLEARN = setRefClass(
       if(!fitted){
         objects$module <<- reticulate::import(paste('sklearn', config[['model.module']], sep = '.'))
         objects$model <<- do.call(objects$module[[config[['model.class']]]], args = config %>% rutils::list.remove(reserved_words))
-        if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
+        if(inherits(X, 'WIDETABLE')){X = wt_as_matrix(X)}
         objects$model$fit(X %>% data.matrix, y)
       }
     },
     
     model.predict = function(X){
-      if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
+      if(inherits(X, 'WIDETABLE')){X = wt_as_matrix(X)}
       retrieve_model()
       out = objects$model$transform(X %>% data.matrix) %>% as.data.frame()
       

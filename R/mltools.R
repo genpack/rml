@@ -104,7 +104,7 @@ logit_inv = function(x){
 # todo: should work for WideTables as well
 #' @export
 int_ordinals = function(X){
-  if(inherits(X, 'WIDETABLE')) {X <- rbig::as.data.frame(X)}
+  if(inherits(X, 'WIDETABLE')) {X <- wt_as_data_frame(X)}
   if(inherits(X, 'matrix')) {X %<>% as.data.frame}
   nms = colnames(X)
   for (col in nms){
@@ -206,7 +206,7 @@ outlier = function(x, sd_threshold = 4, recursive = F){
 #' @export
 ranker = function(X){
   X %<>% as.data.frame
-  for(col in rbig::colnames(X)){
+  for(col in wt_colnames(X)){
     v = X %>% pull(col)
     if(inherits(v, 'numeric')){
       X[, col %>% paste('rank', sep = '_')] <-  order(v)
@@ -262,7 +262,7 @@ na2median = function(X){
 correlation = function(x, y, metrics = 'pearson', threshold = NULL, quantiles = NULL){
 
   if(inherits(x, c('data.frame', 'WIDETABLE', 'matrix'))){
-    if(!inherits(x, 'WIDETABLE')){cols = rbig::colnames(x)} else {cols = colnames(x)}
+    if(!inherits(x, 'WIDETABLE')){cols = wt_colnames(x)} else {cols = colnames(x)}
     if(is.null(cols)){cols = sequence(ncol(x))}
     out = list()
     for(col in cols){
@@ -280,7 +280,7 @@ correlation = function(x, y, metrics = 'pearson', threshold = NULL, quantiles = 
 
     for (metric in metrics %^% 'optsplit.chi'){
       assert(length(unique(y)) == 2, "Only works for binary y")
-      cbind(feature = x, label = y) %>% optSplit.chi(num_col = 'feature', cat_col = 'label') -> res
+      data.frame(feature = x, label = y) %>% optSplit.chi(num_col = 'feature', cat_col = 'label') -> res
       out[[metric]] <- res$correlation
       out[[metric %>% paste('cutpoint', sep = '.')]] <- res$split
       out[[metric %>% paste('pvalue', sep = '.')]] <- res$pvalue
@@ -288,25 +288,21 @@ correlation = function(x, y, metrics = 'pearson', threshold = NULL, quantiles = 
 
     for (metric in metrics %^% 'optsplit.f1'){
       assert(length(unique(y)) == 2, "Only works for binary y")
-      cbind(feature = x, label = y) %>% optSplit.f1(num_col = 'feature', cat_col = 'label') -> res
+      data.frame(feature = x, label = y) %>% optSplit.f1(prob_col = 'feature', label_col = 'label') -> res
       out[[metric]] <- res$f1
       out[[metric %>% paste('cutpoint', sep = '.')]] <- res$split
     }
     
     subset = metrics %^% c('aurc', 'gini')
     if(length(subset) > 0){
-      aurc = AUC::auc(AUC::roc(x %>% vect.map, y %>% as.factor))
+      aurc = auc_binary(x, y)
       for (metric in subset){
         if(metric == 'aurc') out[[metric]] = aurc else out[[metric]] = 2*aurc - 1
       }
     }
     
     for(metric in metrics %^% 'log_loss'){
-      lossfun = rfun::logistic$copy()
-      lossfun$reset()
-      lossfun$inputs$x = x
-      lossfun$inputs$y = y
-      out[[metric]] <- lossfun$get.output() %>% mean
+      out[[metric]] <- log_loss(x, y)
     }
     
     for(metric in metrics %^% c('mae', 'rmse', 'medae', 'r_squared', 'mape', 'geo_mape')){
@@ -1097,7 +1093,7 @@ model_make_unique_transformer_names = function(model){
 model_types = function(model){
   mdlns = model$type
   for(tr in model$transformers){
-    mdlns = c(mdlns, transformer_types(tr))
+    mdlns = c(mdlns, model_types(tr))
   }
   return(mdlns %>% unique)
 }
@@ -1105,9 +1101,9 @@ model_types = function(model){
 # converts given categorical columns to integer
 # take to gener
 int_columns = function(x, cats){
-  X %<>% as.data.frame
+  x %<>% as.data.frame
   for(i in intersect(cats, colnames(x))){
-    X[, i] <- X[, i] %>% as.integer
+    x[, i] <- x[, i] %>% as.integer
   }
   return(x)
 }
@@ -1115,9 +1111,9 @@ int_columns = function(x, cats){
 # converts all columns to numeric
 # take to gener
 numerize_columns = function(x){
-  X %<>% as.data.frame
+  x %<>% as.data.frame
   for(i in colnames(x))
-    X[,i] <- as.numeric(x[,i])
+    x[,i] <- as.numeric(x[,i])
   return(x)
 }
 

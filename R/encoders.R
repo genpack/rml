@@ -72,12 +72,12 @@ ENC.SKLEARN.OHE = setRefClass(
     model.fit = function(X, y){
       if(!fitted){
         if(!'n_unique' %in% colnames(objects$features)){
-          objects$features$n_unique <<- rbig::colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
+          objects$features$n_unique <<- wt_colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
         }
         objects$features <<- objects$features %>% filter(fname %in% nominals(X), n_unique <= config$max_domain)
         
         X = X[objects$features$fname]
-        callSuper()
+        callSuper(X, y)
       }
     },
     
@@ -259,10 +259,10 @@ ENC.RML.FE = setRefClass(
     
     model.fit = function(X, y = NULL){
       if(!fitted){
-        catfigs = objects$features %>% filter(fclass %in% c('character', 'integer', 'factor')) %>% pull(fname) %>% intersect(rbig::colnames(X))
+        catfigs = objects$features %>% filter(fclass %in% c('character', 'integer', 'factor')) %>% pull(fname) %>% intersect(wt_colnames(X))
         if(!is.null(config$categoricals)) {catfigs = catfigs %^% config$categoricals}
         
-        numfigs = objects$features %>% filter(fclass %in% c('numeric', 'integer')) %>% pull(fname) %>% intersect(rbig::colnames(X)) %>% setdiff(catfigs)
+        numfigs = objects$features %>% filter(fclass %in% c('numeric', 'integer')) %>% pull(fname) %>% intersect(wt_colnames(X)) %>% setdiff(catfigs)
         assert(length(catfigs) > 0, 'No categorical feature for encoding')
         assert(length(numfigs) > 0, 'No numerical features for feature encoding')
         objects$categoricals <<- catfigs
@@ -315,7 +315,7 @@ ENC.RML.TE = setRefClass('ENC.RML.TE', contains = 'MODEL',
                            model.fit = function(X, y){
                              if(!fitted){
                                # todo: remove this conversion when widetable supports cbind, group_by and summarise
-                               if(inherits(X, 'WIDETABLE')){X = rbig::as.data.frame(X)}
+                               if(inherits(X, 'WIDETABLE')){X = wt_as_data_frame(X)}
                                objects$features <<- objects$features %>% filter(fclass %in% c('integer', 'character', 'factor'))
                                X = X[objects$features$fname]
                                rutils::assert(ncol(X) > 0, "No nominal or ordinal features left for encoding!")

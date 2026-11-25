@@ -7,7 +7,7 @@
 #' @export
 feature_booster = function(base_model, X, y, n_experiment = 10, subset_size = 10){
   # Verifications:
-  columns = rbig::colnames(X)
+  columns = wt_colnames(X)
   basefet = model_features(base_model)
   assert(basefet %<% columns, "todo")
   
@@ -66,8 +66,8 @@ feature_booster = function(base_model, X, y, n_experiment = 10, subset_size = 10
 hp_booster = function(base, parameter, values, ...){
   
   bag = list()
-  for(i in sequenc(length(values))){
-    model = base&deep_copy(i)
+  for(i in sequence(length(values))){
+    model = base$deep_copy(i)
     model$config[[parameter]] <- values[i]
     model$name %<>% paste('_HPB', i)
     model$reset()
