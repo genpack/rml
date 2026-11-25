@@ -145,13 +145,13 @@ MAP.RML.MMS = setRefClass('MAP.RML.MMS', contains = 'MODEL',
                             model.fit = function(X, y = NULL){
                               objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
                               X = X[objects$features$fname] %>% as.matrix
-                              X %>% apply(2, function(v) min(v, na.rm = T)) ->> objects$features$min
-                              X %>% apply(2, function(v) max(v, na.rm = T)) ->> objects$features$max
+                              objects$features$min <<- unname(apply(X, 2, min, na.rm = T))
+                              objects$features$max <<- unname(apply(X, 2, max, na.rm = T))
                             },
                             
                             model.predict = function(X){
-                              feat  = objects$features %>% column2Rownames('fname')
-                              objects$features$fname %>% sapply(function(i) (X[[i]] -  feat[i,'min'])/(feat[i,'max'] - feat[i,'min'])) %>% na2zero %>% as.data.frame
+                              f = objects$features
+                              scale_columns(X, f$fname, f$min, f$max - f$min)
                             }
                           ))
 
@@ -172,13 +172,13 @@ MAP.RML.ZFS = setRefClass('MAP.RML.ZFS', contains = "MODEL", methods = list(
   model.fit = function(X, y = NULL){
     objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
     X = X[objects$features$fname] %>% as.matrix
-    X %>% apply(2, function(v) mean(v, na.rm = T)) ->> objects$features$mean
-    X %>% apply(2, function(v)   sd(v, na.rm = T)) ->> objects$features$stdv
+    objects$features$mean <<- unname(colMeans(X, na.rm = T))
+    objects$features$stdv <<- unname(apply(X, 2, sd, na.rm = T))
   },
   
   model.predict = function(X){
-    feat  = objects$features %>% column2Rownames('fname')
-    objects$features$fname %>% sapply(function(i) (X[,i] -  feat[i,'mean'])/feat[i,'stdv']) %>% na2zero %>% as.data.frame
+    f = objects$features
+    scale_columns(X, f$fname, f$mean, f$stdv)
   }
 ))
 

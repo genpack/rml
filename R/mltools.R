@@ -1200,12 +1200,19 @@ feature_info_numeric = function(X, probs = seq(0, 1, 0.25)){
     }
     return(out)
   } else if(inherits(X, c('data.frame', 'matrix', 'tibble', 'data.table'))){
-    X %>% as.matrix %>% apply(2, moment, m = 1:4) %>% t %>%
-      cbind(
-        X %>% as.matrix %>% apply(2, function(v) {c(n_missing = sum(is.na(v)), n_values = sum(!is.na(v)), n_unique = length(unique(v)))}) %>% t) %>%
-      cbind(
-        X %>% as.matrix %>% apply(2, quantile, probs = probs, na.rm = T) %>% t) %>%
-      as.data.frame %>% rownames2Column('fname')
+    # Vectorised over columns (much faster than apply() on wide tables):
+    M   = as.matrix(X)
+    out = data.frame(fname = colnames(M), stringsAsFactors = F)
+    for(k in 1:4){out[[paste0('M', k)]] <- unname(colSums(M^k, na.rm = T))}
+    nmis = unname(colSums(is.na(M)))
+    out$n_missing = nmis
+    out$n_values  = nrow(M) - nmis
+    out$n_unique  = vapply(seq_len(ncol(M)), function(i) length(unique(M[, i])), integer(1))
+    qnt = apply(M, 2, quantile, probs = probs, na.rm = T, names = F)
+    qnt = matrix(qnt, nrow = length(probs))
+    qnames = paste0(format(100*probs, trim = T), '%')
+    for(i in seq_along(probs)){out[[qnames[i]]] <- qnt[i, ]}
+    out
   } else stop('X has unknown class!')
 }
 

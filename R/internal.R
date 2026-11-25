@@ -89,3 +89,15 @@ xgb_train = function(params, data, nrounds, evals = list(), obj = NULL, feval = 
   args = args[!vapply(args, is.null, logical(1))]
   do.call(xgboost::xgb.train, args)
 }
+
+# Returns data.frame((X[[col]] - center)/scale) for each column; non-finite results (missing values, zero scale) become 0
+scale_columns = function(X, columns, center, scale){
+  out = vector('list', length(columns))
+  for(i in seq_along(columns)){
+    v = (X[[columns[i]]] - center[i])/scale[i]
+    v[!is.finite(v)] <- 0
+    out[[i]] <- v
+  }
+  names(out) <- columns
+  as.data.frame(out, optional = TRUE, stringsAsFactors = FALSE)
+}
