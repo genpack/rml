@@ -94,7 +94,7 @@ ohe_input = function(X){
 #' Wraps \code{sklearn.preprocessing.OneHotEncoder} for categorical columns with at most \code{max_domain} distinct values.
 #' Values are encoded as text, values not seen in training give all-zero rows (\code{handle_unknown = 'ignore'}), and
 #' output columns are named \code{<column>_<value>}.
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{TRM.SKLEARN-class}}.
 #' @section Configuration:
@@ -155,7 +155,7 @@ ENC.SKLEARN.OHE = setRefClass(
 #' @aliases ENC.CATEGORY_ENCODERS
 #' @description
 #' Superclass of the category_encoders based classes. Encodes categorical (character, factor, integer) columns.
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{MODEL-class}}.
 #' @section Configuration:
@@ -262,7 +262,7 @@ ENC.CATEGORY_ENCODERS = setRefClass(
 #' @aliases ENC.CATEGORY_ENCODERS.CATB
 #' @description
 #' Wraps \code{category_encoders.cat_boost.CatBoostEncoder}. Its arguments can be passed.
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{ENC.CATEGORY_ENCODERS-class}}.
 #' @examples
@@ -296,7 +296,7 @@ ENC.CATEGORY_ENCODERS.CATB = setRefClass(
 #' @aliases ENC.CATEGORY_ENCODERS.TE
 #' @description
 #' Wraps \code{category_encoders.target_encoder.TargetEncoder}. Its arguments can be passed.
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{ENC.CATEGORY_ENCODERS-class}}.
 #' @examples
@@ -330,7 +330,7 @@ ENC.CATEGORY_ENCODERS.TE = setRefClass(
 #' @aliases ENC.CATEGORY_ENCODERS.JSTN
 #' @description
 #' Wraps \code{category_encoders.james_stein.JamesSteinEncoder}. Its arguments can be passed.
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{ENC.CATEGORY_ENCODERS-class}}.
 #' @examples
@@ -363,7 +363,7 @@ ENC.CATEGORY_ENCODERS.JSTN = setRefClass(
 #' @aliases ENC.CATEGORY_ENCODERS.HLMRT
 #' @description
 #' Wraps \code{category_encoders.helmert.HelmertEncoder}. Its arguments can be passed.
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{ENC.CATEGORY_ENCODERS-class}}.
 #' @examples

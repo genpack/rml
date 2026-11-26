@@ -7,7 +7,7 @@
 \title{Support vector machine classifier (scikit-learn)}
 \description{
 Wraps \code{sklearn.svm.SVC} with \code{probability = TRUE} (arguments \code{C}, \code{kernel}, \code{gamma}, ...).
-Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 
 Inherits from \code{\link{CLS.SKLEARN-class}}.
 }

@@ -3,7 +3,7 @@
 #' @aliases MAP.SKLEARN.NRM
 #' @description
 #' Wraps \code{sklearn.preprocessing.Normalizer}. Its arguments can be passed.
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{TRM.SKLEARN-class}}.
 #' @examples
@@ -34,7 +34,7 @@ MAP.SKLEARN.NRM = setRefClass(
 #' @aliases MAP.SKLEARN.ZFS
 #' @description
 #' Wraps \code{sklearn.preprocessing.StandardScaler}. Its arguments can be passed.
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{TRM.SKLEARN-class}}.
 #' @examples
@@ -64,7 +64,7 @@ MAP.SKLEARN.ZFS = setRefClass(
 #' @aliases MAP.SKLEARN.MMS
 #' @description
 #' Wraps \code{sklearn.preprocessing.MinMaxScaler}. Its arguments can be passed.
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{TRM.SKLEARN-class}}.
 #' @examples
@@ -149,7 +149,7 @@ MAP.STATS.PCA = setRefClass('MAP.STATS.PCA', contains = 'MODEL', methods = list(
 #' @aliases MAP.PYLMNN.LMNN
 #' @description
 #' Learns a linear projection with the Python package pylmnn.
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{MODEL-class}}.
 #' @section Configuration:
@@ -319,7 +319,7 @@ MAP.RML.ZFS = setRefClass('MAP.RML.ZFS', contains = "MODEL", methods = list(
 #' @aliases MAP.SKLEARN.QT
 #' @description
 #' Wraps \code{sklearn.preprocessing.QuantileTransformer}. Its arguments can be passed.
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{MODEL-class}}.
 #' @examples

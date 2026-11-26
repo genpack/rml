@@ -9,7 +9,7 @@
 Wraps \code{sklearn.preprocessing.OneHotEncoder} for categorical columns with at most \code{max_domain} distinct values.
 Values are encoded as text, values not seen in training give all-zero rows (\code{handle_unknown = 'ignore'}), and
 output columns are named \code{<column>_<value>}.
-Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 
 Inherits from \code{\link{TRM.SKLEARN-class}}.
 }

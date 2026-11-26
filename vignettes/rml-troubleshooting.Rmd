@@ -1,0 +1,192 @@
+---
+title: "7. Troubleshooting"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{7. Troubleshooting}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+This vignette collects the problems users run into most often, with their causes and fixes. Most of
+them involve Python, because many rml classes run Python code through the reticulate package.
+
+## Python
+
+### Which classes need Python
+
+Classes with `SKLEARN`, `CATEGORY_ENCODERS`, `PYLMNN` or `KERAS` in their name call Python:
+
+| Classes | Python modules needed |
+| --- | --- |
+| `CLS.SKLEARN.*`, `REG.SKLEARN.*`, `MAP.SKLEARN.*`, `ENC.SKLEARN.OHE`, `BIN.SKLEARN.KMC`, `FET.SKLEARN.MFG`, `TRM.SKLEARN` | `scikit-learn`, `joblib` |
+| `CLS.SKLEARN.XGB`, `REG.SKLEARN.XGB` | `xgboost` |
+| `ENC.CATEGORY_ENCODERS.*` | `category_encoders` |
+| `MAP.PYLMNN.LMNN` | `pylmnn` |
+| `CLS.KERAS.DNN` | `tensorflow` (through the R packages keras and tensorflow) |
+| Row sampling with `smp.method = 'smote'` | `smote_variants` |
+
+All other classes are pure R and need no Python.
+
+### "No module named 'sklearn'" although sklearn is installed
+
+```
+> lr = CLS.SKLEARN.LR(name = 'lr')
+Error in py_module_import(module, convert = convert) :
+  ModuleNotFoundError: No module named 'sklearn'
+```
+
+reticulate is using a different Python from the one you installed sklearn into. A computer often has
+several: one from python.org, one from conda, one from the Microsoft Store, and one that reticulate
+manages itself. See which one reticulate uses:
+
+```{r}
+reticulate::py_config()
+```
+
+The first line, `python:`, is the Python in use. If the output ends with
+`NOTE: Python version was forced by VIRTUAL_ENV` and the path contains `reticulate/uv`, reticulate is
+using its own managed Python, which has none of the packages you installed with `pip`.
+
+Two rules explain most of the confusion:
+
+* **reticulate binds to one Python per R session**, the first time any Python code runs. After that,
+  `use_python()` and `RETICULATE_PYTHON` have no effect until you **restart R**. Creating a Python-based
+  rml model counts as running Python code, even if it fails.
+* **Python and R must have the same architecture.** An x86-64 build of R cannot load an ARM64 Python,
+  and the reverse. On Windows on ARM machines the default Python download is often ARM64
+  (its folder contains `arm64`, for example `pythoncore-3.15-arm64`), while the default R download is
+  x86-64. Check R with `R.version$arch`: `"x86_64"` is the Intel/AMD build, `"aarch64"` the ARM build.
+
+Pick one of the fixes below, then restart R.
+
+### Fix 1 (recommended): let reticulate install the modules
+
+Recent versions of reticulate (1.41 and later) manage a Python environment for you and install the
+modules you declare with `py_require()`. It always matches R's architecture.
+
+```{r}
+library(rml)
+reticulate::py_require(c("scikit-learn", "category_encoders", "joblib"))
+lr = CLS.SKLEARN.LR(name = 'lr')
+```
+
+`py_require()` must run before the first Python-based model in each session. The first call downloads
+the modules; later sessions use a cache. To run it in every session, add the line to your `~/.Rprofile`
+(open it with `usethis::edit_r_profile()` or `file.edit("~/.Rprofile")`).
+
+Add any other module you need, for example `"xgboost"` for `CLS.SKLEARN.XGB` or `"pylmnn"` for
+`MAP.PYLMNN.LMNN`. Specific versions can be requested as `"scikit-learn>=1.5"`.
+
+### Fix 2: use a Python you installed yourself
+
+1. Install a Python with the same architecture as R. For x86-64 R on Windows, use the "Windows installer
+   (64-bit)" from python.org, not the ARM64 one. Versions supported by all modules (currently 3.11 to
+   3.13) are the safest choice; the newest Python release often lacks packages for a while.
+2. Install the modules with that Python, from a terminal:
+
+   ```
+   C:/path/to/python.exe -m pip install scikit-learn category_encoders joblib
+   ```
+
+3. Tell reticulate to use it. Either add this line to `~/.Renviron` (open it with
+   `usethis::edit_r_environ()` or `file.edit("~/.Renviron")`) and restart R:
+
+   ```
+   RETICULATE_PYTHON=C:/path/to/python.exe
+   ```
+
+   or call this at the start of the session, before any Python-based model:
+
+   ```{r}
+   reticulate::use_python("C:/path/to/python.exe", required = TRUE)
+   ```
+
+Use forward slashes (`/`) in Windows paths. A virtualenv or conda environment works the same way with
+`reticulate::use_virtualenv("name")` or `reticulate::use_condaenv("name")`.
+
+### Fix 3: choose Python from the model
+
+Every Python-based class accepts `python_address`:
+
+```{r}
+lr = CLS.SKLEARN.LR(name = 'lr', python_address = "C:/path/to/python.exe")
+```
+
+This only works for the first Python-based model of the session (see the rule above), so fixes 1 and
+2 are more reliable.
+
+### Checking the setup
+
+```{r}
+reticulate::py_config()                          # Python in use, should be the one you chose
+reticulate::py_module_available("sklearn")       # TRUE
+reticulate::py_module_available("category_encoders")
+R.version$arch                                   # architecture of R
+```
+
+### Other Python errors
+
+| Message | Cause and fix |
+| --- | --- |
+| `Python shared library not found` or `failed to load` | The Python's architecture differs from R's, or it is a Microsoft Store Python. Use fix 1 or a python.org Python of the right architecture. |
+| `numpy.core.multiarray failed to import`, or errors mentioning numpy 2 | An old reticulate with numpy 2. Update reticulate (`install.packages("reticulate")`). |
+| `InvalidParameterError: The 'n_neighbors' parameter ... must be an int` (or a similar `TypeError`) | R numbers are doubles, but scikit-learn wants integers for counts. Write integer arguments with `L`: `n_neighbors = 25L`, `n_clusters = 4L`. |
+| A fitted Python model gives errors after `model_load()` | Python objects are saved with joblib next to the RDS file. Keep the whole folder written by `model_save()` and load it with `model_load()`, not `readRDS()`. |
+| Parallel fitting (`mc.num_cores > 1`) fails for Python models | Each worker starts its own R and Python. rml must be installed (not only sourced), and the Python setup must apply to every session, so use `~/.Rprofile` or `~/.Renviron` (fixes 1 and 2) rather than a call in your script. |
+
+## R packages
+
+### Optional packages
+
+Only the packages rml needs everywhere are installed with it. Classes that wrap another package need
+that package installed; an error such as `there is no package called 'xgboost'` means it is missing:
+
+| Classes or features | Package |
+| --- | --- |
+| `CLS.XGBOOST`, `REG.XGBOOST` | xgboost |
+| `CLS.KERAS.DNN` | keras, tensorflow |
+| `CLS.E1071.NB` | e1071 |
+| `CLS.MLR` | mlr |
+| `CLS.HDPENREG.FLASSO` | HDPenReg |
+| `CLS.SPARKLYR.GBT`, `spark.*` functions | sparklyr |
+| `ENC.FASTDUMMIES.OHE` | fastDummies |
+| `BIN.SMBINNING.OB` | smbinning |
+| `service_models()`, `hp_booster()`, `evaluate_features()` | purrr |
+| `mc.num_cores > 1` | doParallel |
+| WIDETABLE inputs | rwidetable (or the older rbig) |
+
+The genpack packages (rutils, rwidetable, rvis) are installed from GitHub:
+
+```{r}
+remotes::install_github("genpack/rutils")
+remotes::install_github("genpack/rml")
+```
+
+### xgboost versions
+
+rml works with both the xgboost 1.x and 3.x R packages and translates the arguments that were renamed
+between them (`watchlist`/`evals`, `obj`/`objective`, `feval`/`custom_metric`). Other arguments rml
+does not use itself are passed to xgboost unchanged, so use the names of the xgboost parameter
+documentation.
+
+## Model errors
+
+| Message | Cause and fix |
+| --- | --- |
+| `Model not fitted!` | `predict()` was called before `fit()`, or fitting failed. For a transformer, the error is kept in `transformer$objects$fitting_error`. |
+| `Model ... does not support gradient transformers yet` | Only `CLS.XGBOOST`, `CLS.STATS.LR` and `CLS.KERAS.DNN` (and every regressor) can be boosted. See `vignette('rml-gradient-boosting')`. |
+| `SMOTE sampling cannot be used with gradient transformers` | Synthetic rows have no gradient. Use `smp.method = 'upsample'` or `'downsample'`. |
+| `No features left for training the model!` | Column filters (`column_filters`, which by default drop constant columns) or the feature selection removed every column. Check `features.include`, `features.exclude` and `column_filters`. |
+| `Features ... were not generated by transformers! Filled with zero.` | The data given to `predict()` lacks columns the model was trained on. Pass the same columns as in training. |
+| A transformer is silently missing from the model | It failed to fit and was removed (`remove_failed_transformers = TRUE`). Look at its `objects$fitting_error`. |
+| `could not find function` inside a class you wrote | Methods of your class run in your environment. Load rml with `library(rml)` before defining the class. |
+
+## Getting help
+
+Every class and function has a help page (`?CLS.XGBOOST`, `?MODEL`, `?python_setup`). When reporting a
+problem, include the output of `sessionInfo()`, and for Python-based models also
+`reticulate::py_config()`.

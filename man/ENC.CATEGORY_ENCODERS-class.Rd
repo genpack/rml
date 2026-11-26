@@ -7,7 +7,7 @@
 \title{Wrapper for encoders of the Python package category_encoders}
 \description{
 Superclass of the category_encoders based classes. Encodes categorical (character, factor, integer) columns.
-Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 
 Inherits from \code{\link{MODEL-class}}.
 }

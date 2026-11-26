@@ -7,7 +7,7 @@
 \title{XGBoost classifier (Python xgboost)}
 \description{
 Wraps \code{xgboost.XGBClassifier} through reticulate (arguments \code{n_estimators}, \code{max_depth}, \code{learning_rate}, ...). For the R xgboost package use \code{\link{CLS.XGBOOST-class}}.
-Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 
 Inherits from \code{\link{CLASSIFIER-class}}.
 }

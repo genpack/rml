@@ -143,7 +143,7 @@ classifier_transform_yout = function(model, X, Y){
 #' @aliases CLS.SKLEARN
 #' @description
 #' Superclass of scikit-learn classifiers: fits \code{sklearn.<model.module>.<model.class>} and returns \code{predict_proba()[, 2]}.
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{CLASSIFIER-class}}.
 #' @section Configuration:
@@ -186,7 +186,7 @@ CLS.SKLEARN = setRefClass('CLS.SKLEARN', contains = c('TRM.SKLEARN', "CLASSIFIER
 #' @aliases CLS.SKLEARN.KNN
 #' @description
 #' Wraps \code{sklearn.neighbors.KNeighborsClassifier}. Any of its arguments (\code{n_neighbors}, \code{weights}, ...) can be passed; integers must be given as integers (\code{10L}).
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{CLS.SKLEARN-class}}.
 #' @examples
@@ -320,7 +320,7 @@ CLS.MLR = setRefClass('CLS.MLR', contains = "CLASSIFIER",
 #' @aliases CLS.SKLEARN.LR
 #' @description
 #' Wraps \code{sklearn.linear_model.LogisticRegression} (arguments \code{C}, \code{penalty}, \code{solver}, ...). Uses numeric features only. Feature importance is the absolute coefficient scaled by the feature's standard deviation.
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{CLS.SKLEARN-class}}.
 #' @examples
@@ -362,7 +362,7 @@ CLS.SKLEARN.LR = setRefClass('CLS.SKLEARN.LR', contains = "CLS.SKLEARN",
 #' @aliases CLS.SKLEARN.DT
 #' @description
 #' Wraps \code{sklearn.tree.DecisionTreeClassifier} (arguments \code{max_depth}, \code{min_samples_leaf}, ...).
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{CLS.SKLEARN-class}}.
 #' @examples
@@ -491,7 +491,7 @@ CLS.STATS.LR = setRefClass('CLS.STATS.LR', contains = "CLASSIFIER",
 #' @aliases CLS.SKLEARN.XGB
 #' @description
 #' Wraps \code{xgboost.XGBClassifier} through reticulate (arguments \code{n_estimators}, \code{max_depth}, \code{learning_rate}, ...). For the R xgboost package use \code{\link{CLS.XGBOOST-class}}.
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{CLASSIFIER-class}}.
 #' @section Configuration:
@@ -620,7 +620,7 @@ CLS.SKLEARN.XGB = setRefClass('CLS.SKLEARN.XGB', contains = "CLASSIFIER",
 #' @aliases CLS.SKLEARN.SVM
 #' @description
 #' Wraps \code{sklearn.svm.SVC} with \code{probability = TRUE} (arguments \code{C}, \code{kernel}, \code{gamma}, ...).
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{CLS.SKLEARN-class}}.
 #' @examples
@@ -940,7 +940,7 @@ CLS.RPART.DT = setRefClass('CLS.RPART.DT', contains = 'MODEL', methods = list(
 #' @aliases CLS.SKLEARN.MNB
 #' @description
 #' Wraps \code{sklearn.naive_bayes.MultinomialNB}. Uses integer (count) columns only.
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{CLS.SKLEARN-class}}.
 #' @examples

@@ -7,7 +7,7 @@
 \title{Wrapper for scikit-learn binary classifiers}
 \description{
 Superclass of scikit-learn classifiers: fits \code{sklearn.<model.module>.<model.class>} and returns \code{predict_proba()[, 2]}.
-Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 
 Inherits from \code{\link{CLASSIFIER-class}}.
 }

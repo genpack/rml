@@ -66,6 +66,7 @@
 #'
 #' Start with \code{vignette('rml-getting-started', package = 'rml')} and see \code{\link{MODEL-class}} for
 #' the settings shared by all models.
+#' Python-based classes need a Python setup; see \code{\link{python_setup}} and \code{vignette('rml-troubleshooting')}.
 #' @author Nicholas Berta
 #' @keywords internal
 #' @import magrittr

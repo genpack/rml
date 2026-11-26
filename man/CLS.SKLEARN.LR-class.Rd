@@ -7,7 +7,7 @@
 \title{Logistic regression (scikit-learn)}
 \description{
 Wraps \code{sklearn.linear_model.LogisticRegression} (arguments \code{C}, \code{penalty}, \code{solver}, ...). Uses numeric features only. Feature importance is the absolute coefficient scaled by the feature's standard deviation.
-Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 
 Inherits from \code{\link{CLS.SKLEARN-class}}.
 }

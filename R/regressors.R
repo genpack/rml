@@ -259,7 +259,7 @@ REG.XGBOOST = setRefClass('REG.XGBOOST', contains = "REGRESSOR",
 #' @aliases REG.SKLEARN.XGB
 #' @description
 #' Wraps \code{xgboost.XGBRegressor} through reticulate.
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{REGRESSOR-class}}.
 #' @examples

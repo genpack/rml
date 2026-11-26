@@ -69,6 +69,7 @@ Collate:
     'metric_learning.R'
     'mltools.R'
     'mlvis.R'
+    'python_setup.R'
     'regressors.R'
     'rml.R'
     'templates.R'

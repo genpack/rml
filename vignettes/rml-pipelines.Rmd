@@ -140,7 +140,8 @@ ens$performance(X[-train, ], y[-train], metrics = 'gini')
 ## Python models
 
 Classes with `SKLEARN` in their name wrap scikit-learn through reticulate. Arguments are passed to the
-scikit-learn constructor, so integers must be given as integers (`10L`).
+scikit-learn constructor, so integers must be given as integers (`10L`). If R cannot find the Python module,
+see `vignette('rml-troubleshooting')`.
 
 ```{r sklearn, eval = has_sklearn}
 knn = CLS.SKLEARN.KNN(name = 'knn', n_neighbors = 25L, verbose = 0,

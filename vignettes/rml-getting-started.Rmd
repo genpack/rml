@@ -154,5 +154,6 @@ all.equal(lr$predict(X_test), lr_loaded$predict(X_test))
 * *4. Model and argument reference*: every class and every config argument.
 * *5. Transformers*: encoders, mappers, binners, clustering, feature generators and function transformers, with an example of each.
 * *6. Ensembles, boosters, model search and tools*: ensemblers, cross-validation, comparing models, boosters, templates and helper functions.
+* *7. Troubleshooting*: setting up Python for the scikit-learn and other Python-based classes, and common errors.
 
 Every class and function also has a help page, for example `?CLS.XGBOOST`, `?ENC.RML.TE` or `?correlation`.

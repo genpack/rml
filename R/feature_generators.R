@@ -3,7 +3,7 @@
 #' @aliases FET.SKLEARN.MFG
 #' @description
 #' Wraps \code{sklearn.preprocessing.PolynomialFeatures} (arguments \code{degree}, \code{interaction_only}, ...).
-#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{TRM.SKLEARN-class}}.
 #' @examples
