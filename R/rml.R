@@ -79,7 +79,7 @@
 #                             its label; the visNetwork chart uses box nodes. Showcase vignette: hover details on the Gini against
 #                             fitting time chart and an interactive ROC chart (plotly).
 #
-# 3.0.0 (27 November 2026)  - New: plot.network() draws with DiagrammeR (Graphviz layout) by default: boxes fitted to labels,
+# 2.1.0 (27 November 2026)  - New: plot.network() draws with DiagrammeR (Graphviz layout) by default: boxes fitted to labels,
 #                             colours by model type, hover a model for details, legend under the chart. It falls back to
 #                             visNetwork, then igraph, when a package is missing. New argument legend. DiagrammeR added to
 #                             Suggests. Showcase vignette and its Shiny app use the DiagrammeR chart.
