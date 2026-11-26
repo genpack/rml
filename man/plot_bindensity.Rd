@@ -5,14 +5,31 @@
 \title{This function plots density of vector \code{x} for elements for which \code{y} is 0 in black and
 another density plot for elements for which \code{y} is 1 in red.}
 \usage{
-plot_bindensity(x, y)
+plot_bindensity(
+  x,
+  y,
+  main = "",
+  xlab = "",
+  labels = c("0", "1"),
+  legend = TRUE,
+  ...
+)
 }
 \arguments{
 \item{x}{\code{numeric} vector.}
 
 \item{y}{binary vector of the same length.}
+
+\item{main}{\code{character} chart title. Default is no title.}
+
+\item{xlab}{\code{character} x axis label.}
+
+\item{labels}{\code{character} names of class 0 and class 1, shown in the legend.}
+
+\item{legend}{\code{logical} add a legend? Default \code{TRUE}.}
+
+\item{...}{further arguments passed to \code{plot()}.}
 }
 \description{
-This function plots density of vector \code{x} for elements for which \code{y} is 0 in black and
-another density plot for elements for which \code{y} is 1 in red.
+Outliers are removed first. Both densities share one y axis, so neither curve is cut off.
 }

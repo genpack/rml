@@ -74,6 +74,11 @@
 # 2.0.1 (27 November 2026)  - Documentation: boosting terminology corrected. If A is a gradient transformer of B, A is the base
 #                             model and is boosted by B. Vignettes, help pages and the 'boosted by' links of plot.network() updated.
 #
+# 2.0.2 (27 November 2026)  - Visualisation fixes. plot_bindensity() no longer prints a default title under the given one and
+#                             gains main, xlab, labels and legend arguments. plot.network(plotter = 'igraph') sizes each box to
+#                             its label; the visNetwork chart uses box nodes. Showcase vignette: hover details on the Gini against
+#                             fitting time chart and an interactive ROC chart (plotly).
+#
 # Versioning: x.y.z - increase z for a minor change or bug fix, y for a major change, x when features or packages are added.
 
 # Description for Roxygen

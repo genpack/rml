@@ -72,21 +72,31 @@ binary_class_pie = function(X, y, ncuts = 1000, C0_tag = 'C0', C1_tag = 'C1', ro
 
 #' This function plots density of vector \code{x} for elements for which \code{y} is 0 in black and
 #' another density plot for elements for which \code{y} is 1 in red.
-#' 
+#'
+#' Outliers are removed first. Both densities share one y axis, so neither curve is cut off.
+#'
 #' @param x \code{numeric} vector.
 #' @param y binary vector of the same length.
+#' @param main \code{character} chart title. Default is no title.
+#' @param xlab \code{character} x axis label.
+#' @param labels \code{character} names of class 0 and class 1, shown in the legend.
+#' @param legend \code{logical} add a legend? Default \code{TRUE}.
+#' @param ... further arguments passed to \code{plot()}.
 #' @export
-plot_bindensity = function(x, y){
+plot_bindensity = function(x, y, main = '', xlab = '', labels = c('0', '1'), legend = TRUE, ...){
   rmv = which(x %>% outlier(recursive = T))
   if(length(rmv) > 0){
     x = x[- rmv]
     y = y[- rmv]
   }
-  w0 = which(y == 0)
-  w1 = which(y == 1)
-  
-  x[w0] %>% density %>% plot
-  x[w1] %>% density %>% lines(col = 'red')
+  d0 = density(x[which(y == 0)], na.rm = TRUE)
+  d1 = density(x[which(y == 1)], na.rm = TRUE)
+  plot(d0, main = main, xlab = xlab, ylim = c(0, max(d0$y, d1$y)), ...)
+  lines(d1, col = 'red')
+  if(legend){
+    graphics::legend('topright', legend = labels, col = c('black', 'red'), lty = 1, bty = 'n', cex = 0.8)
+  }
+  invisible(list(d0 = d0, d1 = d1))
 }
 
 

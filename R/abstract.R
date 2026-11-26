@@ -817,15 +817,19 @@ MODEL = setRefClass('MODEL',
       }
       if(plotter == 'visNetwork'){
         if(requireNamespace('rvis', quietly = TRUE) && requireNamespace('visNetwork', quietly = TRUE)){
+          # shape 'box' makes every node a rectangle sized to its own label
+          net$nodes$shape = 'box'
           return(rvis::rvisPlot(type = 'graph', plotter = 'visNetwork', obj = net, key = 'id', label = 'label', color = 'type',
-                                tooltip = 'title', source = 'source', target = 'target', linkLabel = 'relation', linkColor = 'color',
-                                config = list(...)))
+                                shape = 'shape', tooltip = 'title', source = 'source', target = 'target', linkLabel = 'relation',
+                                linkColor = 'color', config = list(...)) %>%
+                   visNetwork::visNodes(margin = 10))
         }
         assert(requireNamespace('visNetwork', quietly = TRUE), "plot.network() needs package 'visNetwork' (or use plotter = 'igraph')")
-        nodes = net$nodes %>% dplyr::mutate(group = type)
+        nodes = net$nodes %>% dplyr::mutate(group = type, shape = 'box')
         edges = net$links %>% dplyr::transmute(from = source, to = target, label = relation, color = color, arrows = 'to',
                                                dashes = relation == 'boosted by')
         return(visNetwork::visNetwork(nodes, edges, ...) %>%
+                 visNetwork::visNodes(margin = 10) %>%
                  visNetwork::visHierarchicalLayout(direction = 'LR', sortMethod = 'directed') %>%
                  visNetwork::visLegend(useGroups = TRUE) %>%
                  visNetwork::visOptions(highlightNearest = TRUE))
@@ -835,20 +839,47 @@ MODEL = setRefClass('MODEL',
       types = unique(net$nodes$type)
       pal   = grDevices::hcl.colors(max(3, length(types)), 'Set 2')[seq_along(types)]
       # left to right: column = longest path from INPUT, rows ordered by igraph's Sugiyama layout to reduce crossings
-      order = igraph::topo_sort(g, mode = 'out')
-      depth = stats::setNames(rep(0, igraph::vcount(g)), igraph::V(g)$name)
-      for(v in igraph::V(g)$name[order]){
+      sorted = igraph::topo_sort(g, mode = 'out')
+      depth  = stats::setNames(rep(0, igraph::vcount(g)), igraph::V(g)$name)
+      for(v in igraph::V(g)$name[sorted]){
         for(w in igraph::neighbors(g, v, mode = 'out')$name){depth[w] <- max(depth[w], depth[v] + 1)}
       }
       lay = igraph::layout_with_sugiyama(g, layers = depth + 1)$layout[seq_len(igraph::vcount(g)), , drop = FALSE]
-      lay = cbind(depth, lay[, 1])
-      igraph::plot.igraph(g, layout = lay, rescale = TRUE, asp = 0,
-                          vertex.color = pal[match(igraph::V(g)$type, types)], vertex.shape = 'rectangle',
-                          vertex.size = 120/max(depth + 1), vertex.size2 = 15, vertex.label = igraph::V(g)$label, vertex.label.cex = 0.85,
-                          vertex.label.color = 'black', edge.color = net$links$color, edge.arrow.size = 0.4,
-                          edge.lty = ifelse(net$links$relation == 'boosted by', 2, 1), ...)
-      graphics::legend('topleft', legend = types, fill = pal, bty = 'n', cex = 0.85, inset = c(0, -0.02), xpd = TRUE)
-      graphics::legend('topright', legend = c('feeds (transformer)', 'boosted by (gradient transformer)'), col = link_colors[c('feeds', 'boosted by')], lty = c(1, 2), bty = 'n', cex = 0.85, inset = c(0, -0.02), xpd = TRUE)
+      xs  = unname(depth); ys = lay[, 1]
+      # one row unit per node in each column, keeping Sugiyama's order, centred vertically
+      ys  = stats::ave(ys, xs, FUN = function(u) rank(u, ties.method = 'first') - (length(u) + 1)/2)
+      args = list(...)
+      cex  = if(is.null(args$cex)) 0.85 else args$cex
+      labels = igraph::V(g)$label
+      # draw with base graphics so every box is sized to fit its own label; legends go in the bottom margin
+      op = graphics::par(mar = c(4, 0.5, ifelse(is.null(args$main), 0.5, 2.5), 0.5))
+      on.exit(graphics::par(op), add = TRUE)
+      graphics::plot.new()
+      graphics::plot.window(xlim = c(-0.3, max(xs) + 0.3), ylim = c(min(ys) - 0.55, max(ys) + 0.55))
+      if(!is.null(args$main)) graphics::title(main = args$main)
+      measure = function(cex){
+        list(w = graphics::strwidth(labels, cex = cex) + 1.0*graphics::strwidth('M', cex = cex),
+             h = graphics::strheight(labels, cex = cex) + 0.9*graphics::strheight('M', cex = cex))
+      }
+      m = measure(cex)
+      # shrink the text if the widest box would overlap the next column or the tallest box the next row
+      shrink = min(1, 0.93/max(m$w), 0.9/max(m$h))
+      if(shrink < 1){cex = cex*shrink; m = measure(cex)}
+      src = match(net$links$source, igraph::V(g)$name); trg = match(net$links$target, igraph::V(g)$name)
+      graphics::arrows(x0 = xs[src] + m$w[src]/2, y0 = ys[src], x1 = xs[trg] - m$w[trg]/2, y1 = ys[trg],
+                       length = 0.08, col = net$links$color, lwd = 1.3,
+                       lty = ifelse(net$links$relation == 'boosted by', 2, 1))
+      graphics::rect(xs - m$w/2, ys - m$h/2, xs + m$w/2, ys + m$h/2,
+                     col = pal[match(igraph::V(g)$type, types)], border = 'grey30')
+      graphics::text(xs, ys, labels, cex = cex)
+      lcex = 0.8
+      xmid = graphics::grconvertX(0.5, 'nfc')
+      graphics::legend(xmid, graphics::grconvertY(0, 'nfc'), xjust = 0.5, yjust = 0, legend = types, fill = pal, text.width = graphics::strwidth(types, cex = 0.8),
+                       bty = 'n', cex = lcex, horiz = TRUE, xpd = NA)
+      graphics::legend(xmid, graphics::grconvertY(0.045, 'nfc'), xjust = 0.5, yjust = 0,
+                       legend = c('feeds (transformer)', 'boosted by (gradient transformer)'),
+                       col = link_colors[c('feeds', 'boosted by')], lty = c(1, 2), lwd = 1.3, bty = 'n', cex = lcex,
+                       horiz = TRUE, xpd = NA)
       invisible(net)
     },
 
