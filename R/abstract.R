@@ -48,7 +48,7 @@ library(magrittr)
 #'   \item{\code{deep_copy(name_suffix = NULL)}}{Copy of the model, its transformers and gradient transformers.}
 #'   \item{\code{info.features()}, \code{info.model()}, \code{info.transformers()}, \code{info.edge_list()}}{Information about the features and the network of models.}
 #'   \item{\code{info.network()}}{\code{list(nodes, links)} of the model network: transformers feed their parent, gradient transformers are boosted by it.}
-#'   \item{\code{plot.network(plotter)}}{Draws the network: \code{'visNetwork'} (interactive, through rvis if installed, otherwise visNetwork) or \code{'igraph'} (static).}
+#'   \item{\code{plot.network(plotter, legend)}}{Draws the network: \code{'DiagrammeR'} (default; Graphviz layout, boxes fitted to labels, hover a node for details), \code{'visNetwork'} (interactive, through rvis if installed, otherwise visNetwork) or \code{'igraph'} (static). Falls back to the next installed package.}
 #'   \item{\code{model.save(path)}, \code{model.load(path)}}{Save or load native model files; use \code{\link{model_save}} and \code{\link{model_load}}.}
 #'   \item{\code{supports_gradient_transformers()}}{TRUE if training uses the output of gradient transformers.}
 #' }
@@ -803,17 +803,27 @@ MODEL = setRefClass('MODEL',
     },
 
     # Draws the network of models.
-    # plotter = 'visNetwork': interactive htmlwidget, through package rvis if installed, otherwise package visNetwork.
-    # plotter = 'igraph': static plot with package igraph.
-    # Arguments in ... are passed to rvis as config (or to visNetwork::visNetwork / igraph's plot()).
-    plot.network = function(plotter = c('visNetwork', 'igraph'), ...){
+    # plotter = 'DiagrammeR': Graphviz layout through DiagrammeR::grViz() (htmlwidget, hover a node for details).
+    # plotter = 'visNetwork': interactive htmlwidget (drag and zoom), through package rvis if installed, otherwise package visNetwork.
+    # plotter = 'igraph': static plot with base graphics, laid out with package igraph.
+    # If the chosen package is not installed, the next available one in this order is used.
+    # Arguments in ... are passed to DiagrammeR::grViz, rvis (as config) or visNetwork::visNetwork; for igraph, main and cex.
+    plot.network = function(plotter = c('DiagrammeR', 'visNetwork', 'igraph'), legend = TRUE, ...){
       plotter = match.arg(plotter)
       net = info.network()
       link_colors = c(feeds = '#7f8c8d', 'boosted by' = '#e67e22', prediction = '#2c3e50')
       net$links$color = ifelse(net$links$relation %in% names(link_colors), link_colors[net$links$relation], '#3498db')
-      if(plotter == 'visNetwork' && !requireNamespace('visNetwork', quietly = TRUE) && requireNamespace('igraph', quietly = TRUE)){
-        message("Package 'visNetwork' is not installed: drawing a static igraph chart instead.")
-        plotter = 'igraph'
+      plotters = c('DiagrammeR', 'visNetwork', 'igraph')
+      available = plotters[sapply(plotters, requireNamespace, quietly = TRUE)]
+      assert(length(available) > 0, "plot.network() needs one of the packages 'DiagrammeR', 'visNetwork' or 'igraph'")
+      if(!plotter %in% available){
+        alt = available[which(match(available, plotters) > match(plotter, plotters))[1]]
+        if(is.na(alt)) alt = available[1]
+        message(sprintf("Package '%s' is not installed: using '%s' instead.", plotter, alt))
+        plotter = alt
+      }
+      if(plotter == 'DiagrammeR'){
+        return(DiagrammeR::grViz(network_dot(net, legend = legend), ...))
       }
       if(plotter == 'visNetwork'){
         if(requireNamespace('rvis', quietly = TRUE) && requireNamespace('visNetwork', quietly = TRUE)){
@@ -831,13 +841,13 @@ MODEL = setRefClass('MODEL',
         return(visNetwork::visNetwork(nodes, edges, ...) %>%
                  visNetwork::visNodes(margin = 10) %>%
                  visNetwork::visHierarchicalLayout(direction = 'LR', sortMethod = 'directed') %>%
-                 visNetwork::visLegend(useGroups = TRUE) %>%
+                 visNetwork::visLegend(enabled = legend, useGroups = TRUE) %>%
                  visNetwork::visOptions(highlightNearest = TRUE))
       }
       assert(requireNamespace('igraph', quietly = TRUE), "plotter = 'igraph' needs package 'igraph'")
       g = igraph::graph_from_data_frame(net$links[c('source', 'target', 'relation')], vertices = net$nodes[c('id', 'type', 'label')])
       types = unique(net$nodes$type)
-      pal   = grDevices::hcl.colors(max(3, length(types)), 'Set 2')[seq_along(types)]
+      pal   = unname(network_palette(types))
       # left to right: column = longest path from INPUT, rows ordered by igraph's Sugiyama layout to reduce crossings
       sorted = igraph::topo_sort(g, mode = 'out')
       depth  = stats::setNames(rep(0, igraph::vcount(g)), igraph::V(g)$name)
@@ -852,7 +862,7 @@ MODEL = setRefClass('MODEL',
       cex  = if(is.null(args$cex)) 0.85 else args$cex
       labels = igraph::V(g)$label
       # draw with base graphics so every box is sized to fit its own label; legends go in the bottom margin
-      op = graphics::par(mar = c(4, 0.5, ifelse(is.null(args$main), 0.5, 2.5), 0.5))
+      op = graphics::par(mar = c(ifelse(legend, 4, 0.5), 0.5, ifelse(is.null(args$main), 0.5, 2.5), 0.5))
       on.exit(graphics::par(op), add = TRUE)
       graphics::plot.new()
       graphics::plot.window(xlim = c(-0.3, max(xs) + 0.3), ylim = c(min(ys) - 0.55, max(ys) + 0.55))
@@ -872,6 +882,7 @@ MODEL = setRefClass('MODEL',
       graphics::rect(xs - m$w/2, ys - m$h/2, xs + m$w/2, ys + m$h/2,
                      col = pal[match(igraph::V(g)$type, types)], border = 'grey30')
       graphics::text(xs, ys, labels, cex = cex)
+      if(!legend) return(invisible(net))
       lcex = 0.8
       xmid = graphics::grconvertX(0.5, 'nfc')
       graphics::legend(xmid, graphics::grconvertY(0, 'nfc'), xjust = 0.5, yjust = 0, legend = types, fill = pal, text.width = graphics::strwidth(types, cex = 0.8),

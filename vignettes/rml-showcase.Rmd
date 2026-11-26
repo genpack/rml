@@ -20,6 +20,7 @@ has_pyxgb   = has_sklearn && reticulate::py_module_available("xgboost")
 has_dt      = has("DT")
 has_plotly  = has("plotly") && has("crosstalk") && has("reshape2")
 has_vis     = has("visNetwork")
+has_dgr     = has("DiagrammeR")
 has_igraph  = has("igraph")
 has_keras   = has("keras") && has("tensorflow")
 knitr::opts_chunk$set(eval = has_xgboost)
@@ -31,7 +32,7 @@ deep network of models (encoders feeding classifiers, feeding an ensemble, feedi
 and draws it.
 
 Interactive charts use htmlwidgets: **DT** tables, **plotly** charts linked with **crosstalk** filters,
-and **visNetwork** network graphs (drawn through package **rvis** when it is installed). When a
+and **DiagrammeR** network graphs laid out by Graphviz. When a
 package is missing, the vignette shows a static chart instead. The scikit-learn models need Python;
 see `vignette("rml-troubleshooting")` to set it up.
 
@@ -307,16 +308,18 @@ networks with `performance.cv()`, shows whether the extra levels pay off.
 ### Drawing the network
 
 `plot.network()` draws the network. Solid grey links show a transformer feeding its parent; the dashed
-orange link, labelled "boosted by", goes from a base model (a gradient transformer) to the model that boosts it. With visNetwork installed
-the graph is interactive: drag nodes, zoom, and hover for each model's class, description and
-number of outputs.
+orange link goes from a base model (a gradient transformer) to the model that boosts it. By default
+the chart uses DiagrammeR, whose Graphviz layout places each model in a column after its inputs and
+keeps links from crossing where it can. Hover over a model for its class, description and number of
+outputs.
 
-```{r network, eval = has_xgboost && (has_vis || has_igraph), fig.width = 10, fig.height = 8, out.width = '100%'}
+```{r network, eval = has_xgboost && (has_dgr || has_vis || has_igraph), fig.width = 10, fig.height = 8, out.width = '100%'}
 final$plot.network()
 ```
 
-When visNetwork is not installed, `plot.network()` draws the same network as a static chart with
-igraph instead. You can also ask for the static chart with `plot.network(plotter = 'igraph')`.
+Two other plotters are available. `plot.network('visNetwork')` gives a chart whose nodes can be
+dragged and zoomed, and `plot.network('igraph')` a static chart. If the chosen package is not
+installed, `plot.network()` uses the next one in the order DiagrammeR, visNetwork, igraph.
 
 The nodes and links behind the chart are available with `info.network()`, for example to draw the
 network with another tool:
@@ -346,7 +349,7 @@ ui = fluidPage(
       tabsetPanel(
         tabPanel('Scores', DT::DTOutput('scores')),
         tabPanel('ROC', plotOutput('roc', height = 450)),
-        tabPanel('Network', visNetwork::visNetworkOutput('network', height = 500))))))
+        tabPanel('Network', DiagrammeR::grVizOutput('network', height = 500))))))
 
 server = function(input, output){
   pick = function(name) if(name == 'final') final else zoo[[which(sapply(zoo, function(m) m$name) == name)]]
@@ -360,7 +363,7 @@ server = function(input, output){
     }
     legend('bottomright', input$models, col = cols, lwd = 2, bty = 'n')
   })
-  output$network = visNetwork::renderVisNetwork(pick(input$network)$plot.network('visNetwork'))
+  output$network = DiagrammeR::renderGrViz(pick(input$network)$plot.network('DiagrammeR'))
 }
 shinyApp(ui, server)
 ```

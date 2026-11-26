@@ -175,3 +175,42 @@ python_args = function(config, reserved_words = character()){
   }
   args
 }
+
+# Colours of node types in network charts, shared by all plotters of plot.network()
+network_palette = function(types){
+  stats::setNames(grDevices::hcl.colors(max(3, length(types)), 'Set 2')[seq_along(types)], types)
+}
+
+# Graphviz DOT code of a model network (the output of MODEL$info.network()), drawn by DiagrammeR::grViz().
+# Nodes are boxes sized to their labels and coloured by type, laid out left to right by Graphviz's layered
+# ('dot') layout. Hovering over a node shows its description.
+network_dot = function(net, legend = TRUE, fontsize = 11, rankdir = 'LR'){
+  q   = function(s) paste0('"', gsub('"', '\\\\"', gsub('\\\\', '\\\\\\\\', s)), '"')
+  esc = function(s) gsub('\n', '\\\\n', s)
+  html = function(s) gsub('>', '&gt;', gsub('<', '&lt;', gsub('&', '&amp;', s)))
+  types = unique(net$nodes$type)
+  pal   = network_palette(types)
+  tooltip = gsub('<[^>]+>', '', gsub('<br>', '\n', net$nodes$title))
+  nodes = sprintf('  %s [label = %s, fillcolor = "%s", tooltip = %s]', q(net$nodes$id), esc(q(net$nodes$label)),
+                  pal[net$nodes$type], esc(q(tooltip)))
+  boost = net$links$relation == 'boosted by'
+  links = sprintf('  %s -> %s [color = "%s", style = %s, tooltip = %s]', q(net$links$source), q(net$links$target),
+                  net$links$color, ifelse(boost, 'dashed', 'solid'),
+                  q(ifelse(boost, paste(net$links$source, 'is boosted by', net$links$target),
+                    ifelse(net$links$relation == 'prediction', paste('prediction of', net$links$source),
+                           paste(net$links$source, net$links$relation, net$links$target)))))
+  lines = c('digraph rml {',
+            sprintf('  graph [rankdir = %s, nodesep = 0.25, ranksep = 0.55, fontname = "Helvetica", bgcolor = "transparent"]', rankdir),
+            sprintf('  node [shape = box, style = "rounded,filled", fontname = "Helvetica", fontsize = %s, color = "#4d4d4d", margin = "0.15,0.06"]', fontsize),
+            '  edge [arrowsize = 0.7, penwidth = 1.2]',
+            nodes, links)
+  if(legend){
+    cells = paste0(sprintf('<TD BGCOLOR="%s">%s</TD>', pal, html(types)), collapse = '')
+    lines = c(lines, paste0('  graph [labelloc = "b", labeljust = "c", fontsize = ', fontsize - 1, ', label = <',
+      '<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="3" CELLPADDING="4"><TR>', cells, '</TR>',
+      '<TR><TD COLSPAN="', length(types), '" BORDER="0">',
+      '<FONT COLOR="#7f8c8d">&#8212;&#8212; feeds (transformer)</FONT>&#160;&#160;&#160;&#160;',
+      '<FONT COLOR="#e67e22">- - - boosted by (gradient transformer)</FONT></TD></TR></TABLE>>]'))
+  }
+  paste(c(lines, '}'), collapse = '\n')
+}
