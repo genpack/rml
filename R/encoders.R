@@ -1,4 +1,24 @@
 
+#' @title One-hot encoder (fastDummies)
+#' @name ENC.FASTDUMMIES.OHE-class
+#' @aliases ENC.FASTDUMMIES.OHE
+#' @description
+#' Creates one 0/1 column per value of each categorical column with between 3 and \code{max_domain} distinct values.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{max_domain}}{Maximum number of distinct values of an encoded column. Default 25.}
+#' }
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), city = sample(c('A', 'B', 'C'), 300, replace = TRUE))
+#' y = as.numeric(X$a + (X$city == 'A') + rnorm(300) > 0)
+#' m = ENC.FASTDUMMIES.OHE()
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export ENC.FASTDUMMIES.OHE
 ENC.FASTDUMMIES.OHE = setRefClass('ENC.FASTDUMMIES.OHE', contains = "MODEL",
   methods = list(
@@ -55,6 +75,11 @@ ENC.FASTDUMMIES.OHE = setRefClass('ENC.FASTDUMMIES.OHE', contains = "MODEL",
 
 
 # Converts categorical columns to a character matrix (same text values at fit and predict time)
+#' @title Text matrix for one-hot encoding
+#' @param X \code{data.frame} of categorical columns.
+#' @return Character matrix.
+#' @keywords internal
+#' @export
 ohe_input = function(X){
   if(inherits(X, 'WIDETABLE')){X = wt_as_data_frame(X)}
   X = as.data.frame(X)
@@ -62,6 +87,29 @@ ohe_input = function(X){
   as.matrix(X)
 }
 
+#' @title One-hot encoder (scikit-learn)
+#' @name ENC.SKLEARN.OHE-class
+#' @aliases ENC.SKLEARN.OHE
+#' @description
+#' Wraps \code{sklearn.preprocessing.OneHotEncoder} for categorical columns with at most \code{max_domain} distinct values.
+#' Values are encoded as text, values not seen in training give all-zero rows (\code{handle_unknown = 'ignore'}), and
+#' output columns are named \code{<column>_<value>}.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#'
+#' Inherits from \code{\link{TRM.SKLEARN-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{max_domain}}{Maximum number of distinct values of an encoded column. Default 25.}
+#' }
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), city = sample(c('A', 'B', 'C'), 300, replace = TRUE))
+#' y = as.numeric(X$a + (X$city == 'A') + rnorm(300) > 0)
+#' m = ENC.SKLEARN.OHE()
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export ENC.SKLEARN.OHE
 ENC.SKLEARN.OHE = setRefClass(
   'ENC.SKLEARN.OHE',
@@ -102,6 +150,28 @@ ENC.SKLEARN.OHE = setRefClass(
 ))
 
 
+#' @title Wrapper for encoders of the Python package category_encoders
+#' @name ENC.CATEGORY_ENCODERS-class
+#' @aliases ENC.CATEGORY_ENCODERS
+#' @description
+#' Superclass of the category_encoders based classes. Encodes categorical (character, factor, integer) columns.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{model.module}}{category_encoders sub-module.}
+#'   \item{\code{model.class}}{Encoder class.}
+#' }
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), city = sample(c('A', 'B', 'C'), 300, replace = TRUE))
+#' y = as.numeric(X$a + (X$city == 'A') + rnorm(300) > 0)
+#' m = ENC.CATEGORY_ENCODERS(model.module = 'target_encoder', model.class = 'TargetEncoder')
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export ENC.CATEGORY_ENCODERS
 ENC.CATEGORY_ENCODERS = setRefClass(
   'ENC.CATEGORY_ENCODERS',
@@ -187,6 +257,22 @@ ENC.CATEGORY_ENCODERS = setRefClass(
 
 ####
 
+#' @title CatBoost encoder (category_encoders)
+#' @name ENC.CATEGORY_ENCODERS.CATB-class
+#' @aliases ENC.CATEGORY_ENCODERS.CATB
+#' @description
+#' Wraps \code{category_encoders.cat_boost.CatBoostEncoder}. Its arguments can be passed.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#'
+#' Inherits from \code{\link{ENC.CATEGORY_ENCODERS-class}}.
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), city = sample(c('A', 'B', 'C'), 300, replace = TRUE))
+#' y = as.numeric(X$a + (X$city == 'A') + rnorm(300) > 0)
+#' m = ENC.CATEGORY_ENCODERS.CATB()
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export ENC.CATEGORY_ENCODERS.CATB
 ENC.CATEGORY_ENCODERS.CATB = setRefClass(
   'ENC.CATEGORY_ENCODERS.CATB',
@@ -205,6 +291,22 @@ ENC.CATEGORY_ENCODERS.CATB = setRefClass(
     }
 ))
 
+#' @title Target encoder (category_encoders)
+#' @name ENC.CATEGORY_ENCODERS.TE-class
+#' @aliases ENC.CATEGORY_ENCODERS.TE
+#' @description
+#' Wraps \code{category_encoders.target_encoder.TargetEncoder}. Its arguments can be passed.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#'
+#' Inherits from \code{\link{ENC.CATEGORY_ENCODERS-class}}.
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), city = sample(c('A', 'B', 'C'), 300, replace = TRUE))
+#' y = as.numeric(X$a + (X$city == 'A') + rnorm(300) > 0)
+#' m = ENC.CATEGORY_ENCODERS.TE()
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export ENC.CATEGORY_ENCODERS.TE
 ENC.CATEGORY_ENCODERS.TE = setRefClass(
   'ENC.CATEGORY_ENCODERS.TE',
@@ -223,6 +325,22 @@ ENC.CATEGORY_ENCODERS.TE = setRefClass(
 
 
 
+#' @title James-Stein encoder (category_encoders)
+#' @name ENC.CATEGORY_ENCODERS.JSTN-class
+#' @aliases ENC.CATEGORY_ENCODERS.JSTN
+#' @description
+#' Wraps \code{category_encoders.james_stein.JamesSteinEncoder}. Its arguments can be passed.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#'
+#' Inherits from \code{\link{ENC.CATEGORY_ENCODERS-class}}.
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), city = sample(c('A', 'B', 'C'), 300, replace = TRUE))
+#' y = as.numeric(X$a + (X$city == 'A') + rnorm(300) > 0)
+#' m = ENC.CATEGORY_ENCODERS.JSTN()
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export ENC.CATEGORY_ENCODERS.JSTN
 ENC.CATEGORY_ENCODERS.JSTN = setRefClass(
   'ENC.CATEGORY_ENCODERS.JSTN',
@@ -240,6 +358,22 @@ ENC.CATEGORY_ENCODERS.JSTN = setRefClass(
 ))
 
 
+#' @title Helmert encoder (category_encoders)
+#' @name ENC.CATEGORY_ENCODERS.HLMRT-class
+#' @aliases ENC.CATEGORY_ENCODERS.HLMRT
+#' @description
+#' Wraps \code{category_encoders.helmert.HelmertEncoder}. Its arguments can be passed.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#'
+#' Inherits from \code{\link{ENC.CATEGORY_ENCODERS-class}}.
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), city = sample(c('A', 'B', 'C'), 300, replace = TRUE))
+#' y = as.numeric(X$a + (X$city == 'A') + rnorm(300) > 0)
+#' m = ENC.CATEGORY_ENCODERS.HLMRT()
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export ENC.CATEGORY_ENCODERS.HLMRT
 ENC.CATEGORY_ENCODERS.HLMRT = setRefClass(
   'ENC.CATEGORY_ENCODERS.HLMRT',
@@ -256,6 +390,28 @@ ENC.CATEGORY_ENCODERS.HLMRT = setRefClass(
     }
 ))
 
+#' @title Feature encoder: numeric aggregates per category
+#' @name ENC.RML.FE-class
+#' @aliases ENC.RML.FE
+#' @description
+#' For each categorical column and each numeric column, outputs the aggregate (e.g. mean) of the numeric column within
+#' the row's category, as learned in training. Output columns are named \code{<categorical>_<numeric>}.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{aggregator}}{Name of the aggregate function. Default \code{'mean'}.}
+#'   \item{\code{categoricals}}{Categorical columns to use. Default all.}
+#'   \item{\code{action_by_original}}{Optional function of (aggregate, original value), e.g. a difference, applied to each output.}
+#' }
+#' @examples
+#' X = data.frame(a = rnorm(300), city = sample(c('A', 'B', 'C'), 300, replace = TRUE))
+#' y = as.numeric(X$a + (X$city == 'A') + rnorm(300) > 0)
+#' m = ENC.RML.FE(aggregator = 'mean')
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' @export ENC.RML.FE
 ENC.RML.FE = setRefClass(
   'ENC.RML.FE', contains = 'MODEL',
   methods = list(
@@ -314,6 +470,20 @@ ENC.RML.FE = setRefClass(
 )
 
 # Replaces categorical features with class ratios associated with each category
+#' @title Target encoder
+#' @name ENC.RML.TE-class
+#' @aliases ENC.RML.TE
+#' @description
+#' Replaces each categorical (character, factor or integer) column by the rate of class 1 within its category in the training
+#' data. Categories not seen in training get the median rate.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @examples
+#' X = data.frame(a = rnorm(300), city = sample(c('A', 'B', 'C'), 300, replace = TRUE))
+#' y = as.numeric(X$a + (X$city == 'A') + rnorm(300) > 0)
+#' m = ENC.RML.TE()
+#' m$fit(X, y)
+#' head(m$predict(X))
 #' @export ENC.RML.TE
 ENC.RML.TE = setRefClass('ENC.RML.TE', contains = 'MODEL',
                          methods = list(
@@ -353,6 +523,29 @@ ENC.RML.TE = setRefClass('ENC.RML.TE', contains = 'MODEL',
 )
 
 # Todo: does not save joblib for Python segment models
+#' @title Model encoder: one model per category
+#' @name ENC.RML.ME-class
+#' @aliases ENC.RML.ME
+#' @description
+#' For each categorical column, fits a separate model (of class \code{model.class}) on the rows of each category value
+#' with more than \code{min_rows} rows, plus a global model. Each row is scored by the model of its category (or the global one).
+#' Outputs one column per categorical column.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{model.class}}{Class name of the segment models, e.g. \code{'CLS.STATS.LR'}.}
+#'   \item{\code{model.config}}{List of arguments for the segment models.}
+#'   \item{\code{min_rows}}{Minimum rows for a category to get its own model. Default 100.}
+#'   \item{\code{segmentation_features}}{Categorical columns to segment by. Default all.}
+#' }
+#' @examples
+#' X = data.frame(a = rnorm(300), city = sample(c('A', 'B', 'C'), 300, replace = TRUE))
+#' y = as.numeric(X$a + (X$city == 'A') + rnorm(300) > 0)
+#' m = ENC.RML.ME(model.class = 'CLS.STATS.LR', model.config = list(features.include = 'a', verbose = 0), min_rows = 50)
+#' m$fit(X, y)
+#' head(m$predict(X))
 #' @export ENC.RML.ME
 ENC.RML.ME = setRefClass('ENC.RML.ME', contains = 'MODEL',
                          methods = list(
@@ -424,6 +617,15 @@ ENC.RML.ME = setRefClass('ENC.RML.ME', contains = 'MODEL',
 
 # previously: SEGMENTER.MODEL.BOOSTER
 # Model Encoder Booster
+#' @title Model encoder with fallback to the global model
+#' @name ENC.RML.MEB-class
+#' @aliases ENC.RML.MEB
+#' @description
+#' Like \code{\link{ENC.RML.ME-class}}, but holds out 30\% of the training rows and drops a category's model when the global
+#' model scores better (gini) on that category.
+#'
+#' Inherits from \code{\link{ENC.RML.ME-class}}.
+#' @export ENC.RML.MEB
 ENC.RML.MEB =
   setRefClass('ENC.RML.MEB',
               contains = 'ENC.RML.ME',

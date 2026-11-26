@@ -2,19 +2,16 @@
 % Please edit documentation in R/mltools.R
 \name{model_types}
 \alias{model_types}
-\title{Returns model type and types of its transformers recursively}
+\title{Model types of a model network}
 \usage{
 model_types(model)
 }
+\arguments{
+\item{model}{Any object inheriting from class \code{MODEL}.}
+}
 \value{
-\code{character} vector containing model type and all its transformer types
+\code{character} vector containing model type and all its transformer types.
 }
 \description{
-Returns model type and types of its transformers recursively
+Returns the type of the model and of its transformers, recursively.
 }
-\section{Fields}{
-
-\describe{
-\item{\code{model}}{Any object inheriting from class \code{MODEL}}
-}}
-

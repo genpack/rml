@@ -6,15 +6,12 @@
 \usage{
 na2median(X)
 }
+\arguments{
+\item{X}{\code{data.frame} or \code{matrix}: Input table to be imputed}
+}
 \value{
 \code{data.frame} with missing values replaced by imputed values
 }
 \description{
 Imputes missing values with the median of non-existing values in each column
 }
-\section{Fields}{
-
-\describe{
-\item{\code{X}}{\code{data.frame} or \code{matrix}: Input table to be imputed}
-}}
-

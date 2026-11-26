@@ -6,15 +6,12 @@
 \usage{
 ranker(X)
 }
+\arguments{
+\item{X}{\code{data.frame} or \code{matrix}: Input table to be ranked}
+}
 \value{
 \code{data.frame} containing ranked values. Suffix \code{_rank} is added to each column header.
 }
 \description{
 This function gets a data.frame and replaces each cell with its rank among all the cells in its column.
 }
-\section{Fields}{
-
-\describe{
-\item{\code{X}}{\code{data.frame} or \code{matrix}: Input table to be ranked}
-}}
-

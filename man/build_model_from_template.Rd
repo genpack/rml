@@ -4,8 +4,14 @@
 \alias{build_model_from_template}
 \title{builds a model object from a template which is given in a list of templates.}
 \usage{
-build_model_from_template(template_name, model_name = NULL,
-  features = NULL, templates = default_templates, metric = "gini")
+build_model_from_template(
+  template_name,
+  model_name = NULL,
+  features = NULL,
+  templates = default_templates,
+  metric = "gini",
+  max_depth = 4
+)
 }
 \arguments{
 \item{template_name}{\code{character}: Specify template name. Must be among the names of the list given via argument \code{templates}}
@@ -17,6 +23,10 @@ The models's config parameter \code{features.include} will be set accordingly to
 features can also be a data frame of features (output of function evaluate_features)}
 
 \item{templates}{\code{list}: A named list of templates. Argument \code{template_name} must be among the names of this list.}
+
+\item{metric}{\code{character}: metric used to rank features when \code{features} is a table from \code{\link{evaluate_features}}.}
+
+\item{max_depth}{\code{integer}: Maximum depth of nested transformers. Prevents endless recursion when templates refer to each other.}
 }
 \value{
 A object inheriting from class \code{MODEL}

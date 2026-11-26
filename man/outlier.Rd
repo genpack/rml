@@ -6,19 +6,16 @@
 \usage{
 outlier(x, sd_threshold = 4, recursive = F)
 }
+\arguments{
+\item{x}{\code{numeric} : Input vector}
+
+\item{sd_threshold}{\code{numeric} : Standard Deviation threshold as a criteria for outlier determination.}
+
+\item{recursive}{\code{logical} : TRUE if the process of outlier detection should continue with eliminated outliers}
+}
 \value{
 logical vector specifying which element of the given vector \code{x} is outlier.
 }
 \description{
 This function gets a vector and returns a vector of logical which is TRUE if the corresponding value is an outlier
 }
-\section{Fields}{
-
-\describe{
-\item{\code{x}}{\code{numeric} : Input vector}
-
-\item{\code{sd_threshold}}{\code{numeric} : Standard Deviation threshold as a criteria for outlier determination.}
-
-\item{\code{recursive}}{\code{logical} : TRUE if the process of outlier detection should continue with eliminated outliers}
-}}
-

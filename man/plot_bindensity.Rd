@@ -7,6 +7,11 @@ another density plot for elements for which \code{y} is 1 in red.}
 \usage{
 plot_bindensity(x, y)
 }
+\arguments{
+\item{x}{\code{numeric} vector.}
+
+\item{y}{binary vector of the same length.}
+}
 \description{
 This function plots density of vector \code{x} for elements for which \code{y} is 0 in black and
 another density plot for elements for which \code{y} is 1 in red.

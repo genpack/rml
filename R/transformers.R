@@ -52,6 +52,31 @@
 #   PCA: Principal Component Analysis Mapper
 #   NRM: Normalizer
 
+#' @title Wrapper for scikit-learn transformers and models
+#' @name TRM.SKLEARN-class
+#' @aliases TRM.SKLEARN
+#' @description
+#' Superclass of all scikit-learn based classes. It creates \code{sklearn.<model.module>.<model.class>} with the
+#' non-reserved config arguments, fits it on the numeric matrix of the input and calls its \code{transform()} method
+#' at prediction. Python models are saved with joblib by \code{model_save()}.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{model.module}}{sklearn sub-module, e.g. \code{'preprocessing'}.}
+#'   \item{\code{model.class}}{sklearn class, e.g. \code{'StandardScaler'}.}
+#'   \item{\code{python_address}}{Path of the Python executable.}
+#' }
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = TRM.SKLEARN(model.module = 'preprocessing', model.class = 'StandardScaler')
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export TRM.SKLEARN
 TRM.SKLEARN = setRefClass(
   'TRM.SKLEARN',
@@ -140,6 +165,14 @@ TRM.SKLEARN = setRefClass(
 
 
 
+#' @title Categorical concatenator
+#' @name CATCONCATER-class
+#' @aliases CATCONCATER
+#' @description
+#' Outputs one column joining the values of all categorical columns of a row with \code{'-'}.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @export CATCONCATER
 CATCONCATER = setRefClass('CATCONCATER', contains = "MODEL",
    methods = list(
      initialize = function(...){

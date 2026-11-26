@@ -4,7 +4,18 @@
 # The barchart shows counts of each class for all cases for which the selected feature values 
 # fall into the specified value range
 # packages plotly and crossbar are required
-#' @export 
+#' @title Interactive class counts by feature threshold
+#' @description
+#' Interactive plotly bar or pie chart of the count of each binary class for rows whose feature value is below a threshold chosen with a slider (requires plotly, crosstalk, reshape2).
+#' @param X \code{data.frame} of features.
+#' @param y Binary target.
+#' @param ncuts Number of thresholds.
+#' @param C0_tag,C1_tag Class labels.
+#' @param round_digits Rounding of thresholds.
+#' @param horizontal \code{logical} horizontal bars.
+#' @return A crosstalk widget.
+#' @rdname binary_class_plots
+#' @export
 binary_class_bar = function(X, y, ncuts = 1000, C0_tag = 'C0', C1_tag = 'C1', round_digits = 2, horizontal = T){
   
   cbind(X, label = y) %>% bucket_moments(colnames(X), 'label', ncuts = ncuts) -> res
@@ -35,7 +46,8 @@ binary_class_bar = function(X, y, ncuts = 1000, C0_tag = 'C0', C1_tag = 'C1', ro
   return(fig)
 }
 
-#' @export 
+#' @rdname binary_class_plots
+#' @export
 binary_class_pie = function(X, y, ncuts = 1000, C0_tag = 'C0', C1_tag = 'C1', round_digits = 2, horizontal = T){
   
   cbind(X, label = y) %>% bucket_moments(colnames(X), 'label', ncuts = ncuts) -> res
@@ -61,6 +73,8 @@ binary_class_pie = function(X, y, ncuts = 1000, C0_tag = 'C0', C1_tag = 'C1', ro
 #' This function plots density of vector \code{x} for elements for which \code{y} is 0 in black and
 #' another density plot for elements for which \code{y} is 1 in red.
 #' 
+#' @param x \code{numeric} vector.
+#' @param y binary vector of the same length.
 #' @export
 plot_bindensity = function(x, y){
   rmv = which(x %>% outlier(recursive = T))

@@ -52,34 +52,46 @@
 # 1.4.6 (06 March 2023)     - Minor bug fixed in mappers. Used to destroy feature names when a tibble was passed for training.
 # 1.4.7 (08 June 2023)      - clustering.R changed to version 1.2.7
 
+# 1.5.0                     - Bug fixes and speed-ups, xgboost 3.x support, gradient transformers for CLS.STATS.LR,
+#                             roxygen documentation, vignettes and tests.
+
 # Description for Roxygen
 
-#' rml
+#' rml: machine learning pipelines built from models and transformers
 #'
-#' This package is a tool-box for machine learning and prediction.
+#' rml wraps algorithms from R and Python packages (stats, xgboost, keras, scikit-learn, category_encoders and
+#' others) in reference classes with one interface: \code{model$fit(X, y)} and \code{model$predict(X)}.
+#' Models can be chained: a model's \code{transformers} produce its input features, and its
+#' \code{gradient_transformers} are the models it is boosted by.
+#'
+#' Start with \code{vignette('rml-getting-started', package = 'rml')} and see \code{\link{MODEL-class}} for
+#' the settings shared by all models.
 #' @author Nicholas Berta
-#'
-#' @docType package
-#' @name rml
-
-# If you changed default_templates, run this before committing:
-# default_templates %>% yaml::write_yaml('data/default_templates.yaml')
-
-# Run these lines before building the package:
-# yaml::read_yaml('data/default_templates.yaml') -> default_templates
-# save(default_templates, file = 'data/default_templates.RData')
-
+#' @keywords internal
 #' @import magrittr
 #' @import rutils
-#' @import rbig
-#' 
+#' @rawNamespace import(dplyr, except = c(pick))
+#' @importFrom methods new setRefClass
+#' @importFrom foreach foreach %dopar%
+#' @importFrom parallel stopCluster detectCores
+#' @importFrom stats sd quantile median cor predict binomial glm lm as.formula runif rnorm rgeom setNames prcomp kmeans chisq.test dist hclust cutree na.omit var pchisq pf as.dist density
+#' @importFrom utils head tail object.size read.csv write.csv txtProgressBar setTxtProgressBar
+#' @importFrom graphics lines
+"_PACKAGE"
+
+#' Default model templates
+#'
+#' Named list of templates used by \code{\link{build_model_from_template}}. Each template gives a model
+#' \code{class} and sets or ranges of config values to draw from.
+#' @format Named \code{list}.
+"default_templates"
+
 #' @include abstract.R
 #' @include mltools.R
 #' @include transformers.R
 #' @include encoders.R
 #' @include mappers.R
 #' @include binners.R
-#' @include mappers.R
 #' @include feature_generators.R
 #' @include function_transformers.R
 #' @include classifiers.R
@@ -87,6 +99,5 @@
 #' @include gentools.R
 #' @include ensemblers.R
 #' @include boosters.R
-#' 
-#' 
+NULL
 

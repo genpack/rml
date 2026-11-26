@@ -1,5 +1,19 @@
 
 # previously ENS.RML.BS
+#' @title Binary supervisor ensembler
+#' @name ENS.RML.BS-class
+#' @aliases ENS.RML.BS
+#' @description
+#' Learns which of its \code{pupils} (model outputs among the input columns) to trust for each row: a supervisor model
+#' predicts the best pupil, and that pupil's output is returned.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{model_class}}{Class of the supervisor model. Default \code{'CLS.SKLEARN.XGB'}.}
+#'   \item{\code{model_config}}{Arguments of the supervisor model.}
+#' }
 #' @export ENS.RML.BS
 ENS.RML.BS = setRefClass('ENS.RML.BS', contains = "MODEL",
    methods = list(
@@ -34,6 +48,25 @@ ENS.RML.BS = setRefClass('ENS.RML.BS', contains = "MODEL",
    )
 )
 
+#' @title Aggregating ensembler
+#' @name ENS.RML.AGGR-class
+#' @aliases ENS.RML.AGGR
+#' @description
+#' Outputs a row-wise aggregate (default the mean) of its numeric inputs. Give it classifiers as transformers to average
+#' their probabilities. It is a classifier, so \code{return}, thresholds and \code{performance()} apply.
+#'
+#' Inherits from \code{\link{CLASSIFIER-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{aggregator}}{Name of the aggregate function. Default \code{'mean'}.}
+#' }
+#' @examples
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = ENS.RML.AGGR(verbose = 0, transformers = list(CLS.STATS.LR(name = 'a', features.include = 'a'), CLS.STATS.LR(name = 'b')))
+#' m$fit(X, y)
+#' head(m$predict(X))
 #' @export ENS.RML.AGGR
 ENS.RML.AGGR = setRefClass('ENS.RML.AGGR', contains = "CLASSIFIER",
    methods = list(

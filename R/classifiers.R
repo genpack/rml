@@ -1,6 +1,32 @@
 #' @include transformers.R
 
-#' @export
+#' @title Abstract base class of binary classifiers
+#' @name CLASSIFIER-class
+#' @aliases CLASSIFIER
+#' @description
+#' All rml classifiers are binary: \code{model.predict()} returns the probability of class 1, and the
+#' \code{return} setting converts it to log-odds or 0/1 classes. When the classifier has gradient
+#' transformers their output (log-odds) is added before that conversion. Inherit from this class to write
+#' your own classifier: implement \code{model.fit(X, y)} and \code{model.predict(X)}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{return}}{\code{'probs'} (default), \code{'logit'} or \code{'class'}.}
+#'   \item{\code{return_type_in_output}}{Add the return type to the output column name. Default TRUE.}
+#'   \item{\code{threshold}}{Probability threshold for \code{return = 'class'}. Default 0.5.}
+#'   \item{\code{threshold_determination}}{\code{'set_as_config'} (default), \code{'maximum_f1'}, \code{'maximum_chi'} or \code{'label_rate_quantile'}: how the threshold is chosen on the training data.}
+#'   \item{\code{metric}}{Main metric, default \code{'gini'} (\code{'f1'} for class output).}
+#'   \item{\code{metrics}}{Default metrics of \code{performance()}, default \code{'pearson'}.}
+#'   \item{\code{sig_level}}{Significance level used by some subclasses. Default 0.1.}
+#' }
+#' @section Methods:
+#' \describe{
+#'   \item{\code{predict_probs(X)}}{Probabilities of class 1 as a vector, whatever \code{return} is set to.}
+#'   \item{\code{set_threshold(X, y)}}{Chooses \code{threshold} according to \code{threshold_determination}.}
+#' }
+#' @seealso \code{\link{MODEL-class}}, \code{\link{classifier_transform_yout}}
+#' @export CLASSIFIER
+#' @exportClass CLASSIFIER
 CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
   methods = list(
     initialize = function(...){
@@ -83,6 +109,15 @@ CLASSIFIER = setRefClass('CLASSIFIER', contains = "MODEL",
 # Shared output transformation of all binary classifiers.
 # Y holds predicted probabilities of class 1. If the model has gradient transformers, their (logit) output is added in log-odds space.
 # The result is then converted to the configured 'return' type: 'probs', 'logit' or 'class'.
+#' @title Output transformation of binary classifiers
+#' @description
+#' Adds gradient transformer output (log-odds) to the predicted probabilities, applies the output function and converts to the configured \code{return} type. Used by all classifiers.
+#' @param model A \code{\link{CLASSIFIER-class}} object.
+#' @param X Input data.
+#' @param Y \code{data.frame} of predicted probabilities.
+#' @return \code{data.frame}.
+#' @keywords internal
+#' @export
 classifier_transform_yout = function(model, X, Y){
   cfg = model$config
   if(length(model$gradient_transformers) > 0){
@@ -103,6 +138,28 @@ classifier_transform_yout = function(model, X, Y){
   return(Y)
 }
 
+#' @title Wrapper for scikit-learn binary classifiers
+#' @name CLS.SKLEARN-class
+#' @aliases CLS.SKLEARN
+#' @description
+#' Superclass of scikit-learn classifiers: fits \code{sklearn.<model.module>.<model.class>} and returns \code{predict_proba()[, 2]}.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#'
+#' Inherits from \code{\link{CLASSIFIER-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{model.module}}{sklearn sub-module.}
+#'   \item{\code{model.class}}{sklearn classifier class.}
+#' }
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = CLS.SKLEARN(model.module = 'naive_bayes', model.class = 'GaussianNB')
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export CLS.SKLEARN
 CLS.SKLEARN = setRefClass('CLS.SKLEARN', contains = c('TRM.SKLEARN', "CLASSIFIER"),
    methods = list(
@@ -124,6 +181,22 @@ CLS.SKLEARN = setRefClass('CLS.SKLEARN', contains = c('TRM.SKLEARN', "CLASSIFIER
   )
 )
 
+#' @title K-nearest neighbours classifier (scikit-learn)
+#' @name CLS.SKLEARN.KNN-class
+#' @aliases CLS.SKLEARN.KNN
+#' @description
+#' Wraps \code{sklearn.neighbors.KNeighborsClassifier}. Any of its arguments (\code{n_neighbors}, \code{weights}, ...) can be passed; integers must be given as integers (\code{10L}).
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#'
+#' Inherits from \code{\link{CLS.SKLEARN-class}}.
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = CLS.SKLEARN.KNN(n_neighbors = 15L)
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export CLS.SKLEARN.KNN
 CLS.SKLEARN.KNN = setRefClass('CLS.SKLEARN.KNN', contains = "CLS.SKLEARN",
   methods = list(
@@ -136,6 +209,27 @@ CLS.SKLEARN.KNN = setRefClass('CLS.SKLEARN.KNN', contains = "CLS.SKLEARN",
   )
 )
 
+#' @title Fused lasso logistic regression (HDPenReg)
+#' @name CLS.HDPENREG.FLASSO-class
+#' @aliases CLS.HDPENREG.FLASSO
+#' @description
+#' Logistic regression with fused lasso penalty from \code{HDPenReg::EMfusedlasso}. Numeric features only.
+#'
+#' Inherits from \code{\link{CLASSIFIER-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{lambda1}}{Lasso penalty. Default 1.}
+#'   \item{\code{lambda2}}{Fusion penalty. Default 1.}
+#' }
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = CLS.HDPENREG.FLASSO(lambda1 = 0.1, lambda2 = 0.1)
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export CLS.HDPENREG.FLASSO
 CLS.HDPENREG.FLASSO = setRefClass('CLS.HDPENREG.FLASSO', contains = 'CLASSIFIER', methods = list(
   initialize = function(...){
@@ -167,6 +261,26 @@ CLS.HDPENREG.FLASSO = setRefClass('CLS.HDPENREG.FLASSO', contains = 'CLASSIFIER'
   }
 ))
 
+#' @title Any mlr classification learner
+#' @name CLS.MLR-class
+#' @aliases CLS.MLR
+#' @description
+#' Wraps an mlr learner (\code{mlr::makeLearner(model_type, predict.type = 'prob')}).
+#'
+#' Inherits from \code{\link{CLASSIFIER-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{model_type}}{mlr learner name, e.g. \code{'classif.randomForest'}. Default \code{'classif.gbm'}.}
+#' }
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = CLS.MLR(model_type = 'classif.logreg')
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export CLS.MLR
 CLS.MLR = setRefClass('CLS.MLR', contains = "CLASSIFIER",
     methods = list(
@@ -201,6 +315,22 @@ CLS.MLR = setRefClass('CLS.MLR', contains = "CLASSIFIER",
 
 # A simple logistic regression classifier from SKLEARN python package:
 # It extracts only numeric features, does no dummification for categorical columns.
+#' @title Logistic regression (scikit-learn)
+#' @name CLS.SKLEARN.LR-class
+#' @aliases CLS.SKLEARN.LR
+#' @description
+#' Wraps \code{sklearn.linear_model.LogisticRegression} (arguments \code{C}, \code{penalty}, \code{solver}, ...). Uses numeric features only. Feature importance is the absolute coefficient scaled by the feature's standard deviation.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#'
+#' Inherits from \code{\link{CLS.SKLEARN-class}}.
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = CLS.SKLEARN.LR(C = 0.5)
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export CLS.SKLEARN.LR
 CLS.SKLEARN.LR = setRefClass('CLS.SKLEARN.LR', contains = "CLS.SKLEARN",
     methods = list(
@@ -227,6 +357,22 @@ CLS.SKLEARN.LR = setRefClass('CLS.SKLEARN.LR', contains = "CLS.SKLEARN",
 )
 
 # A simple decision tree classifier from SKLEARN python package:
+#' @title Decision tree classifier (scikit-learn)
+#' @name CLS.SKLEARN.DT-class
+#' @aliases CLS.SKLEARN.DT
+#' @description
+#' Wraps \code{sklearn.tree.DecisionTreeClassifier} (arguments \code{max_depth}, \code{min_samples_leaf}, ...).
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#'
+#' Inherits from \code{\link{CLS.SKLEARN-class}}.
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = CLS.SKLEARN.DT(max_depth = 3L)
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export CLS.SKLEARN.DT
 CLS.SKLEARN.DT = setRefClass('CLS.SKLEARN.DT', contains = "CLS.SKLEARN",
   methods = list(
@@ -238,6 +384,26 @@ CLS.SKLEARN.DT = setRefClass('CLS.SKLEARN.DT', contains = "CLS.SKLEARN",
   )
 )
 
+#' @title Logistic regression (stats::glm)
+#' @name CLS.STATS.LR-class
+#' @aliases CLS.STATS.LR
+#' @description
+#' Binomial \code{glm} on all input columns. Feature importance is derived from coefficient p-values (1 for p = 0, 0 for p >= 0.1).
+#' Supports gradient transformers: their log-odds enter the model as an offset, so the regression learns the correction on top of them.
+#' Other \code{glm} arguments (\code{weights}, \code{control}, ...) can be passed.
+#'
+#' Inherits from \code{\link{CLASSIFIER-class}}.
+#' @examples
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = CLS.STATS.LR(name = 'lr')
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' # boosted by xgboost (requires the xgboost package):
+#' if(requireNamespace('xgboost', quietly = TRUE)){
+#'   m2 = CLS.STATS.LR(gradient_transformers = list(CLS.XGBOOST(nrounds = 10, verbose = 0)))
+#'   m2$fit(X, y)
+#' }
 #' @export CLS.STATS.LR
 CLS.STATS.LR = setRefClass('CLS.STATS.LR', contains = "CLASSIFIER",
                          methods = list(
@@ -320,6 +486,27 @@ CLS.STATS.LR = setRefClass('CLS.STATS.LR', contains = "CLASSIFIER",
 )
 
 
+#' @title XGBoost classifier (Python xgboost)
+#' @name CLS.SKLEARN.XGB-class
+#' @aliases CLS.SKLEARN.XGB
+#' @description
+#' Wraps \code{xgboost.XGBClassifier} through reticulate (arguments \code{n_estimators}, \code{max_depth}, \code{learning_rate}, ...). For the R xgboost package use \code{\link{CLS.XGBOOST-class}}.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#'
+#' Inherits from \code{\link{CLASSIFIER-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{n_jobs}}{Number of threads (converted to integer).}
+#' }
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = CLS.SKLEARN.XGB(n_estimators = 50L, max_depth = 3L)
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export CLS.SKLEARN.XGB
 CLS.SKLEARN.XGB = setRefClass('CLS.SKLEARN.XGB', contains = "CLASSIFIER",
     methods = list(
@@ -428,6 +615,22 @@ CLS.SKLEARN.XGB = setRefClass('CLS.SKLEARN.XGB', contains = "CLASSIFIER",
     )
 )
 
+#' @title Support vector machine classifier (scikit-learn)
+#' @name CLS.SKLEARN.SVM-class
+#' @aliases CLS.SKLEARN.SVM
+#' @description
+#' Wraps \code{sklearn.svm.SVC} with \code{probability = TRUE} (arguments \code{C}, \code{kernel}, \code{gamma}, ...).
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#'
+#' Inherits from \code{\link{CLS.SKLEARN-class}}.
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = CLS.SKLEARN.SVM(C = 1)
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export CLS.SKLEARN.SVM
 CLS.SKLEARN.SVM = setRefClass('CLS.SKLEARN.SVM', contains = "CLS.SKLEARN",
    methods = list(
@@ -441,6 +644,41 @@ CLS.SKLEARN.SVM = setRefClass('CLS.SKLEARN.SVM', contains = "CLS.SKLEARN",
    )
 )
 
+#' @title Deep neural network classifier (keras)
+#' @name CLS.KERAS.DNN-class
+#' @aliases CLS.KERAS.DNN
+#' @description
+#' Dense feed-forward network built with keras/tensorflow. Supports gradient transformers: their log-odds are fed as a
+#' second input and added to the network's linear output inside a custom logistic loss.
+#'
+#' Inherits from \code{\link{CLASSIFIER-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{num_layers}}{Number of hidden layers (1 to 25). Default 1.}
+#'   \item{\code{first_layer_nodes}}{Units in the first hidden layer. Default 128.}
+#'   \item{\code{layer_nodes_ratio}}{Each layer has this share of the previous layer's units. Default 0.4.}
+#'   \item{\code{layers_activation}}{Activation of hidden layers. Default \code{'relu'}.}
+#'   \item{\code{layers_dropout}}{Dropout rate after each hidden layer. Default 0.25.}
+#'   \item{\code{layers}}{Custom list of layer specifications; overrides the five settings above.}
+#'   \item{\code{kernel_regularization_penalty_l1, kernel_regularization_penalty_l2}}{Weight penalties. Default 0.}
+#'   \item{\code{activity_regularization_penalty_l1, activity_regularization_penalty_l2}}{Activity penalties. Default 0.}
+#'   \item{\code{kernel_initializer}}{Initializer; by default uniform between \code{initializer_minval} (-0.1) and \code{initializer_maxval} (0.1) with \code{initializer_seed} (42).}
+#'   \item{\code{epochs}}{Training epochs. Default 5.}
+#'   \item{\code{batch_size}}{Default 32.}
+#'   \item{\code{optimizer}}{One of \code{'adam'} (default), \code{'adadelta'}, \code{'adagrad'}, \code{'adamax'}, \code{'nadam'}, \code{'rmsprop'}, \code{'sgd'}.}
+#'   \item{\code{learning_rate}}{Default 1e-4.}
+#'   \item{\code{loss}}{Keras loss. Default \code{'categorical_crossentropy'}.}
+#'   \item{\code{callback}}{Function called at the end of each epoch.}
+#' }
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = CLS.KERAS.DNN(num_layers = 2, epochs = 10)
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export CLS.KERAS.DNN
 CLS.KERAS.DNN = setRefClass('CLS.KERAS.DNN', contains = 'CLASSIFIER',
   methods = c(
@@ -576,6 +814,28 @@ CLS.KERAS.DNN = setRefClass('CLS.KERAS.DNN', contains = 'CLASSIFIER',
     }
 ))
 
+#' @title Gradient boosted trees on Spark (sparklyr)
+#' @name CLS.SPARKLYR.GBT-class
+#' @aliases CLS.SPARKLYR.GBT
+#' @description
+#' Trains \code{sparklyr::ml_gbt_classifier} on a Spark connection. Other arguments of that function can be passed.
+#'
+#' Inherits from \code{\link{CLASSIFIER-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{spark_home}}{Spark installation. Default \code{Sys.getenv('SPARK_HOME')}.}
+#'   \item{\code{spark_config}}{Spark configuration. Default \code{sparklyr::spark_config()}.}
+#'   \item{\code{connection}}{An existing Spark connection; a local one is created if missing.}
+#' }
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = CLS.SPARKLYR.GBT(max_iter = 20)
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export CLS.SPARKLYR.GBT
 CLS.SPARKLYR.GBT = setRefClass('CLS.SPARKLYR.GBT', contains = 'CLASSIFIER', methods = list(
   initialize = function(...){
@@ -611,6 +871,22 @@ CLS.SPARKLYR.GBT = setRefClass('CLS.SPARKLYR.GBT', contains = 'CLASSIFIER', meth
 ))
 
 
+#' @title Naive Bayes classifier (e1071)
+#' @name CLS.E1071.NB-class
+#' @aliases CLS.E1071.NB
+#' @description
+#' Wraps \code{e1071::naiveBayes}.
+#'
+#' Inherits from \code{\link{CLASSIFIER-class}}.
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = CLS.E1071.NB()
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
+#' @export CLS.E1071.NB
 CLS.E1071.NB = setRefClass('CLS.E1071.NB', contains = 'CLASSIFIER', methods = list(
     initialize = function(...){
       callSuper(...)
@@ -659,6 +935,24 @@ CLS.RPART.DT = setRefClass('CLS.RPART.DT', contains = 'MODEL', methods = list(
   ))
 
 # Multinominal Naive Bayes Classifier:
+#' @title Multinomial naive Bayes classifier (scikit-learn)
+#' @name CLS.SKLEARN.MNB-class
+#' @aliases CLS.SKLEARN.MNB
+#' @description
+#' Wraps \code{sklearn.naive_bayes.MultinomialNB}. Uses integer (count) columns only.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#'
+#' Inherits from \code{\link{CLS.SKLEARN-class}}.
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' X$c = rpois(300, 3)
+#' m = CLS.SKLEARN.MNB()
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
+#' @export CLS.SKLEARN.MNB
 CLS.SKLEARN.MNB = setRefClass('CLS.SKLEARN.MNB', contains = 'CLS.SKLEARN', methods = list(
     initialize = function(...){
       callSuper(model.module = 'naive_bayes', model.class = 'MultinomialNB', ...)
@@ -679,6 +973,7 @@ CLS.SKLEARN.MNB = setRefClass('CLS.SKLEARN.MNB', contains = 'CLS.SKLEARN', metho
 
 # pmg_accuracy: Performance Metric with Gradient: Accuracy
 # Accuracy as loss
+#' @rdname xgboost_eval_functions
 #' @export
 pmg_accuracy <- function(preds, dtrain){
   labels <- xgboost::getinfo(dtrain, "label")
@@ -691,6 +986,13 @@ pmg_accuracy <- function(preds, dtrain){
   return(list(metric = "accuracy", value = prf))
 }
 
+#' @title Custom xgboost evaluation functions
+#' @description
+#' Evaluation functions for \code{feval} of \code{\link{CLS.XGBOOST-class}}: gini, accuracy, log loss and lift of the predicted log-odds.
+#' @param preds Predicted log-odds.
+#' @param dtrain \code{xgb.DMatrix} with labels.
+#' @return \code{list(metric = , value = )}.
+#' @rdname xgboost_eval_functions
 #' @export
 pmg_gini <- function(preds, dtrain){
   labels <- xgboost::getinfo(dtrain, "label")
@@ -701,6 +1003,7 @@ pmg_gini <- function(preds, dtrain){
   return(list(metric = "gini", value = prf))
 }
 
+#' @rdname xgboost_eval_functions
 #' @export
 pmg_logloss <- function(preds, dtrain){
   labels <- xgboost::getinfo(dtrain, "label")
@@ -711,6 +1014,7 @@ pmg_logloss <- function(preds, dtrain){
   return(list(metric = "log_loss", value = prf))
 }
 
+#' @rdname xgboost_eval_functions
 #' @export
 pmg_lift <- function(preds, dtrain){
   labels <- xgboost::getinfo(dtrain, "label")
@@ -721,6 +1025,40 @@ pmg_lift <- function(preds, dtrain){
   return(list(metric = "lift", value = prf))
 }
 
+#' @title XGBoost classifier (R xgboost)
+#' @name CLS.XGBOOST-class
+#' @aliases CLS.XGBOOST
+#' @description
+#' Gradient boosted trees with \code{xgboost::xgb.train}. Any booster parameter (\code{max_depth}, \code{eta}, \code{subsample},
+#' \code{colsample_bytree}, \code{scale_pos_weight}, ...) can be passed. Works with xgboost 1.x and 3.x.
+#' Supports gradient transformers: their log-odds are set as the base margin of the training data.
+#'
+#' Inherits from \code{\link{CLASSIFIER-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{nrounds}}{Number of boosting rounds. Default 100.}
+#'   \item{\code{objective}}{Default \code{'binary:logistic'}.}
+#'   \item{\code{nthread}}{Threads. Default 1.}
+#'   \item{\code{early_stopping_rounds}}{Stop when the validation metric has not improved for this many rounds (uses \code{cv.set}).}
+#'   \item{\code{show_progress}}{Print evaluation progress. Default FALSE.}
+#'   \item{\code{print_every_n}}{Default 1.}
+#'   \item{\code{eval_metric}}{Evaluation metric when progress or early stopping is on. Default \code{'auc'}.}
+#'   \item{\code{obj}}{Custom objective function.}
+#'   \item{\code{feval}}{Custom evaluation function, e.g. \code{\link{pmg_gini}}.}
+#'   \item{\code{maximize}}{Whether \code{feval} is maximised.}
+#'   \item{\code{xgb_model}}{Model to continue training from.}
+#'   \item{\code{callbacks}}{List of xgboost callbacks.}
+#'   \item{\code{save_period, save_name}}{Periodic saving during training.}
+#' }
+#' @examples
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' if(requireNamespace('xgboost', quietly = TRUE)){
+#'   m = CLS.XGBOOST(nrounds = 20, max_depth = 3, eta = 0.2, verbose = 0)
+#'   m$fit(X, y)
+#'   head(m$predict(X))
+#' }
 #' @export CLS.XGBOOST
 CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list(
   initialize = function(...){

@@ -26,6 +26,8 @@ createFeatures.logical = function(flist, nf, prefix = 'Feat', actions = c('AND',
       column2Rownames('name'))
 }
 # immunes a subset of features to the highest safety level
+#' @rdname legacy_genetic
+#' @export
 immune = function(flist, features, level, columns){
   flist[features, 'safety'] = level
   have_parents = which(!(features %in% columns))
@@ -38,6 +40,8 @@ immune = function(flist, features, level, columns){
 
 
 
+#' @rdname legacy_genetic
+#' @export
 getFeatureValue.logical = function(flist, name, dataset){
   if(length(name) > 1){
     out = NULL
@@ -57,6 +61,8 @@ getFeatureValue.logical = function(flist, name, dataset){
   } else {stop('Feature name is not in the list!')}
 }
 
+#' @rdname legacy_genetic
+#' @export
 getFeatureValue.multiplicative = function(flist, name, dataset){
   if(length(name) > 1){
     out = NULL
@@ -138,6 +144,8 @@ evaluateFeatures.logical = function(flist, X, y, top = 100, cor_fun = cross_accu
 }
 
 # Optimal Genetic Binary Feature Combiner
+#' @rdname legacy_genetic
+#' @export
 genBinFeatBoost.fit = function(X, y, target = 0.9, epochs = 10, max_fails = 2, cycle_survivors = 500, cycle_births = 2000, final_survivors = 5, metric = cross_enthropy){
   columns = wt_colnames(X)
   flist   = data.frame(name = columns, father = NA, mother = NA, action = NA, correlation = metric(X[, columns], y) %>% as.numeric %>% abs, safety = 0) %>% column2Rownames('name')
@@ -230,6 +238,24 @@ GENETIC = setRefClass(
 
 ########## GENERIC GENETIC ##############
 
+#' @title Legacy genetic feature search
+#' @description
+#' Functions of the older genetic feature search in gentools.R, kept for existing code.
+#' @param flist Feature list.
+#' @param nf Number of features.
+#' @param types Feature types.
+#' @param prefix Name prefix.
+#' @param X Features.
+#' @param y Target.
+#' @param fnames,name Feature names.
+#' @param dataset Data.
+#' @param features Features.
+#' @param level Level.
+#' @param columns Columns.
+#' @param target,epochs,max_fails,cycle_survivors,cycle_births,final_survivors,metric Search settings.
+#' @rdname legacy_genetic
+#' @keywords internal
+#' @export
 createFeatures = function(flist, nf, types, prefix = 'FEAT', X, y){
   features = names(flist)
   lenflist = length(flist)
@@ -262,6 +288,8 @@ createFeatures = function(flist, nf, types, prefix = 'FEAT', X, y){
   return(flist)
 }
 
+#' @rdname legacy_genetic
+#' @export
 getFeatureValue = function(flist, fnames, X){
   if(length(fnames) > 1){
     out = NULL
@@ -289,7 +317,7 @@ getFeatureCorrelations = function(flist, X, y, metric = 'pearson_correlation'){
     keep %<>% c(is.na(item$correlation))
   }
   for(i in which(keep)){
-    flist[[i]]$correlation <- correlation(getFeatureValue(flist, ns[i], X), y, metric = metric) %>% max
+    flist[[i]]$correlation <- correlation(getFeatureValue(flist, ns[i], X), y, metrics = metric) %>% max
   }
   return(flist)
 }
@@ -774,7 +802,7 @@ get_expert_correlations = function(experts, X, y, metric = 'gini'){
   for(i in which(tbc)){
     val = try(get_expert_value(experts$exlist, exnames[i], X), silent = T)
     if(!inherits(val, 'try-error')){
-      experts$exlog[i, 'correlation'] <- correlation(val, y, metric = metric) %>% max
+      experts$exlog[i, 'correlation'] <- correlation(val, y, metrics = metric) %>% max
     }
   }
   return(experts)
@@ -907,13 +935,12 @@ evaluate_funlist = function(funlist, X, y, metric = logloss_sum){
 # }
 
 
-evaluate_models.multicore = function(funlist, X, y, metric = logloss_sum, n_jobs = 8, ...){
+# Legacy genetic search: evaluates a list of function objects in parallel
+evaluate_funlist.multicore = function(funlist, X, y, metric = logloss_sum, n_jobs = 8, ...){
 
 
-  library(doParallel)
-  cl = makeCluster(n_jobs)
-  registerDoParallel(cl)
-  warnif(getDoParWorkers() < n_jobs, 'Parallel run is not working. It may take too long!')
+  cl = rutils::setup_multicore(n_jobs = n_jobs)
+  warnif(foreach::getDoParWorkers() < n_jobs, 'Parallel run is not working. It may take too long!')
 
   boostlist = funlist %>% lapply(function(ff) {out = inherits(ff, 'FUNCTION'); if(out) out = length(ff$list.parameters()) > 0; out}) %>% unlist %>% which %>% names
   bflist    = foreach(fn = boostlist, .combine = c, .packages = c('magrittr', 'dplyr'), .errorhandling = 'stop') %dopar% {
@@ -1079,7 +1106,7 @@ train_funlist = function(flist = NULL, champions = list(), X_train, y_train, X_t
     while(!enough | (!success & chance)){
       grow_funlist(flist, features = features, n_births = n_births, function_set = function_set) -> flist
       # boost_funlist(flist, X = X_train, y = y_train, metric = loss_train, silent = silent)
-      flist = evaluate_models.multicore(flist, X = X_train, y = y_train, metric = loss_train)
+      flist = evaluate_funlist.multicore(flist, X = X_train, y = y_train, metric = loss_train)
       flist %<>% clean_funlist(X = X_train, y = y_train, metric = loss_train)
       evaluate_funlist(flist, X = X_train, y = y_train, metric = loss_train) -> err_train
       reset_funlist(flist)
@@ -1168,6 +1195,15 @@ add_model_to_modlog = function(modlog = data.frame(), model = NULL, performance)
 }
 
 # Column headers must not be duplicated. Function does not check this and will return error.
+#' @title Score each column against the target
+#' @description
+#' Correlation metrics of each column with \code{y}, plus summary statistics when \code{extra_info = TRUE}.
+#' @param X \code{data.frame}.
+#' @param y Target.
+#' @param metrics Metrics of \code{\link{correlation}}.
+#' @param extra_info \code{logical} add counts, quantiles, mean, sd and most frequent value.
+#' @param ... Passed to \code{\link{correlation}}.
+#' @return \code{data.frame} with one row per column.
 #' @export
 evaluate_features = function(X, y, metrics = 'gini', extra_info = T, ...){
   nrwx = nrow(X)
@@ -1212,6 +1248,11 @@ evaluate_features = function(X, y, metrics = 'gini', extra_info = T, ...){
   return(features)
 }
 
+#' Classifiers that support gradient transformers
+#'
+#' Names of the classifier classes that can be boosted by gradient transformers (see the gradient boosting vignette).
+#' @format \code{character} vector.
+#' @export
 gb_supporting_classifiers = c('CLS.XGBOOST', 'CLS.KERAS.DNN', 'CLS.STATS.LR')
 ##
 add_classifier = function(input = list(fetlog = NULL, modlog = data.frame(), modlist = list()),
@@ -1269,7 +1310,7 @@ add_classifier = function(input = list(fetlog = NULL, modlog = data.frame(), mod
     modperf = c()
     yp = base$predict(X_valid)[,1]
     for(mtrc in metrics){
-      modperf[mtrc] <- try(correlation(yp, y_valid, metric = mtrc), silent = T)
+      modperf[mtrc] <- try(correlation(yp, y_valid, metrics = mtrc), silent = T)
     }
 
     modlog %<>% add_model_to_modlog(base, performance = modperf)

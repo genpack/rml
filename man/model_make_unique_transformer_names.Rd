@@ -6,15 +6,12 @@
 \usage{
 model_make_unique_transformer_names(model)
 }
+\arguments{
+\item{model}{Any object inheriting from class \code{MODEL}}
+}
 \value{
 None
 }
 \description{
 Changes duplicated transformer names of a given model to ensure all transformers have distinct names
 }
-\section{Fields}{
-
-\describe{
-\item{\code{model}}{Any object inheriting from class \code{MODEL}}
-}}
-

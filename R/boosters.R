@@ -4,6 +4,15 @@
 # - set cv.train_ratio = 1
 # - set cv.ntrain = 1
 # - specify a separate validation set in parameter: cv.set
+#' @title Try adding features to a model
+#' @description
+#' Builds \code{n_experiment} copies of \code{base_model}, each with a random subset of extra columns, cross-validates them and returns the best one if it beats the base model.
+#' @param base_model Model object.
+#' @param X Features (all candidate columns).
+#' @param y Target.
+#' @param n_experiment Number of copies.
+#' @param subset_size Extra columns per copy.
+#' @return The best model, or \code{NULL} if none improved.
 #' @export
 feature_booster = function(base_model, X, y, n_experiment = 10, subset_size = 10){
   # Verifications:

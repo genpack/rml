@@ -6,6 +6,28 @@
 # 1.0.0     16 September 2020    Initial Issue.
 # 1.0.1     26 August 2024       maler_words renamed to reserved_words
 
+#' @title Abstract base class of regressors
+#' @name REGRESSOR-class
+#' @aliases REGRESSOR
+#' @description
+#' Regressors predict a numeric target. Every regressor supports gradient transformers: it is trained on
+#' the residual \code{y - g}, where g is the aggregated gradient transformer output, and g is added back
+#' at prediction. Inherit from this class to write your own regressor.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{metrics}}{Default metrics of \code{performance()}, default \code{'mae'}.}
+#'   \item{\code{sig_level}}{Significance level used by some subclasses. Default 0.05.}
+#'   \item{\code{sfs.enabled}}{Stepwise feature selection where supported. Default FALSE.}
+#' }
+#' @seealso \code{\link{MODEL-class}}
+#' @examples
+#' X = data.frame(a = rnorm(200), b = runif(200))
+#' y = 2*X$a + sin(4*X$b) + rnorm(200, sd = 0.1)
+#' m = REG.STATS.LNR(name = 'lm')
+#' m$fit(X, y)
+#' m$performance(X, y, metrics = c('mae', 'rmse'))
+#' @export REGRESSOR
 REGRESSOR = setRefClass('REGRESSOR', contains = "MODEL",
  methods = list(
    initialize = function(...){
@@ -42,6 +64,25 @@ REGRESSOR = setRefClass('REGRESSOR', contains = "MODEL",
 
 # A simple linear regression model. Features with linear dependency to others, will be removed to avoid singularity.
 # feature importances are based on p-values of coefficients.
+#' @title Linear regression (stats::lm)
+#' @name REG.STATS.LNR-class
+#' @aliases REG.STATS.LNR
+#' @description
+#' Ordinary least squares with \code{lm} on numeric features. Collinear features are removed until no coefficient is undefined.
+#' Feature importance is derived from coefficient p-values.
+#'
+#' Inherits from \code{\link{REGRESSOR-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{sfs.enabled}}{Run stepwise feature selection before fitting. Default FALSE.}
+#' }
+#' @examples
+#' X = data.frame(a = rnorm(300), b = runif(300))
+#' y = 2*X$a + sin(4*X$b) + rnorm(300, sd = 0.1)
+#' m = REG.STATS.LNR()
+#' m$fit(X, y)
+#' head(m$predict(X))
 #' @export REG.STATS.LNR
 REG.STATS.LNR = setRefClass('REG.STATS.LNR', contains = "REGRESSOR",
    methods = list(
@@ -143,6 +184,27 @@ REG.STATS.LNR = setRefClass('REG.STATS.LNR', contains = "REGRESSOR",
 )
 
 
+#' @title XGBoost regressor (R xgboost)
+#' @name REG.XGBOOST-class
+#' @aliases REG.XGBOOST
+#' @description
+#' Gradient boosted regression trees with \code{xgboost::xgb.train}. Booster parameters (\code{max_depth}, \code{eta},
+#' \code{objective}, ...) can be passed. Missing values are replaced by 0.
+#'
+#' Inherits from \code{\link{REGRESSOR-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{nrounds}}{Number of boosting rounds. Default 100.}
+#' }
+#' @examples
+#' X = data.frame(a = rnorm(300), b = runif(300))
+#' y = 2*X$a + sin(4*X$b) + rnorm(300, sd = 0.1)
+#' if(requireNamespace('xgboost', quietly = TRUE)){
+#'   m = REG.XGBOOST(nrounds = 30, max_depth = 3)
+#'   m$fit(X, y)
+#'   head(m$predict(X))
+#' }
 #' @export REG.XGBOOST
 REG.XGBOOST = setRefClass('REG.XGBOOST', contains = "REGRESSOR",
                      methods = list(
@@ -192,6 +254,22 @@ REG.XGBOOST = setRefClass('REG.XGBOOST', contains = "REGRESSOR",
 )
 
 
+#' @title XGBoost regressor (Python xgboost)
+#' @name REG.SKLEARN.XGB-class
+#' @aliases REG.SKLEARN.XGB
+#' @description
+#' Wraps \code{xgboost.XGBRegressor} through reticulate.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable.
+#'
+#' Inherits from \code{\link{REGRESSOR-class}}.
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = runif(300))
+#' y = 2*X$a + sin(4*X$b) + rnorm(300, sd = 0.1)
+#' m = REG.SKLEARN.XGB(n_estimators = 50L)
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export REG.SKLEARN.XGB
 REG.SKLEARN.XGB = setRefClass('REG.SKLEARN.XGB', contains = "REGRESSOR",
                              methods = list(

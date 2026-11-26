@@ -17,6 +17,11 @@
 # 1.2.6     27 April 2021        function cluster_tree() added: runs a hierarchical clustering with optimal selection of depths
 # 1.2.7     08 June 2023         function cluster_tree modified: gives full information for each number of cluster from 1 to number of points
 
+# Cosine dissimilarity used by spherical k-means (package skmeans): 1 - cos(angle between x and y)
+spherical.distance <- function(x, y){
+  1 - sum(x*y)/sqrt(sum(x^2)*sum(y^2))
+}
+
 cluster.distances <- function(M, SK){
   # Returns a vector containing the distances of each point from the center of
   # its cluster.
@@ -51,22 +56,16 @@ cluster.moments <- function(M, SK){
 #' @param M A matrix containing vectors for clustering. Each row defines a vector.
 #' @param max.num.clusters maximum number of clusters
 #' @param metric Either 'euclidean' or 'spherical' determining the metric used for clustering
-#' @param bnc_threshold Specifies the threshold for reduction ratio in within group sum of squares
+#' @param bnc_method Method of \code{\link{best_num_clusters}} choosing the best number of clusters.
+#' @param ... Passed to \code{\link{best_num_clusters}}, e.g. \code{jump_threshold}.
 #' @param doPlot logical: Would you like to see the elbow plot to determine the number of clusters?
 #' @param num.clusters set of values for number of clusters to test. 
 #' @return list: containing three elements: wgss (Within group sum of squares), clst (list of clustering objects), bnc(best number of clusters)
 #' @examples
-#' a = elbow(iris[,1:4], num.clusters = c(2, 5, 10, 15, 20, 25), doPlot = T)
+#' a = elbow(iris[,1:4], num.clusters = c(2, 5, 10, 15, 20, 25), doPlot = TRUE)
 #'
-#' a$wgss
-#'       NC2       NC5      NC10      NC15      NC20      NC25 
-#' 152.34795  46.46117  29.90776  21.67031  17.78198  11.90241 
-#' (Your values may be different!)
-#' 
-#' a$clst[[a$bnc]]$cluster %>% table
-#' 1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 
-#' 15 10  7 13  8  8  1 10  4  6  3  5  8  9  5  5  5 14 10  4 
-#' (Your values may be different!)
+#' a$wgss  # within group sum of squares for each number of clusters
+#' table(a$clst[[paste0('NC', a$bnc)]]$cluster)
 #' @export
 elbow <- function(M, max.num.clusters = 25, metric = "euclidean", doPlot = T, num.clusters = NULL, bnc_method = "jump_threshold", ...) {
   if(!inherits(M, 'matrix')){M %<>% as.matrix}
@@ -103,12 +102,12 @@ elbow <- function(M, max.num.clusters = 25, metric = "euclidean", doPlot = T, nu
     return(list(wgss = wgss, clst = clst, bnc = wgss %>% best_num_clusters(method = bnc_method, ...)))
   }
   else if (metric == "spherical"){
-    library("skmeans")
+    assert(requireNamespace('skmeans', quietly = TRUE), "Package 'skmeans' is required for metric = 'spherical'", err_src = 'elbow')
     for (nc in num.clusters){
-      SK    = skmeans(M, nc)
+      SK    = skmeans::skmeans(M, nc)
       tot.withinss = sum(cluster.moments(M, SK))
       wgss = c(wgss, tot.withinss)
-      clst %<>% list.add(K)
+      clst %<>% list.add(SK)
     }
     names(wgss) <- paste0('NC', num.clusters)
     names(clst) <- paste0('NC', num.clusters)
@@ -118,12 +117,20 @@ elbow <- function(M, max.num.clusters = 25, metric = "euclidean", doPlot = T, nu
   }
 }
 
+#' @title Best number of clusters
+#' @description
+#' Chooses the number of clusters from the within-cluster sum of squares curve.
+#' @param wss \code{numeric} within-cluster sum of squares for 1, 2, ... clusters.
+#' @param method Selection rule.
+#' @param jump_threshold Threshold of the jump method.
+#' @param angle_threshold Threshold of the angle method.
+#' @return \code{integer}.
 #' @export
 best_num_clusters <- function(wss, method =c("jump_threshold", "gain_and_cost", "min_slope", "best_break", "angle_threshold") , jump_threshold = 0.2, angle_threshold = 70){
   method = match.arg(method)
   N = length(wss)
   ncls = names(wss) %>% gsub(pattern = "NC", replacement = "") %>% as.numeric
-  if(is.empty(ncls)){ncls = len_seq(wss)}
+  if(is.empty(ncls)){ncls = seq_along(wss)}
   
   if(method == 'jump_threshold'){
     w   =  which((wss[-N] - wss[-1])/wss[-N] < jump_threshold)
@@ -181,6 +188,13 @@ best_num_clusters <- function(wss, method =c("jump_threshold", "gain_and_cost", 
   }
 }
 
+#' @title Hierarchical clustering tree
+#' @description
+#' Builds a tree of nested clusterings from a distance matrix.
+#' @param distmat Distance matrix.
+#' @param max_num_clusters Largest number of clusters.
+#' @param show_progress \code{logical}.
+#' @return Clustering tree.
 #' @export
 cluster_tree <- function(distmat, max_num_clusters = as.integer(nrow(distmat)/2), show_progress = T){
   # np: number of points
