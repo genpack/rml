@@ -16,7 +16,7 @@ Inherits from \code{\link{CLS.SKLEARN-class}}.
 \dontrun{
 X = data.frame(a = rnorm(300), b = rnorm(300))
 y = as.numeric(X$a - X$b + rnorm(300) > 0)
-m = CLS.SKLEARN.SVM(C = 1)
+m = CLS.SKLEARN.SVM(config = list(C = 1))
 m$fit(X, y)
 head(m$predict(X))
 }

@@ -34,7 +34,7 @@ library(magrittr)
 #'   the model learns to correct their output. Several outputs are combined by \code{gradient_transformers_aggregator}.
 #' @field yin_transformers,yout_transformers \code{list} reserved for target transformation functions.
 #' @field objects \code{list} fitted state: \code{model} (the trained object), \code{features} (table of the
-#'   features used, with class and importance), \code{fitting_time}, \code{n_output}.
+#'   features used, with class and importance), \code{fitting_time} (when fitting finished), \code{fitting_duration} (seconds), \code{n_output}.
 #'
 #' @section Methods:
 #' \describe{
@@ -47,7 +47,8 @@ library(magrittr)
 #'   \item{\code{performance.cv(X, y, metrics)}}{Repeated train/test cross-validation on a deep copy of the model.}
 #'   \item{\code{deep_copy(name_suffix = NULL)}}{Copy of the model, its transformers and gradient transformers.}
 #'   \item{\code{info.features()}, \code{info.model()}, \code{info.transformers()}, \code{info.edge_list()}}{Information about the features and the network of models.}
-#'   \item{\code{plot.network()}}{Draws the network of models (requires package rvis).}
+#'   \item{\code{info.network()}}{\code{list(nodes, links)} of the model network: transformers feed their parent, gradient transformers boost it.}
+#'   \item{\code{plot.network(plotter)}}{Draws the network: \code{'visNetwork'} (interactive, through rvis if installed, otherwise visNetwork) or \code{'igraph'} (static).}
 #'   \item{\code{model.save(path)}, \code{model.load(path)}}{Save or load native model files; use \code{\link{model_save}} and \code{\link{model_load}}.}
 #'   \item{\code{supports_gradient_transformers()}}{TRUE if training uses the output of gradient transformers.}
 #' }
@@ -106,7 +107,7 @@ library(magrittr)
 #' }
 #' Runtime:
 #' \describe{
-#'   \item{\code{verbose}}{0 silences progress messages. Default 1.}
+#'   \item{\code{verbose}}{0 silences progress messages. Default 1, or the value of \code{options(rml.verbose = )} so that \code{options(rml.verbose = 0)} silences all models of a session.}
 #'   \item{\code{mc.num_cores}}{Cores used to fit and run transformers in parallel. Default 1.}
 #'   \item{\code{remove_failed_transformers}}{Drop transformers that fail to fit instead of stopping. Default TRUE.}
 #' }
@@ -187,7 +188,7 @@ MODEL = setRefClass('MODEL',
         settings[[pn]] <- verify(settings[[pn]], 'logical', lengths = 1, domain = c(T,F), default = T)
       }
       
-      settings$verbose <- verify(settings$verbose, c('numeric', 'integer'), lengths = 1, default = 1) %>% as.integer
+      settings$verbose <- verify(settings$verbose, c('numeric', 'integer'), lengths = 1, default = getOption('rml.verbose', 1)) %>% as.integer
       settings$column_filters  <- verify(settings$column_filters, 'list', default = list(list(column = 'n_unique', filter = ' > 1')))
 
       # Default metrics are set by subclasses (CLASSIFIER: 'pearson', REGRESSOR: 'mae')
@@ -415,6 +416,7 @@ MODEL = setRefClass('MODEL',
     },
 
     fit = function(X, y = NULL){
+      fit_start = Sys.time(); was_fitted = fitted
       if(!fitted){
         if(length(gradient_transformers) > 0){
           assert(supports_gradient_transformers(), sprintf("Model %s of class %s does not support gradient transformers yet. Supported classifiers: %s", name, class(.self)[1], paste(gb_supporting_classifiers, collapse = ', ')))
@@ -560,6 +562,8 @@ MODEL = setRefClass('MODEL',
       }
       fitted <<- TRUE
       objects$fitting_time <<- Sys.time()
+      # seconds spent fitting this model, including its transformers and gradient transformers
+      if(!was_fitted){objects$fitting_duration <<- as.numeric(difftime(objects$fitting_time, fit_start, units = 'secs'))}
     },
 
     transform_x = function(X, y = NULL){
@@ -759,30 +763,93 @@ MODEL = setRefClass('MODEL',
       return(tbl %>% dplyr::distinct(name, .keep_all = TRUE))
     },
 
-    plot.network = function(plotter = 'visNetwork', ...){
-      nodes = .self$info.transformers()
-      rownames(nodes) <- nodes$name
-      nodes['INPUT', 'name'] <- 'INPUT'
-      nodes['INPUT', 'type'] <- 'Data'
-      nodes['INPUT', 'class'] <- 'INPUT'
-      nodes['INPUT', 'description'] <- 'Features'
-      nodes['OUTPUT', 'name'] <- 'OUTPUT'
-      nodes['OUTPUT', 'type'] <- 'Final Prediction'
-      nodes['OUTPUT', 'class'] <- 'OUTPUT'
-      nodes['OUTPUT', 'description'] <- ''
-      nodes$outputs[is.na(nodes$outputs)] <- '?'
-      nodes[is.na(nodes)] <- 'NULL'
-      nodes$type %<>% as.factor
+    # Nodes and links of the model network, used by plot.network().
+    # Links: 'feeds' from a transformer (or INPUT) to the model using its output as features,
+    # 'boosts' from a gradient transformer to the model it boosts.
+    info.network = function(){
+      edge = function(s, t, r) data.frame(source = s, target = t, relation = r, stringsAsFactors = FALSE)
+      collect = function(m){
+        out = list()
+        if(is.empty(m$transformers)){out[[length(out) + 1]] <- edge('INPUT', m$name, 'feeds')}
+        for(tr in m$transformers){
+          out[[length(out) + 1]] <- edge(tr$name, m$name, 'feeds')
+          out[[length(out) + 1]] <- collect(tr)
+        }
+        for(gt in m$gradient_transformers){
+          if(inherits(gt, 'MODEL')){
+            out[[length(out) + 1]] <- edge(gt$name, m$name, 'boosts')
+            out[[length(out) + 1]] <- collect(gt)
+          } else {
+            out[[length(out) + 1]] <- edge('INPUT', m$name, paste('offset', gt))
+          }
+        }
+        do.call(rbind, out)
+      }
+      links = collect(.self) %>% rbind(data.frame(source = name, target = 'OUTPUT', relation = 'prediction', stringsAsFactors = FALSE)) %>% dplyr::distinct()
 
-      nodes$description = paste(nodes$class, nodes$description, nodes$type, sep = '\n')
+      tbl   = info.transformers()
+      nodes = data.frame(id = tbl$name, class = tbl$class, type = tbl$type,
+                         description = tbl$description, package = tbl$package,
+                         outputs = if(is.null(tbl$outputs)) NA_integer_ else as.integer(tbl$outputs),
+                         fitted = tbl$fitted, stringsAsFactors = FALSE)
+      nodes = rbind(data.frame(id = 'INPUT', class = 'INPUT', type = 'Data', description = 'Input features', package = '', outputs = NA_integer_, fitted = TRUE, stringsAsFactors = FALSE),
+                    nodes,
+                    data.frame(id = 'OUTPUT', class = 'OUTPUT', type = 'Prediction', description = 'Final prediction', package = '', outputs = NA_integer_, fitted = TRUE, stringsAsFactors = FALSE))
+      nodes$label = ifelse(nodes$id %in% c('INPUT', 'OUTPUT'), nodes$id, paste0(nodes$id, '\n', nodes$class))
+      nodes$title = paste0('<b>', nodes$id, '</b><br>', nodes$class, '<br>', nodes$description,
+                           ifelse(is.na(nodes$outputs), '', paste0('<br>outputs: ', nodes$outputs)))
+      links$outputs = nodes$outputs[match(links$source, nodes$id)]
+      list(nodes = nodes, links = links)
+    },
 
-      links = .self$info.edge_list() %>% {colnames(.) <- c('source', 'target');.} %>% as.data.frame %>%
-        mutate(source = as.character(source), target = as.character(target)) %>%
-        left_join(nodes %>% select(source = name, outputs), by = 'source')
-
-      rvis::viserPlot(list(nodes = nodes, links = links), source = 'source', target = 'target', linkWidth = 'outputs', key = 'name', label = 'description',
-                       color = 'type', config = list(...), linkLabel = 'outputs', type = 'graph', plotter = plotter)
-
+    # Draws the network of models.
+    # plotter = 'visNetwork': interactive htmlwidget, through package rvis if installed, otherwise package visNetwork.
+    # plotter = 'igraph': static plot with package igraph.
+    # Arguments in ... are passed to rvis as config (or to visNetwork::visNetwork / igraph's plot()).
+    plot.network = function(plotter = c('visNetwork', 'igraph'), ...){
+      plotter = match.arg(plotter)
+      net = info.network()
+      link_colors = c(feeds = '#7f8c8d', boosts = '#e67e22', prediction = '#2c3e50')
+      net$links$color = ifelse(net$links$relation %in% names(link_colors), link_colors[net$links$relation], '#3498db')
+      if(plotter == 'visNetwork' && !requireNamespace('visNetwork', quietly = TRUE) && requireNamespace('igraph', quietly = TRUE)){
+        message("Package 'visNetwork' is not installed: drawing a static igraph chart instead.")
+        plotter = 'igraph'
+      }
+      if(plotter == 'visNetwork'){
+        if(requireNamespace('rvis', quietly = TRUE) && requireNamespace('visNetwork', quietly = TRUE)){
+          return(rvis::rvisPlot(type = 'graph', plotter = 'visNetwork', obj = net, key = 'id', label = 'label', color = 'type',
+                                tooltip = 'title', source = 'source', target = 'target', linkLabel = 'relation', linkColor = 'color',
+                                config = list(...)))
+        }
+        assert(requireNamespace('visNetwork', quietly = TRUE), "plot.network() needs package 'visNetwork' (or use plotter = 'igraph')")
+        nodes = net$nodes %>% dplyr::mutate(group = type)
+        edges = net$links %>% dplyr::transmute(from = source, to = target, label = relation, color = color, arrows = 'to',
+                                               dashes = relation == 'boosts')
+        return(visNetwork::visNetwork(nodes, edges, ...) %>%
+                 visNetwork::visHierarchicalLayout(direction = 'LR', sortMethod = 'directed') %>%
+                 visNetwork::visLegend(useGroups = TRUE) %>%
+                 visNetwork::visOptions(highlightNearest = TRUE))
+      }
+      assert(requireNamespace('igraph', quietly = TRUE), "plotter = 'igraph' needs package 'igraph'")
+      g = igraph::graph_from_data_frame(net$links[c('source', 'target', 'relation')], vertices = net$nodes[c('id', 'type', 'label')])
+      types = unique(net$nodes$type)
+      pal   = grDevices::hcl.colors(max(3, length(types)), 'Set 2')[seq_along(types)]
+      # left to right: column = longest path from INPUT, rows ordered by igraph's Sugiyama layout to reduce crossings
+      order = igraph::topo_sort(g, mode = 'out')
+      depth = stats::setNames(rep(0, igraph::vcount(g)), igraph::V(g)$name)
+      for(v in igraph::V(g)$name[order]){
+        for(w in igraph::neighbors(g, v, mode = 'out')$name){depth[w] <- max(depth[w], depth[v] + 1)}
+      }
+      lay = igraph::layout_with_sugiyama(g, layers = depth + 1)$layout[seq_len(igraph::vcount(g)), , drop = FALSE]
+      lay = cbind(depth, lay[, 1])
+      igraph::plot.igraph(g, layout = lay, rescale = TRUE, asp = 0,
+                          vertex.color = pal[match(igraph::V(g)$type, types)], vertex.shape = 'rectangle',
+                          vertex.size = 120/max(depth + 1), vertex.size2 = 15, vertex.label = igraph::V(g)$label, vertex.label.cex = 0.85,
+                          vertex.label.color = 'black', edge.color = net$links$color, edge.arrow.size = 0.4,
+                          edge.lty = ifelse(net$links$relation == 'boosts', 2, 1), ...)
+      graphics::legend('topleft', legend = types, fill = pal, bty = 'n', cex = 0.85, inset = c(0, -0.02), xpd = TRUE)
+      graphics::legend('topright', legend = c('feeds (transformer)', 'boosts (gradient transformer)'), col = link_colors[c('feeds', 'boosts')], lty = c(1, 2), bty = 'n', cex = 0.85, inset = c(0, -0.02), xpd = TRUE)
+      invisible(net)
     },
 
     # info.transformers = function(){

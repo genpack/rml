@@ -336,7 +336,7 @@ CLS.MLR = setRefClass('CLS.MLR', contains = "CLASSIFIER",
 #' \dontrun{
 #' X = data.frame(a = rnorm(300), b = rnorm(300))
 #' y = as.numeric(X$a - X$b + rnorm(300) > 0)
-#' m = CLS.SKLEARN.LR(C = 0.5)
+#' m = CLS.SKLEARN.LR(config = list(C = 0.5))  # C goes in config: C = would match new()'s Class argument
 #' m$fit(X, y)
 #' head(m$predict(X))
 #' }
@@ -638,7 +638,7 @@ CLS.SKLEARN.XGB = setRefClass('CLS.SKLEARN.XGB', contains = "CLASSIFIER",
 #' \dontrun{
 #' X = data.frame(a = rnorm(300), b = rnorm(300))
 #' y = as.numeric(X$a - X$b + rnorm(300) > 0)
-#' m = CLS.SKLEARN.SVM(C = 1)
+#' m = CLS.SKLEARN.SVM(config = list(C = 1))
 #' m$fit(X, y)
 #' head(m$predict(X))
 #' }
@@ -913,12 +913,14 @@ CLS.E1071.NB = setRefClass('CLS.E1071.NB', contains = 'CLASSIFIER', methods = li
 
     model.fit = function(X, y){
       require(package, character.only = T) %>% assert(paste('Package', package, 'not found!'))
-      naiveBayes(Y ~ ., data = cbind(X, Y = y)) ->> objects$model
+      objects$model <<- e1071::naiveBayes(X, factor(y, levels = c(0, 1)))
     },
 
+    # probability of class 1 (predict() of naiveBayes returns the class by default)
     model.predict = function(X){
       require(package, character.only = T) %>% assert(paste('Package', package, 'not found!'))
-      stats::predict(objects$model, X) %>% as.data.frame
+      p = stats::predict(objects$model, X[objects$features$fname], type = 'raw')
+      data.frame(prob = p[, '1'])
     }
 
   ))
@@ -1091,7 +1093,7 @@ CLS.XGBOOST = setRefClass('CLS.XGBOOST', contains = 'CLASSIFIER', methods = list
     config$nrounds       <<- verify(config$nrounds       , c('numeric', 'integer'), lengths = 1, domain = c(0,Inf), default = 100)
     config$nthread       <<- verify(config$nthread       , c('numeric', 'integer'), lengths = 1, domain = c(0,1024), default = 1)
     config$show_progress <<- verify(config$show_progress , 'logical',               lengths = 1, domain = c(T, F) , default = F)
-    config$verbose       <<- verify(config$verbose       , c('numeric', 'integer', 'logical'), lengths = 1, domain = c(0,1)  , default = 1) %>% as.integer
+    config$verbose       <<- verify(config$verbose       , c('numeric', 'integer', 'logical'), lengths = 1, domain = c(0,1)  , default = getOption('rml.verbose', 1)) %>% as.integer
     config$print_every_n <<- verify(config$print_every_n , c('numeric', 'integer'), lengths = 1, domain = c(0,Inf), default = 1) %>% as.integer
     config$save_name     <<- verify(config$save_name     , 'character',             lengths = 1, default = "xgboost.model")
     config$callbacks     <<- verify(config$callbacks     ,  'list', default = list())

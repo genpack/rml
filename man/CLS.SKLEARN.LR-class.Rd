@@ -28,7 +28,7 @@ Arguments specific to this class (see \code{\link{MODEL-class}} for arguments sh
 \dontrun{
 X = data.frame(a = rnorm(300), b = rnorm(300))
 y = as.numeric(X$a - X$b + rnorm(300) > 0)
-m = CLS.SKLEARN.LR(C = 0.5)
+m = CLS.SKLEARN.LR(config = list(C = 0.5))  # C goes in config: C = would match new()'s Class argument
 m$fit(X, y)
 head(m$predict(X))
 }

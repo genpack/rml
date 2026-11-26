@@ -27,7 +27,6 @@ BIN.KMEANS.KMC = setRefClass('BIN.KMEANS.KMC', contains = 'MODEL', methods = lis
     description      <<- 'KMeans Clustering'
     package          <<- 'rml'
     package_language <<- 'R'
-    type     <<- ' from package kmeans'
     if(is.empty(name)){name <<- 'KMC' %>% paste0(sample(10000:99999, 1))}
     config$num_clusters <<- verify(config$num_clusters, c('numeric', 'integer'), default = 5)
     

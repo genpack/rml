@@ -45,7 +45,7 @@ the model learns to correct their output. Several outputs are combined by \code{
 \item{\code{yin_transformers,yout_transformers}}{\code{list} reserved for target transformation functions.}
 
 \item{\code{objects}}{\code{list} fitted state: \code{model} (the trained object), \code{features} (table of the
-features used, with class and importance), \code{fitting_time}, \code{n_output}.}
+features used, with class and importance), \code{fitting_time} (when fitting finished), \code{fitting_duration} (seconds), \code{n_output}.}
 }}
 
 
@@ -61,7 +61,8 @@ features used, with class and importance), \code{fitting_time}, \code{n_output}.
   \item{\code{performance.cv(X, y, metrics)}}{Repeated train/test cross-validation on a deep copy of the model.}
   \item{\code{deep_copy(name_suffix = NULL)}}{Copy of the model, its transformers and gradient transformers.}
   \item{\code{info.features()}, \code{info.model()}, \code{info.transformers()}, \code{info.edge_list()}}{Information about the features and the network of models.}
-  \item{\code{plot.network()}}{Draws the network of models (requires package rvis).}
+  \item{\code{info.network()}}{\code{list(nodes, links)} of the model network: transformers feed their parent, gradient transformers boost it.}
+  \item{\code{plot.network(plotter)}}{Draws the network: \code{'visNetwork'} (interactive, through rvis if installed, otherwise visNetwork) or \code{'igraph'} (static).}
   \item{\code{model.save(path)}, \code{model.load(path)}}{Save or load native model files; use \code{\link{model_save}} and \code{\link{model_load}}.}
   \item{\code{supports_gradient_transformers()}}{TRUE if training uses the output of gradient transformers.}
 }
@@ -122,7 +123,7 @@ Cross-validation and metrics:
 }
 Runtime:
 \describe{
-  \item{\code{verbose}}{0 silences progress messages. Default 1.}
+  \item{\code{verbose}}{0 silences progress messages. Default 1, or the value of \code{options(rml.verbose = )} so that \code{options(rml.verbose = 0)} silences all models of a session.}
   \item{\code{mc.num_cores}}{Cores used to fit and run transformers in parallel. Default 1.}
   \item{\code{remove_failed_transformers}}{Drop transformers that fail to fit instead of stopping. Default TRUE.}
 }
