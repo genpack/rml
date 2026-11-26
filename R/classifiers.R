@@ -185,7 +185,7 @@ CLS.SKLEARN = setRefClass('CLS.SKLEARN', contains = c('TRM.SKLEARN', "CLASSIFIER
 #' @name CLS.SKLEARN.KNN-class
 #' @aliases CLS.SKLEARN.KNN
 #' @description
-#' Wraps \code{sklearn.neighbors.KNeighborsClassifier}. Any of its arguments (\code{n_neighbors}, \code{weights}, ...) can be passed; integers must be given as integers (\code{10L}).
+#' Wraps \code{sklearn.neighbors.KNeighborsClassifier}. Any of its arguments (\code{n_neighbors}, \code{weights}, ...) can be passed; whole numbers are sent to Python as integers.
 #' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
 #' Inherits from \code{\link{CLS.SKLEARN-class}}.
@@ -322,7 +322,16 @@ CLS.MLR = setRefClass('CLS.MLR', contains = "CLASSIFIER",
 #' Wraps \code{sklearn.linear_model.LogisticRegression} (arguments \code{C}, \code{penalty}, \code{solver}, ...). Uses numeric features only. Feature importance is the absolute coefficient scaled by the feature's standard deviation.
 #' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 #'
+#' \code{max_iter} defaults to 1000 (scikit-learn's default is 100). If scikit-learn still warns that \code{lbfgs failed to converge},
+#' scale the features, for example with \code{transformers = list(MAP.RML.ZFS())}, or raise \code{max_iter}.
+#'
 #' Inherits from \code{\link{CLS.SKLEARN-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{max_iter}}{Maximum solver iterations. Default 1000.}
+#'   \item{other}{Any argument of \code{LogisticRegression}. Whole numbers are passed to Python as integers, so \code{max_iter = 500} works.}
+#' }
 #' @examples
 #' \dontrun{
 #' X = data.frame(a = rnorm(300), b = rnorm(300))
@@ -338,6 +347,8 @@ CLS.SKLEARN.LR = setRefClass('CLS.SKLEARN.LR', contains = "CLS.SKLEARN",
         callSuper(model.module = 'linear_model', model.class = 'LogisticRegression', ...)
         description <<- 'Logistic Regression'
         if(is.empty(name)){name <<- 'SKLR' %>% paste0(sample(10000:99999, 1))}
+        # scikit-learn's default (100) is often too few for unscaled data
+        config$max_iter <<- verify(config$max_iter, c('numeric', 'integer'), lengths = 1, domain = c(1, Inf), default = 1000) %>% as.integer
       },
 
       model.fit = function(X, y){
@@ -577,7 +588,7 @@ CLS.SKLEARN.XGB = setRefClass('CLS.SKLEARN.XGB', contains = "CLASSIFIER",
         if(inherits(X, 'WIDETABLE')){X = wt_as_matrix(X)}
         objects$module <<- reticulate::import('xgboost')
 
-        objects$model <<- do.call(objects$module$XGBClassifier, config %>% list.remove(reserved_words))
+        objects$model <<- do.call(objects$module$XGBClassifier, python_args(config, reserved_words))
         objects$model$fit(X %>% data.matrix, y)
         imp = try(objects$model$feature_importances_ %>% as.numeric, silent = T)
         if(inherits(imp, 'numeric')) objects$features$importance <<- imp

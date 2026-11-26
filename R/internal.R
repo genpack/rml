@@ -160,3 +160,18 @@ scale_columns = function(X, columns, center, scale){
   names(out) <- columns
   as.data.frame(out, optional = TRUE, stringsAsFactors = FALSE)
 }
+
+# Arguments for a Python constructor (scikit-learn, xgboost, category_encoders, ...): the model config without rml's own
+# settings. R numbers are doubles, so whole numbers are sent as Python int: Python libraries reject 100.0 where they expect
+# an int (e.g. max_iter, n_estimators), while float parameters accept an int.
+python_args = function(config, reserved_words = character()){
+  args = config[setdiff(names(config), reserved_words)]
+  for(nm in names(args)){
+    v = args[[nm]]
+    if(is.numeric(v) && !is.integer(v) && length(v) > 0 && all(is.finite(v)) &&
+       all(v == round(v)) && all(abs(v) < .Machine$integer.max)){
+      args[[nm]] <- as.integer(v)
+    }
+  }
+  args
+}

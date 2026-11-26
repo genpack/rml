@@ -9,7 +9,19 @@
 Wraps \code{sklearn.linear_model.LogisticRegression} (arguments \code{C}, \code{penalty}, \code{solver}, ...). Uses numeric features only. Feature importance is the absolute coefficient scaled by the feature's standard deviation.
 Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 
+\code{max_iter} defaults to 1000 (scikit-learn's default is 100). If scikit-learn still warns that \code{lbfgs failed to converge},
+scale the features, for example with \code{transformers = list(MAP.RML.ZFS())}, or raise \code{max_iter}.
+
 Inherits from \code{\link{CLS.SKLEARN-class}}.
+}
+
+\section{Configuration}{
+
+Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+\describe{
+  \item{\code{max_iter}}{Maximum solver iterations. Default 1000.}
+  \item{other}{Any argument of \code{LogisticRegression}. Whole numbers are passed to Python as integers, so \code{max_iter = 500} works.}
+}
 }
 
 \examples{

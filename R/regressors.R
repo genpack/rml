@@ -278,7 +278,7 @@ REG.SKLEARN.XGB = setRefClass('REG.SKLEARN.XGB', contains = "REGRESSOR",
                                  type               <<- 'Extreme Gradient Boosting for Regression'
                                  if(is.empty(name)){name <<- 'SKXGBREG' %>% paste0(sample(1000:9999, 1))}
                                  module_xgb = reticulate::import('xgboost')
-                                 objects$model     <<- do.call(module_xgb$XGBRegressor, config %>% list.remove(reserved_words))
+                                 objects$model     <<- do.call(module_xgb$XGBRegressor, python_args(config, reserved_words))
                                },
                                
                                model.fit = function(X, y){

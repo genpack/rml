@@ -132,7 +132,7 @@ ENC.SKLEARN.OHE = setRefClass(
         }
         objects$features <<- objects$features %>% filter(fname %in% nominals(X), n_unique <= config$max_domain)
         assert(nrow(objects$features) > 0, 'No categorical columns with few enough distinct values for one-hot encoding!')
-        args = config %>% rutils::list.remove(reserved_words)
+        args = python_args(config, reserved_words)
         if(is.null(args$handle_unknown)){args$handle_unknown <- 'ignore'}
         if(is.null(args$sparse_output)){args$sparse_output <- FALSE}
         objects$module <<- reticulate::import('sklearn.preprocessing')
@@ -199,7 +199,7 @@ ENC.CATEGORY_ENCODERS = setRefClass(
       if(!fitted){
         objects$module <<- reticulate::import(paste('category_encoders', config[['model.module']], sep = '.'))
         objects$model  <<- do.call(objects$module[[config$model.class]],
-                                  config %>% list.remove(reserved_words) %>% list.add(cols = objects$features$fname))
+                                  python_args(config, reserved_words) %>% list.add(cols = objects$features$fname))
         objects$model$fit(X, y)
       }
     },

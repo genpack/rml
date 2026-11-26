@@ -143,7 +143,7 @@ TRM.SKLEARN = setRefClass(
     model.fit = function(X, y){
       if(!fitted){
         objects$module <<- reticulate::import(paste('sklearn', config[['model.module']], sep = '.'))
-        objects$model <<- do.call(objects$module[[config[['model.class']]]], args = config %>% rutils::list.remove(reserved_words))
+        objects$model <<- do.call(objects$module[[config[['model.class']]]], args = python_args(config, reserved_words))
         if(inherits(X, 'WIDETABLE')){X = wt_as_matrix(X)}
         objects$model$fit(X %>% data.matrix, y)
       }

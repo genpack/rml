@@ -270,7 +270,7 @@ head(cluster_te$predict(Xte), 3)
 ```
 
 ```{r kmeans-sk, eval = has_sklearn}
-skm = BIN.SKLEARN.KMC(name = 'skm', verbose = 0, n_clusters = 4L, transformers = list(
+skm = BIN.SKLEARN.KMC(name = 'skm', verbose = 0, n_clusters = 4, transformers = list(
   MAP.RML.ZFS(name = 'z', features.include = num)))
 skm$fit(Xtr)
 table(skm$predict(Xte)[[1]])

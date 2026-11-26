@@ -250,7 +250,7 @@ BIN.RML.OBB = setRefClass('BIN.RML.OBB', contains = "MODEL", methods = list(
 #' \dontrun{
 #' X = data.frame(a = rnorm(300), b = rnorm(300))
 #' y = as.numeric(X$a - X$b + rnorm(300) > 0)
-#' m = BIN.SKLEARN.KMC(n_clusters = 4L)
+#' m = BIN.SKLEARN.KMC(n_clusters = 4)
 #' m$fit(X, y)
 #' head(m$predict(X))
 #' }

@@ -6,7 +6,7 @@
 \alias{CLS.SKLEARN.KNN}
 \title{K-nearest neighbours classifier (scikit-learn)}
 \description{
-Wraps \code{sklearn.neighbors.KNeighborsClassifier}. Any of its arguments (\code{n_neighbors}, \code{weights}, ...) can be passed; integers must be given as integers (\code{10L}).
+Wraps \code{sklearn.neighbors.KNeighborsClassifier}. Any of its arguments (\code{n_neighbors}, \code{weights}, ...) can be passed; whole numbers are sent to Python as integers.
 Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
 
 Inherits from \code{\link{CLS.SKLEARN-class}}.

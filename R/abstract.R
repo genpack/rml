@@ -162,7 +162,7 @@ MODEL = setRefClass('MODEL',
                          'ts.enabled', 'ts.id_col', 'ts.time_col', 
                          'return_features', 'feature_subset_size', 'gradient_transformers_aggregator', 'save_predictions',
                          'yin_transformer_function', 'yin_transformer_arguments', 'yout_transformer_function', 'yout_transformer_arguments',
-                         'metric', 'transformers', 'fitted')
+                         'metric', 'transformers', 'fitted', 'python_address')
       
       for(pn in c('keep_columns', 'keep_features', 'cv.restore_model', 'fe.enabled', 'mc.enabled', 
                   'pp.coerce_integer_features', 'pp.trim_outliers', 
