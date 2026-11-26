@@ -4,18 +4,34 @@
 #' @name ENS.RML.BS-class
 #' @aliases ENS.RML.BS
 #' @description
-#' Learns which of its \code{pupils} (model outputs among the input columns) to trust for each row: a supervisor model
-#' predicts the best pupil, and that pupil's output is returned.
+#' Combines two binary classifiers (the \code{pupils}) by learning, row by row, which one to trust.
+#' For each training row the pupil to follow is the one with the higher probability if \code{y = 1} and the
+#' one with the lower probability if \code{y = 0}. A supervisor classifier learns this choice from the
+#' other input columns, and at prediction the output of the chosen pupil is returned.
 #'
-#' Inherits from \code{\link{MODEL-class}}.
+#' The pupils are normally given as transformers, together with a \code{\link{MAP.RML.IDT-class}} transformer
+#' that passes the raw features the supervisor learns from.
+#'
+#' Inherits from \code{\link{CLASSIFIER-class}}.
 #' @section Configuration:
 #' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
 #' \describe{
-#'   \item{\code{model_class}}{Class of the supervisor model. Default \code{'CLS.SKLEARN.XGB'}.}
-#'   \item{\code{model_config}}{Arguments of the supervisor model.}
+#'   \item{\code{pupils}}{Names of the two input columns holding the pupils' probabilities. Default: the output columns of the classifier transformers.}
+#'   \item{\code{model_class}}{Class of the supervisor classifier. Default \code{'CLS.XGBOOST'}.}
+#'   \item{\code{model_config}}{\code{list} of arguments of the supervisor classifier.}
 #' }
+#' @examples
+#' set.seed(1)
+#' X = data.frame(a = rnorm(1000), b = rnorm(1000))
+#' y = as.numeric(runif(1000) < plogis(ifelse(X$b > 0, 2*X$a, -X$a)))
+#' m = ENS.RML.BS(transformers = list(CLS.STATS.LR(name = 'p1', features.include = 'a'),
+#'                                    CLS.XGBOOST(name = 'p2', nrounds = 20),
+#'                                    MAP.RML.IDT(name = 'raw')),
+#'                model_config = list(nrounds = 20, max_depth = 2))
+#' m$fit(X, y)
+#' head(m$predict(X))
 #' @export ENS.RML.BS
-ENS.RML.BS = setRefClass('ENS.RML.BS', contains = "MODEL",
+ENS.RML.BS = setRefClass('ENS.RML.BS', contains = "CLASSIFIER",
    methods = list(
      initialize = function(...){
        callSuper(...)
@@ -25,25 +41,45 @@ ENS.RML.BS = setRefClass('ENS.RML.BS', contains = "MODEL",
        package_language <<- 'R'
        
        if(is.empty(name)){name <<- 'BSUP' %>% paste0(sample(10000:99999, 1))}
-       config$model_class  <<- verify(config$model_class, 'character', default = 'CLS.SKLEARN.XGB')
-       config$model_config <<- verify(config$model_config, 'character', default = list())
-       objects$model <<- new(config$model_class, config = config$model_config)
+       config$model_class  <<- verify(config$model_class, 'character', lengths = 1, default = 'CLS.XGBOOST')
+       config$model_config <<- verify(config$model_config, 'list', default = list())
+       config$pupils       <<- verify(config$pupils, 'character')
+       reserved_words      <<- c(reserved_words, 'model_class', 'model_config', 'pupils')
+     },
+     
+     # Output columns of the classifier transformers
+     find_pupils = function(columns){
+       pupils = c()
+       for(tr in transformers){
+         if(inherits(tr, 'CLASSIFIER')){
+           pupils = c(pupils, columns[columns == tr$name | startsWith(columns, paste0(tr$name, '_'))])
+         }
+       }
+       return(pupils)
      },
      
      model.fit = function(X, y){
-       Xt = X %>% column_drop(objects$pupils)
-       pp = X[objects$pupils] %>% as.matrix
-       pp %>% apply(1, which.max) -> highest
-       pp %>% apply(1, which.min) -> lowest
+       pupils = config$pupils
+       if(is.null(pupils)){pupils = find_pupils(colnames(X))}
+       assert(length(pupils) == 2, sprintf('ENS.RML.BS needs exactly two pupil columns, found %s: %s', length(pupils), paste(pupils, collapse = ', ')))
+       objects$pupils <<- pupils
        
-       yt = ifelse(y, highest, lowest) - 1
+       Xt = X[setdiff(colnames(X), pupils)]
+       if(ncol(Xt) == 0){Xt = X[pupils]}
+       objects$supervisor_features <<- colnames(Xt)
+       pp = as.matrix(X[pupils])
+       
+       # 1 if the second pupil should be followed, 0 for the first one
+       yt = as.numeric(ifelse(y == 1, pp[,2] > pp[,1], pp[,2] < pp[,1]))
+       args = c(config$model_config, list(name = paste0(name, '_supervisor'), verbose = 0))
+       objects$model <<- do.call(new, c(list(config$model_class), args))
        objects$model$fit(Xt, yt)
      },
      
      model.predict = function(X){
-       pp   = X %>% spark.select(objects$pupils)
-       yout = objects$model$predict(X) %>% as.matrix
-       pp %>% nrow %>% sequence %>% sapply(function(i) pp[i, yout[i,1] + 1]) %>% as.data.frame
+       pp     = as.matrix(X[objects$pupils])
+       follow = objects$model$predict_probs(X[objects$supervisor_features]) > 0.5
+       data.frame(prob = ifelse(follow, pp[,2], pp[,1]))
      }
    )
 )

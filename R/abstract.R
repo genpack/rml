@@ -237,7 +237,10 @@ MODEL = setRefClass('MODEL',
     
     reset               = function(reset_transformers = T, reset_gradient_transformers = T, set_features.include = T){
       fitted <<- FALSE
-      if(set_features.include & (length(transformers) == 0)){
+      # A fitted model without transformers keeps the features it used (after elimination) for the next fit.
+      # An unfitted model has no feature table, so its features.include is left as it is
+      # (otherwise a second reset() would set it to NULL and the model would use all columns).
+      if(set_features.include & (length(transformers) == 0) & !is.null(objects$features$fname)){
         config$features.include <<- objects$features$fname
       }
       objects$features <<- NULL

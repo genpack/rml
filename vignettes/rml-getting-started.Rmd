@@ -152,3 +152,7 @@ all.equal(lr$predict(X_test), lr_loaded$predict(X_test))
 * *2. Pipelines with transformers*: feed model outputs into other models and build networks.
 * *3. Boosting with gradient transformers*: boost one algorithm with another.
 * *4. Model and argument reference*: every class and every config argument.
+* *5. Transformers*: encoders, mappers, binners, clustering, feature generators and function transformers, with an example of each.
+* *6. Ensembles, boosters, model search and tools*: ensemblers, cross-validation, comparing models, boosters, templates and helper functions.
+
+Every class and function also has a help page, for example `?CLS.XGBOOST`, `?ENC.RML.TE` or `?correlation`.

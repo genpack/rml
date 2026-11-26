@@ -123,11 +123,21 @@ FNT.RML.LOGIT = setRefClass('FNT.RML.LOGIT', contains = "MODEL", methods = list(
   
   model.fit = function(X, y){
     objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+    X = X[objects$features$fname]
+    # training minimum and maximum, used for min-max scaling at prediction
+    objects$model <<- list(min = vapply(X, min, numeric(1), na.rm = TRUE), max = vapply(X, max, numeric(1), na.rm = TRUE))
   },
   
   model.predict = function(X){
-    X = as.matrix(X)
-    if(config$apply_mms){X = X %>% apply(2, vect.normalise)}
+    X = as.matrix(X[objects$features$fname])
+    if(config$apply_mms){
+      if(is.null(objects$model$min)){
+        # models fitted with older versions: scale by the range of the data being transformed
+        X = X %>% apply(2, function(v) (v - min(v, na.rm = TRUE))/(max(v, na.rm = TRUE) - min(v, na.rm = TRUE)))
+      } else {
+        X = sweep(sweep(X, 2, objects$model$min, '-'), 2, objects$model$max - objects$model$min, '/')
+      }
+    }
     X[X < .Machine$double.eps] <- .Machine$double.eps
     X[X > 1.0 - .Machine$double.eps] <- 1.0 - .Machine$double.eps
     XOUT = log(X/(1 - X))

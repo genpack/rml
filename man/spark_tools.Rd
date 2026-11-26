@@ -18,7 +18,7 @@ spark.dte(tbl, prob_col, label_col, breaks = 1000, fun = NULL)
 
 spark.optSplitColumns.chi(tbl, columns, label_col = "label", fun = NULL)
 
-spark.optSplitColumns.f1(tbl, columns, label_col = "label")
+spark.optSplitColumns.f1(tbl, columns, label_col = "label", fun = NULL)
 
 spark.optSplit.f1(tbl, prob_col, label_col, breaks = 1000, fun = NULL)
 

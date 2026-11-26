@@ -119,7 +119,11 @@ m$objects$features$fname
 | Binners | `BIN.RML.OBB`, `BIN.KMEANS.KMC`, `BIN.SKLEARN.KMC`, `BIN.SMBINNING.OB` | Cut numeric columns into bins or clusters |
 | Feature generators | `FET.RML.D2MUL`, `FET.SKLEARN.MFG` | Pairwise products, polynomial features |
 | Function transformers | `FNT.RML.LOG`, `FNT.RML.INV`, `FNT.RML.LOGIT` | Apply a fixed function to each column |
-| Ensemblers | `ENS.RML.AGGR` | Aggregate inputs, for example the mean of several model outputs |
+| Ensemblers | `ENS.RML.AGGR`, `ENS.RML.BS` | Aggregate model outputs, or pick one model per row |
+| Clustering and grouping | `BIN.KMEANS.KMC`, `BIN.SKLEARN.KMC`, `BIN.RML.GROUPER`, `CATCONCATER` | Cluster rows, group or combine categories |
+
+`vignette('rml-transformers')` shows each of these on its own and `vignette('rml-ensembles-and-tools')`
+covers the ensemblers.
 
 An ensemble of three models averaged by `ENS.RML.AGGR`:
 

@@ -347,7 +347,7 @@ MAP.SKLEARN.QT = setRefClass(
     
     model.fit = function(X, y){
       if(!fitted){
-        objects$features <<- objects$features %>% filter(fname %in% c('numeric', 'integer'))
+        objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
         X = X[objects$features$fname]
         
         module = reticulate::import('sklearn.preprocessing')
@@ -357,7 +357,9 @@ MAP.SKLEARN.QT = setRefClass(
     },
     
     model.predict = function(X){
-      objects$model$transform(X %>% data.matrix) %>% as.data.frame()
+      out = objects$model$transform(X[objects$features$fname] %>% data.matrix) %>% as.data.frame()
+      colnames(out) <- objects$features$fname
+      out
     }
   ))
 

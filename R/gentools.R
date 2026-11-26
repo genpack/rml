@@ -1242,8 +1242,8 @@ evaluate_features = function(X, y, metrics = 'gini', extra_info = T, ...){
       features[cn, 'mfv_freq'] = sum(X[[cn]] == mfv)
       features[cn, 'mfv_rate'] = features[cn, 'mfv_freq']/nrwx
     }
+    features$type = ifelse(features$fclass == 'numeric', 'numeric', ifelse(features$fclass == 'integer', 'ordinal', 'nominal'))
   }
-  features$type = ifelse(features$fclass == 'numeric', 'numeric', ifelse(features$fclass == 'integer', 'ordinal', 'nominal'))
 
   return(features)
 }

@@ -18,9 +18,10 @@ feature_booster = function(base_model, X, y, n_experiment = 10, subset_size = 10
   # Verifications:
   columns = wt_colnames(X)
   basefet = model_features(base_model)
-  assert(basefet %<% columns, "todo")
+  assert(basefet %<% columns, "All features of base_model must be columns of X")
   
-  prf_base = base_model$performance.cv(X, y)
+  # performance.cv() returns one score per test set; models are compared on the mean score
+  prf_base = mean(unlist(base_model$performance.cv(X, y)), na.rm = TRUE)
     
   remain  = columns %-% basefet
 
@@ -49,7 +50,7 @@ feature_booster = function(base_model, X, y, n_experiment = 10, subset_size = 10
   ## Evaluate model bag and get cross-validation performances:
   bag <- evaluate_models(bag, X, y)
   
-  prf <- bag %>% lapply(function(v) v$objects$performance.cv) %>% unlist
+  prf <- bag %>% sapply(function(v) {p = v$objects$performance.cv; if(is.character(p)) NA_real_ else mean(unlist(p), na.rm = TRUE)})
   
   ord = order(prf, decreasing = T) %>% first
   prf_best = prf[ord]
@@ -71,14 +72,22 @@ feature_booster = function(base_model, X, y, n_experiment = 10, subset_size = 10
 
 
 
-# hp_boost: Changes hyper-parameters one-by-one or randomly from a list of given hyper-parameters
+#' Try values of one hyper-parameter
+#'
+#' Makes one copy of \code{base} for each value of \code{parameter} and compares them with \code{\link{service_models}}.
+#' @param base Model object.
+#' @param parameter \code{character} name of a config argument of \code{base}.
+#' @param values Vector of values to try.
+#' @param ... Arguments of \code{\link{service_models}}: \code{X_train}, \code{y_train}, \code{X_test}, \code{y_test}, \code{metrics}, ...
+#' @return Output of \code{\link{service_models}}: \code{list(best_model, best_performance, results)}.
+#' @export
 hp_booster = function(base, parameter, values, ...){
   
   bag = list()
   for(i in sequence(length(values))){
     model = base$deep_copy(i)
-    model$config[[parameter]] <- values[i]
-    model$name %<>% paste('_HPB', i)
+    model$config[[parameter]] <- values[[i]]
+    model$name <- paste0(base$name, '_HPB', i)
     model$reset()
     bag[[model$name]] <- model
   }

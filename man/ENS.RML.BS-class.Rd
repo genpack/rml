@@ -6,18 +6,35 @@
 \alias{ENS.RML.BS}
 \title{Binary supervisor ensembler}
 \description{
-Learns which of its \code{pupils} (model outputs among the input columns) to trust for each row: a supervisor model
-predicts the best pupil, and that pupil's output is returned.
+Combines two binary classifiers (the \code{pupils}) by learning, row by row, which one to trust.
+For each training row the pupil to follow is the one with the higher probability if \code{y = 1} and the
+one with the lower probability if \code{y = 0}. A supervisor classifier learns this choice from the
+other input columns, and at prediction the output of the chosen pupil is returned.
 
-Inherits from \code{\link{MODEL-class}}.
+The pupils are normally given as transformers, together with a \code{\link{MAP.RML.IDT-class}} transformer
+that passes the raw features the supervisor learns from.
+
+Inherits from \code{\link{CLASSIFIER-class}}.
 }
 
 \section{Configuration}{
 
 Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
 \describe{
-  \item{\code{model_class}}{Class of the supervisor model. Default \code{'CLS.SKLEARN.XGB'}.}
-  \item{\code{model_config}}{Arguments of the supervisor model.}
+  \item{\code{pupils}}{Names of the two input columns holding the pupils' probabilities. Default: the output columns of the classifier transformers.}
+  \item{\code{model_class}}{Class of the supervisor classifier. Default \code{'CLS.XGBOOST'}.}
+  \item{\code{model_config}}{\code{list} of arguments of the supervisor classifier.}
 }
 }
 
+\examples{
+set.seed(1)
+X = data.frame(a = rnorm(1000), b = rnorm(1000))
+y = as.numeric(runif(1000) < plogis(ifelse(X$b > 0, 2*X$a, -X$a)))
+m = ENS.RML.BS(transformers = list(CLS.STATS.LR(name = 'p1', features.include = 'a'),
+                                   CLS.XGBOOST(name = 'p2', nrounds = 20),
+                                   MAP.RML.IDT(name = 'raw')),
+               model_config = list(nrounds = 20, max_depth = 2))
+m$fit(X, y)
+head(m$predict(X))
+}

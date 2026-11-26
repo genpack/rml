@@ -1,0 +1,275 @@
+---
+title: "6. Ensembles, boosters, model search and tools"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{6. Ensembles, boosters, model search and tools}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+has_xgboost = requireNamespace("xgboost", quietly = TRUE)
+has_purrr   = requireNamespace("purrr", quietly = TRUE)
+knitr::opts_chunk$set(eval = has_xgboost)
+```
+
+This vignette covers combining models (ensemblers), improving a model automatically (boosters and
+random search with templates), comparing many models, and the helper functions for evaluating features,
+choosing cut points, handling outliers and clustering.
+
+```{r data, message = FALSE}
+library(rml)
+set.seed(3)
+n = 3000
+X = data.frame(x1 = rnorm(n), x2 = rnorm(n), x3 = runif(n), x4 = rnorm(n), x5 = rnorm(n),
+               noise1 = rnorm(n), noise2 = runif(n))
+logit = 1.5*X$x1 - X$x2 + 2*(X$x3 > 0.7) + ifelse(X$x4 > 0, X$x5, -X$x5)
+y = as.numeric(runif(n) < plogis(logit))
+train = sample(n, 2000)
+Xtr = X[train, ];  ytr = y[train]
+Xte = X[-train, ]; yte = y[-train]
+gini = function(model) model$performance(Xte, yte, metrics = 'gini')
+```
+
+## Ensemblers
+
+### ENS.RML.AGGR: averaging models
+
+`ENS.RML.AGGR` outputs a row-wise aggregate of its inputs. With classifiers as transformers it averages
+their probabilities. It is itself a classifier, so `return`, thresholds and `performance()` work as usual.
+
+| Argument | Meaning | Default |
+| --- | --- | --- |
+| `aggregator` | Name of the function applied to each row (`'mean'`, `'median'`, `'max'`, ...) | `'mean'` |
+
+```{r aggr}
+lr  = CLS.STATS.LR(name = 'lr')
+xgb = CLS.XGBOOST(name = 'xgb', nrounds = 80, max_depth = 3, eta = 0.1)
+avg = ENS.RML.AGGR(name = 'avg', verbose = 0, transformers = list(lr, xgb))
+avg$fit(Xtr, ytr)
+c(lr = gini(lr), xgb = gini(xgb), average = gini(avg))
+```
+
+Fitting the ensemble fitted `lr` and `xgb` too, since transformers are fitted with their parent.
+
+### ENS.RML.BS: a supervisor that picks a model per row
+
+`ENS.RML.BS` combines two classifiers (its pupils). For each training row, the pupil to follow is the
+one with the higher probability when `y = 1` and the lower one when `y = 0`. A supervisor classifier
+learns that choice from the other inputs; at prediction, the chosen pupil's probability is returned.
+Give it the two pupils and a `MAP.RML.IDT` that passes the raw columns to the supervisor.
+
+| Argument | Meaning | Default |
+| --- | --- | --- |
+| `pupils` | Names of the two input columns holding the pupils' probabilities | outputs of the classifier transformers |
+| `model_class` | Class of the supervisor | `'CLS.XGBOOST'` |
+| `model_config` | `list` of arguments of the supervisor | `list()` |
+
+Here one pupil sees only `x1` to `x3` and the other only `x4`, `x5`; the supervisor sees everything:
+
+```{r bs}
+bs = ENS.RML.BS(name = 'bs', verbose = 0, model_config = list(nrounds = 50, max_depth = 3),
+  transformers = list(
+    CLS.STATS.LR(name = 'p1', features.include = c('x1', 'x2', 'x3')),
+    CLS.XGBOOST(name = 'p2', nrounds = 50, max_depth = 2, features.include = c('x4', 'x5')),
+    MAP.RML.IDT(name = 'raw')))
+bs$fit(Xtr, ytr)
+c(pupil1 = gini(bs$transformers[[1]]), pupil2 = gini(bs$transformers[[2]]), supervised = gini(bs))
+```
+
+### Stacking
+
+Any model can combine others: a logistic regression on the outputs of other models is a stacked
+ensemble. Its coefficients are the weights it gives each model.
+
+```{r stack}
+stack = CLS.STATS.LR(name = 'stack', verbose = 0, transformers = list(
+  CLS.STATS.LR(name = 'm1'),
+  CLS.XGBOOST(name = 'm2', nrounds = 80, max_depth = 3, eta = 0.1)))
+stack$fit(Xtr, ytr)
+gini(stack)
+stack$objects$model$coefficients
+```
+
+The stacking model here is trained on the same rows its transformers were trained on, which favours
+the more overfitted model. Fit the transformers on other data first (a fitted transformer is not refitted)
+when this matters.
+
+### Boosting
+
+Gradient transformers, where one model learns to correct another, have their own vignette:
+`vignette('rml-gradient-boosting')`.
+
+## Cross-validation
+
+`performance.cv(X, y)` trains a copy of the model on random subsets and scores it on held-out rows. It
+returns a list of scores, one per test set. The settings are model arguments:
+
+| Argument | Meaning | Default |
+| --- | --- | --- |
+| `cv.ntrain` | Number of training subsets | 1 |
+| `cv.ntest` | Test sets per training subset | 5 |
+| `cv.train_ratio` | Share of rows used for training | 0.5 |
+| `cv.test_ratio` | Share of the remaining rows in each test set | 0.2 |
+| `cv.set` | List of fixed validation sets, `list(list(X = , y = ), ...)`, used instead of random test sets | none |
+| `metrics` | Metrics reported (see `correlation()` below) | `'pearson'` for classifiers, `'mae'` for regressors |
+
+```{r cv}
+m = CLS.XGBOOST(name = 'cvm', nrounds = 60, max_depth = 3, cv.ntrain = 2, cv.ntest = 3,
+                cv.train_ratio = 0.7, metrics = c('gini', 'log_loss'))
+scores = m$performance.cv(X, y)
+do.call(rbind, lapply(scores, unlist))
+```
+
+`evaluate_models(models, X, y)` runs `performance.cv` for each model of a named list and stores the
+scores in `model$objects$performance.cv`.
+
+## Comparing models: service_models
+
+`service_models()` fits a list of models, predicts a test set, scores every model and returns the best
+one with a results table (one row per model feature, with the model's scores).
+
+```{r service, eval = has_xgboost && has_purrr}
+candidates = list(
+  CLS.STATS.LR(name = 'logistic'),
+  CLS.XGBOOST(name = 'xgb_shallow', nrounds = 100, max_depth = 2, eta = 0.1),
+  CLS.XGBOOST(name = 'xgb_deep', nrounds = 100, max_depth = 5, eta = 0.05))
+res = service_models(candidates, Xtr, ytr, Xte, yte, metrics = c('gini', 'log_loss'),
+                     reported_parameters = c('max_depth'))
+res$best_model$name
+res$best_performance
+unique(res$results[c('model', 'gini', 'log_loss', 'max_depth')])
+```
+
+## Boosters
+
+### hp_booster: try values of one hyper-parameter
+
+`hp_booster(base, parameter, values, ...)` makes one copy of `base` per value of `parameter`, then
+calls `service_models()` with the remaining arguments.
+
+```{r hp, eval = has_xgboost && has_purrr}
+base = CLS.XGBOOST(name = 'xgb', nrounds = 100, eta = 0.1)
+hp = hp_booster(base, 'max_depth', c(1, 3, 6), X_train = Xtr, y_train = ytr,
+                X_test = Xte, y_test = yte, metrics = 'gini', reported_parameters = 'max_depth')
+unique(hp$results[c('model', 'max_depth', 'gini')])
+```
+
+### feature_booster: try adding features
+
+`feature_booster(base_model, X, y, n_experiment, subset_size)` builds `n_experiment` copies of the
+model, each with `subset_size` extra columns drawn at random from those it does not use yet. It
+cross-validates them and returns the best copy if its mean score beats the base model, otherwise
+`NULL`. The score is the model's first `metrics` entry.
+
+```{r feature-booster}
+small = CLS.STATS.LR(name = 'small', features.include = c('x1', 'noise1'), metrics = 'gini',
+                     cv.ntest = 3, verbose = 0)
+boosted = feature_booster(small, X, y, n_experiment = 4, subset_size = 2)
+if(!is.null(boosted)) boosted$config$features.include
+```
+
+## Random model search with templates
+
+`build_model_from_template(template_name, ...)` creates a model with random settings from a named list of
+templates. Each template gives the class, sets or random functions for its arguments, and which other
+templates may become its transformers and with what probability. The package ships
+`default_templates`; you can pass your own list.
+
+```{r templates}
+my_templates = list(
+  xgb = list(class = 'CLS.XGBOOST', nrounds = c(50, 100), max_depth = 2:5, eta = c(0.05, 0.1),
+             transformers = list(list(templates = 'zscore', probability = 0.5))),
+  zscore = list(class = 'MAP.RML.ZFS'))
+set.seed(10)
+search = lapply(1:4, function(i) build_model_from_template('xgb', model_name = paste0('try', i),
+                                                           templates = my_templates))
+sapply(search, function(m) c(name = m$name, nrounds = m$config$nrounds, max_depth = m$config$max_depth,
+                             transformers = length(m$transformers)))
+```
+
+`names(default_templates)` lists the shipped templates; `?build_model_from_template` describes the
+template fields.
+
+## Feature evaluation
+
+`evaluate_features(X, y, metrics)` scores every column against the target, with summary statistics
+when `extra_info = TRUE`:
+
+```{r eval-features}
+ef = evaluate_features(X, y, metrics = c('gini', 'pearson'), extra_info = FALSE)
+ef[order(-abs(ef$gini)), ]
+```
+
+`correlation(x, y, metrics)` is the function behind every `performance()` call. `x` can be a vector or
+a table (one score per column). Probability metrics include `gini`, `aurc` (AUC), `log_loss`,
+`pearson` and `lift`; with a `threshold` or `quantiles`, classification metrics such as `precision`,
+`recall`, `f1`, `accuracy` and `mcc` are available too (see `?correlation` for the full list).
+
+```{r correlation}
+p = xgb$predict(Xte)[[1]]
+unlist(correlation(p, yte, metrics = c('gini', 'log_loss', 'precision', 'recall', 'f1'), threshold = 0.5))
+```
+
+## Choosing a cut point
+
+`optSplit.chi()` and `optSplit.f1()` find the cut point of a score that best separates the classes,
+by chi-square association or by F1. `scorer()` gives the confusion counts and rates of a binary
+prediction.
+
+```{r splits}
+d = data.frame(score = p, label = yte)
+unlist(optSplit.chi(d, num_col = 'score', cat_col = 'label'))
+unlist(optSplit.f1(d, prob_col = 'score', label_col = 'label'))
+d$pred = as.numeric(d$score > 0.5)
+unlist(scorer(d, prediction_col = 'pred', actual_col = 'label')[c('tp', 'fp', 'fn', 'tn', 'precision', 'recall', 'f1')])
+```
+
+Classifiers use these to set their own threshold: `threshold_determination = 'maximum_f1'` or
+`'maximum_chi'` (see `vignette('rml-reference')`).
+
+## Outliers and data checks
+
+`outlier(x, sd_threshold)` flags values more than `sd_threshold` standard deviations from the mean
+(optionally repeated on the remaining values with `recursive = TRUE`). `trim_outliers(X)` clips them
+in every column; models do this during training with `pp.trim_outliers = TRUE`.
+
+```{r outliers}
+v = c(rnorm(200), 15, -12)
+which(outlier(v, sd_threshold = 4))
+range(trim_outliers(data.frame(v = v))$v)
+```
+
+Other helpers: `remove_invariant_features(X)` drops constant columns, `group_features(X)` groups
+columns by their number of distinct values, `int_ordinals(X)` turns whole-number columns into
+integers, and `na2median(X)` fills missing values with column medians.
+
+## Clustering helpers
+
+`elbow(M, num.clusters)` runs k-means for several numbers of clusters, returns the within-group sum of
+squares (`wgss`), the clusterings (`clst`) and a suggested number of clusters (`bnc`, chosen by
+`best_num_clusters()`):
+
+```{r elbow}
+M = scale(X[c('x1', 'x2', 'x3')])
+el = elbow(M, num.clusters = c(2, 3, 4, 6, 8, 12), doPlot = FALSE)
+round(el$wgss)
+el$bnc
+```
+
+`cluster_tree(distmat)` runs a hierarchical clustering on a distance matrix and reports the clusters for
+each number of clusters. These functions underlie the `BIN.*` clustering transformers described in
+`vignette('rml-transformers')`.
+
+## Saving and loading
+
+`model_save(model, path)` writes the model, with its transformers and any Python or keras objects, into
+the folder `path/<model name>`. `model_load(name, path)` reads it back.
+
+```{r save}
+folder = tempfile()
+model_save(avg, folder)
+avg2 = model_load('avg', folder)
+all.equal(avg$predict(Xte[1:5, ]), avg2$predict(Xte[1:5, ]))
+```

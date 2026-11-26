@@ -158,6 +158,12 @@ TRM.SKLEARN = setRefClass(
       # If your naming strategy is different, write your own model.predict() method for any wrapper inheriting from this class.
       if(ncol(out) == nrow(objects$features)){
         colnames(out) <- objects$features$fname
+      } else {
+        # transformers that create new columns (e.g. PolynomialFeatures) name them with get_feature_names_out()
+        ns = try(as.character(objects$model$get_feature_names_out(objects$features$fname)), silent = TRUE)
+        if(!inherits(ns, 'try-error') && length(ns) == ncol(out)){
+          colnames(out) <- gsub(' ', '_X_', ns)
+        }
       }
       return(out)
     }

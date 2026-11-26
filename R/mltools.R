@@ -496,7 +496,7 @@ optimSearch1d = function(fun, domain, ...){
 #' @rdname optimal_split
 #' @export
 optSplit.chi = function(tbl, num_col, cat_col, fun = NULL){
-  tbl %<>% rename(x = num_col, y = cat_col) %>% dplyr::select(x, y)
+  tbl %<>% rename(x = all_of(num_col), y = all_of(cat_col)) %>% dplyr::select(x, y)
   if(!is.null(fun)){tbl %<>% mutate(x = fun(x))}
   N = nrow(tbl)
   b = tbl %>% pull('y') %>% mean
@@ -509,7 +509,7 @@ optSplit.chi = function(tbl, num_col, cat_col, fun = NULL){
   out <- tbl %>% tail(1) %>% dplyr::select(split = x, correlation = chi) %>% as.list
 
   #out$chisq  <- N*out$chisq
-  out$pvalue <- pchisq(out$correlation, df = 1, lower.tail = F)
+  out$pvalue <- pchisq(N*out$correlation, df = 1, lower.tail = F)
   return(out)
 }
 
@@ -599,7 +599,6 @@ optSplitColumns.f1 = function(df, columns = NULL, label_col = 'label', fun = NUL
     res  <- chif(res1$f1 > res2$f1, res1, res2)
     res  <- c(Column = col, res) %>% as.data.frame
     if(i == 1){sp = res} else {sp %<>% rbind(res)}
-    print(res)
   }
   return(sp)
 }
@@ -608,16 +607,14 @@ optSplitColumns.f1 = function(df, columns = NULL, label_col = 'label', fun = NUL
 #' @export
 optSplitColumns.chi = function(df, columns = numerics(df), label_col = 'label', fun = NULL){
   columns %<>% setdiff(label_col)
-  for(i in sequence(length(columns))){
-    col = columns[i]
-    if(length(unique(df[,col])) > 1){
+  sp = list()
+  for(col in columns){
+    if(length(unique(df[[col]])) > 1){
       res <- df %>% optSplit.chi(num_col = col, cat_col = label_col, fun = fun)
-      res <- c(Column = col, res) %>% as.data.frame
-      if(i == 1){sp = res} else {sp %<>% rbind(res)}
-      print(res)
+      sp[[col]] <- c(Column = col, res) %>% as.data.frame
     }
   }
-  return(sp)
+  return(do.call(rbind, unname(sp)))
 }
 
 
@@ -629,14 +626,13 @@ spark.optSplitColumns.chi = function(tbl, columns, label_col = 'label', fun = NU
     res <- tbl %>% spark.optSplit.chi(num_col = col, cat_col = label_col, fun = fun)
     res <- c(Column = col, res) %>% as.data.frame
     if(i == 1){sp = res} else {sp %<>% rbind(res)}
-    print(res)
   }
   return(sp)
 }
 
 #' @rdname spark_tools
 #' @export
-spark.optSplitColumns.f1 = function(tbl, columns, label_col = 'label'){
+spark.optSplitColumns.f1 = function(tbl, columns, label_col = 'label', fun = NULL){
   for(i in sequence(length(columns))){
     col = columns[i]
     res1 <- tbl %>% spark.optSplit.f1(prob_col = col, label_col = label_col, fun = fun)
@@ -645,7 +641,6 @@ spark.optSplitColumns.f1 = function(tbl, columns, label_col = 'label'){
     res  <- chif(res1$f1 > res2$f1, res1, res2)
     res  <- c(Column = col, res) %>% as.data.frame
     if(i == 1){sp = res} else {sp %<>% rbind(res)}
-    print(res)
   }
   return(sp)
 }
@@ -657,7 +652,7 @@ spark.optSplitColumns.f1 = function(tbl, columns, label_col = 'label'){
 #' @rdname optimal_split
 #' @export
 dte = function(df, prob_col, label_col, breaks = 1000, fun = NULL){
-  df %<>% rename(xxx = prob_col, yy = label_col) %>% dplyr::select(xxx, yy)
+  df %<>% rename(xxx = all_of(prob_col), yy = all_of(label_col)) %>% dplyr::select(xxx, yy)
 
   if(!is.null(fun)){df %<>% mutate(xxx = fun(xxx))}
 
@@ -742,7 +737,7 @@ all_binary_predictive_scores = c('tp', 'fn', 'fp', 'tn', 'tpr', 'fnr', 'fpr', 't
 #' @export
 scorer = function(df, prediction_col, actual_col){
   df %>% as.data.frame %>% 
-    rename(x = prediction_col, y = actual_col) %>%
+    rename(x = all_of(prediction_col), y = all_of(actual_col)) %>%
     group_by(x,y) %>% summarise(count = length(x)) %>% ungroup %>% 
     mutate(x = as.logical(x), y = as.logical(y)) -> scores
 
@@ -798,7 +793,7 @@ scorer = function(df, prediction_col, actual_col){
 #' @param prediction_col,actual_col Column names of predicted and actual binary classes.
 #' @param weight Down-sampling factor of class 0.
 scorer_downsampled = function(tbl, prediction_col, actual_col, weight = 2){
-  tbl %>% rename(x = prediction_col, y = actual_col) %>%
+  tbl %>% rename(x = all_of(prediction_col), y = all_of(actual_col)) %>%
     group_by(x,y) %>% summarise(count = length(x)) -> scores
 
   TP = scores %>% filter(x, y)   %>% pull('count')
@@ -841,7 +836,7 @@ get_map = function(X, y, source, target, encoding = 'target_ratio'){
   } else stop('Unknown encoding ', encoding)
 
   nr = tbl %>% pull(ratio) %>% unique %>% length
-  elbow(tbl['ratio'], max.num.clusters = nr) -> res
+  elbow(tbl['ratio'], max.num.clusters = nr, doPlot = FALSE) -> res
   logpval = c()
 
   for(clust in res$clst){
@@ -1601,7 +1596,7 @@ fit_models = function(models, X, y, num_cores = 1, verbose = 1, remove_failed_mo
   
   ## Remove unfitted (failed) models:
   if(remove_failed_models){
-    fitted = models %>% lapply(function(x) {x$fitted}) %>% unlist %>% which
+    fitted = which(vapply(models, function(x) isTRUE(x$fitted), logical(1)))
     failed = models %>% length %>% sequence %>% setdiff(fitted)
     
     nt = length(fitted)
@@ -1619,15 +1614,17 @@ fit_models = function(models, X, y, num_cores = 1, verbose = 1, remove_failed_mo
 predict_models = function(models, X, num_cores = 1, verbose = 1){
   num_cores = verify(num_cores, c('numeric', 'integer'), lengths = 1, domain = c(1, parallel::detectCores()), default = 1)
   
-  fitted = models %>% lapply(function(x) {x$fitted}) %>% unlist %>% which
+  fitted = which(vapply(models, function(x) isTRUE(x$fitted), logical(1)))
   failed = models %>% length %>% sequence %>% setdiff(fitted)
   
   if(verbose > 0 & length(failed) > 0){
-    print("%s models are not fitted! No columns will be generated from these models.")
+    cat('\n', sprintf("%s model(s) not fitted, no columns will be generated from them: %s", length(failed),
+                      paste(names(models)[failed] %>% {if(is.null(.)) failed else .}, collapse = ', ')), '\n')
   }
   
   models %<>% list.extract(fitted)
   nt = length(models)
+  if(nt == 0){return(data.frame(row.names = sequence(nrow(X)))[, integer(0), drop = FALSE])}
   if((num_cores > 1) & (nt > 1)){
     requirements = models %>% lapply(function(x) x$packages_required) %>% unlist %>% unique
     cl = rutils::setup_multicore(n_jobs = num_cores)
@@ -1682,7 +1679,7 @@ evaluate_models = function(models, X, y){
     res = try(models[[i]]$performance.cv(X, y), silent = T)
     cat('Done!', '\n')
     if(inherits(res, 'try-error')){
-      models[[i]]$objects$performance.cv <- sprintf("Model %s evaluation failed! %s", model$name, res %>% as.character)
+      models[[i]]$objects$performance.cv <- sprintf("Model %s evaluation failed! %s", i, res %>% as.character)
     } else {
       models[[i]]$objects$performance.cv <- res
     }
@@ -1707,7 +1704,7 @@ evaluate_models.multicore = function(models, X, y, n_jobs = parallel::detectCore
     model = models[[i]]
     res = try(model$performance.cv(X, y), silent = T)
     if(inherits(res, 'try-error')){
-      model$objects$performance.cv = sprintf("Model %s evaluation failed! %s", model$name, res %>% as.character)
+      model$objects$performance.cv = sprintf("Model %s evaluation failed! %s", i, res %>% as.character)
     } else {
       model$objects$performance.cv <- res
     }
@@ -1754,23 +1751,25 @@ service_models = function(modlist, X_train, y_train, X_test, y_test, num_cores =
   
   rutils::warnif(length(pf) < length(modlist), 'Some models failed to predict!')
   
-  pfdf = pf %>% lapply(unlist) %>% purrr::reduce(rbind) %>% as.data.frame %>% {rownames(.)<-names(pf);.}
-  print(pfdf)
+  # one row per model, one column per metric (correlation() returns plain numbers for a single metric)
+  pfdf = pf %>% lapply(function(p) {p = unlist(p); if(is.null(names(p))) names(p) <- metrics[seq_along(p)]; as.data.frame(as.list(p))}) %>%
+    dplyr::bind_rows() %>% as.data.frame %>% {rownames(.)<-names(pf);.}
   
   for(i in rownames(pfdf)){
     cfg = modlist[[i]]$config
     for(j in reported_parameters){
-      pfdf[i, j] <- cfg[[j]]
+      val = cfg[[j]]
+      pfdf[i, j] <- if(is.null(val) || length(val) != 1) NA else val
     }
   }
 
   modlist %>% list.extract(rownames(pfdf)) %>% lapply(function(x) x$objects$features %>% dplyr::mutate(model = x$name, fitting_time = as.character(x$objects$fitting_time))) %>% 
     purrr::reduce(dplyr::bind_rows) %>% 
-    dplyr::left_join(pfdf %>% rutils::rownames2Column('model')) -> ptab
+    dplyr::left_join(pfdf %>% rutils::rownames2Column('model'), by = 'model') -> ptab
   
-  ord = order(ptab[[names(pf[[1]])[1]]], decreasing = T)[1]
+  ord = order(ptab[[colnames(pfdf)[1]]], decreasing = T)[1]
   for(i in sequence(length(modlist))){modlist[[i]]$release_model()}
-  return(list(best_model = modlist[[ptab$model[ord]]], best_performance = max(ptab[[names(pf[[1]])[1]]]), results = ptab))
+  return(list(best_model = modlist[[ptab$model[ord]]], best_performance = max(ptab[[colnames(pfdf)[1]]], na.rm = TRUE), results = ptab))
 }
 
 

@@ -175,7 +175,11 @@ Every regressor supports gradient transformers (it trains on the residual).
 | `FNT.RML.LOG` | rml | `log(x + intercept)` | `intercept` (1), `apply_abs` (TRUE) |
 | `FNT.RML.INV` | rml | `1/x`, trimmed | `trim` (10000) |
 | `FNT.RML.LOGIT` | rml | Logit of each column | `apply_mms` (TRUE) |
+| `FNT.RML.POLY` | rml | Powers of `gain*x + intercept` | `n_terms` (3), `gain` (1), `intercept` (0), `apply_abs` (FALSE) |
+| `BIN.RML.GROUPER` | rml | Categories grouped by target rate | `encoding` ('target_ratio') |
+| `CATCONCATER` | rml | Categorical values of a row joined with '-' | |
 | `ENS.RML.AGGR` | rml | Row-wise aggregate of its inputs | `aggregator` ('mean') |
+| `ENS.RML.BS` | rml | Output of one of two classifiers, chosen per row by a supervisor | `pupils`, `model_class` ('CLS.XGBOOST'), `model_config` |
 
 Python-based classes need the reticulate package and the Python module installed. Set `python_address`
 to choose the Python executable.

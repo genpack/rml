@@ -1,0 +1,377 @@
+---
+title: "5. Transformers: encoders, mappers, binners, clustering and feature generators"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{5. Transformers: encoders, mappers, binners, clustering and feature generators}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+has_xgboost = requireNamespace("xgboost", quietly = TRUE)
+has_python  = requireNamespace("reticulate", quietly = TRUE) && reticulate::py_available(initialize = TRUE)
+has_sklearn = has_python && reticulate::py_module_available("sklearn")
+has_catenc  = has_python && reticulate::py_module_available("category_encoders")
+has_pylmnn  = has_python && reticulate::py_module_available("pylmnn")
+has_fastdummies = requireNamespace("fastDummies", quietly = TRUE)
+has_smbinning   = requireNamespace("smbinning", quietly = TRUE)
+```
+
+This vignette walks through every transformer class in rml, family by family. Each section explains
+what the transformer does, lists the arguments specific to it, and shows it on its own and inside a
+model. Arguments shared by all models (`name`, `features.include`, `features.exclude`, `verbose`, and so
+on) are described in `vignette('rml-reference')` and in `?MODEL`. Models with transformers print their
+progress while fitting; the examples set `verbose = 0` to keep the output short.
+
+A transformer is an ordinary model: it has `fit(X, y)` and `predict(X)`. Used alone, `predict()`
+returns its output columns. Used inside another model's `transformers` list, its output columns become
+that model's input features (see `vignette('rml-pipelines')`).
+
+Class names follow the pattern `<TYPE>.<PACKAGE>.<ALGORITHM>`: `ENC.RML.TE` is an encoder (`ENC`)
+implemented in rml (`RML`) doing target encoding (`TE`).
+
+## Data used in the examples
+
+```{r data, message = FALSE}
+library(rml)
+set.seed(42)
+n = 2000
+X = data.frame(
+  age     = round(runif(n, 18, 80)),
+  income  = round(rlnorm(n, 10, 0.6)),
+  balance = rnorm(n, 5000, 2000),
+  visits  = rpois(n, 3),
+  region  = sample(c('north', 'south', 'east', 'west'), n, replace = TRUE, prob = c(.4, .3, .2, .1)),
+  channel = sample(c('web', 'branch', 'phone'), n, replace = TRUE),
+  stringsAsFactors = FALSE)
+logit = -1 + 0.03*(X$age - 45) + 0.8*(log(X$income) - 10) + 0.0003*(X$balance - 5000) +
+        c(north = 0.8, south = -0.5, east = 0.2, west = -1)[X$region] + 0.6*(X$channel == 'web')
+y = as.numeric(runif(n) < plogis(logit))
+train = sample(n, 1500)
+Xtr = X[train, ];  ytr = y[train]
+Xte = X[-train, ]; yte = y[-train]
+gini = function(model) model$performance(Xte, yte, metrics = 'gini')
+```
+
+`X` has four numeric columns (`age`, `income`, `balance`, `visits`) and two categorical columns
+(`region`, `channel`). The binary target depends on all of them.
+
+## Encoders: categorical columns to numbers
+
+Encoders read the categorical columns (character, factor, and for some encoders integer) and output
+numeric columns. Numeric columns are ignored.
+
+### ENC.RML.TE: target encoder
+
+Replaces each categorical column by the share of class 1 among training rows with the same value.
+Values not seen in training get the median rate. It has no specific arguments.
+
+```{r te}
+te = ENC.RML.TE(name = 'te', features.include = c('region', 'channel'))
+te$fit(Xtr, ytr)
+head(te$predict(Xte), 3)
+```
+
+Target encoding feeds a logistic regression with one number per categorical column instead of one
+column per value:
+
+```{r te-model}
+lr_te = CLS.STATS.LR(name = 'lr_te', verbose = 0, transformers = list(
+  te, MAP.RML.IDT(name = 'num', features.include = c('age', 'income', 'balance', 'visits'))))
+lr_te$fit(Xtr, ytr)
+gini(lr_te)
+```
+
+### ENC.RML.FE: numeric aggregates per category
+
+For each categorical column and each numeric column, outputs the aggregate of the numeric column
+within the row's category, for example the mean income per region.
+
+| Argument | Meaning | Default |
+| --- | --- | --- |
+| `aggregator` | Name of the aggregate function | `'mean'` |
+| `categoricals` | Categorical columns to use | all |
+| `action_by_original` | Function of (aggregate, original value) applied to each output, e.g. a difference | none |
+
+```{r fe}
+fe = ENC.RML.FE(name = 'fe', features.include = c('region', 'income', 'age'))
+fe$fit(Xtr, ytr)
+head(fe$predict(Xte), 3)
+```
+
+### ENC.RML.ME and ENC.RML.MEB: one model per category
+
+`ENC.RML.ME` fits a separate model on the rows of each category value with enough rows, plus a global
+model on all rows. Each row is scored by its category's model, or the global one. The output is one
+column per categorical column. `ENC.RML.MEB` holds out 30% of the training rows and keeps a category's
+model only if it beats the global model there.
+
+| Argument | Meaning | Default |
+| --- | --- | --- |
+| `model.class` | Class of the segment models | `'CLS.STATS.LR'` |
+| `model.config` | `list` of arguments of the segment models | `list()` |
+| `min_rows` | Minimum rows for a category to get its own model | 100 |
+| `segmentation_features` | Categorical columns to segment by | all |
+
+```{r me}
+me = ENC.RML.ME(name = 'me', model.class = 'CLS.STATS.LR', min_rows = 150,
+                features.include = c('region', 'age', 'income', 'balance'))
+me$fit(Xtr, ytr)
+head(me$predict(Xte), 3)
+```
+
+### One-hot encoders
+
+`ENC.SKLEARN.OHE` (scikit-learn) and `ENC.FASTDUMMIES.OHE` (package fastDummies) create one 0/1 column
+per value. Both take `max_domain` (default 25): columns with more distinct values are not encoded.
+`ENC.SKLEARN.OHE` names its outputs `<column>_<value>` and gives all-zero rows for values not seen in
+training.
+
+```{r ohe-sk, eval = has_sklearn}
+ohe = ENC.SKLEARN.OHE(name = 'ohe', features.include = c('region', 'channel'))
+ohe$fit(Xtr, ytr)
+head(ohe$predict(Xte), 3)
+```
+
+```{r ohe-fd, eval = has_fastdummies}
+ohe2 = ENC.FASTDUMMIES.OHE(name = 'dummies', features.include = c('region', 'channel'))
+ohe2$fit(Xtr, ytr)
+head(ohe2$predict(Xte), 3)
+```
+
+### category_encoders
+
+`ENC.CATEGORY_ENCODERS.TE` (target), `.CATB` (CatBoost), `.JSTN` (James-Stein) and `.HLMRT` (Helmert)
+wrap the encoders of the Python package category_encoders. Arguments other than rml's own are passed to
+the Python encoder.
+
+```{r catenc, eval = has_catenc}
+cb = ENC.CATEGORY_ENCODERS.CATB(name = 'catb', features.include = c('region', 'channel'))
+cb$fit(Xtr, ytr)
+head(cb$predict(Xte), 3)
+```
+
+### CATCONCATER: combined category
+
+Outputs one column joining the categorical values of a row with `'-'`, for example `north-web`. Feed it
+to a target encoder to encode combinations of categories:
+
+```{r concat}
+combo = ENC.RML.TE(name = 'combo_te', verbose = 0, transformers = list(
+  CATCONCATER(name = 'combo', features.include = c('region', 'channel'))))
+combo$fit(Xtr, ytr)
+head(combo$predict(Xte), 3)
+```
+
+## Mappers: one output column per input column
+
+Mappers transform numeric columns one to one, or project them to a smaller set.
+
+| Class | Output |
+| --- | --- |
+| `MAP.RML.IDT` | The input columns unchanged |
+| `MAP.RML.MMS` | `(x - min)/(max - min)` with training min and max |
+| `MAP.RML.ZFS` | `(x - mean)/sd` with training mean and sd |
+| `MAP.SKLEARN.MMS`, `MAP.SKLEARN.ZFS`, `MAP.SKLEARN.NRM`, `MAP.SKLEARN.QT` | scikit-learn's `MinMaxScaler`, `StandardScaler`, `Normalizer`, `QuantileTransformer` |
+| `MAP.STATS.PCA` | First principal components (`num_components`, default 5; `center`, `scale`) |
+| `MAP.PYLMNN.LMNN` | Large margin nearest neighbour projection (`num_components`, `num_neighbors`, `epochs`) |
+
+`MAP.RML.IDT` is the way to give a model raw columns next to the outputs of other transformers. The
+scalers map missing and undefined values to 0.
+
+```{r mappers}
+num = c('age', 'income', 'balance', 'visits')
+zfs = MAP.RML.ZFS(name = 'z', features.include = num)
+zfs$fit(Xtr)
+round(sapply(zfs$predict(Xte), function(v) c(mean = mean(v), sd = sd(v))), 2)
+
+mms = MAP.RML.MMS(name = 'mm', features.include = num)
+mms$fit(Xtr)
+round(sapply(mms$predict(Xte), range), 2)
+
+pca = MAP.STATS.PCA(name = 'pca', num_components = 2, features.include = num)
+pca$fit(Xtr)
+head(pca$predict(Xte), 3)
+```
+
+```{r mappers-sk, eval = has_sklearn}
+qt = MAP.SKLEARN.QT(name = 'qt', n_quantiles = 100L, output_distribution = 'normal', features.include = num)
+qt$fit(Xtr)
+head(qt$predict(Xte), 3)
+```
+
+```{r lmnn, eval = has_pylmnn}
+lmnn = MAP.PYLMNN.LMNN(name = 'lmnn', num_components = 2, features.include = num)
+lmnn$fit(Xtr, ytr)
+head(lmnn$predict(Xte), 3)
+```
+
+## Binners and clustering
+
+Binners cut numeric columns into bins; clustering binners assign each row to a cluster.
+
+### BIN.RML.OBB: optimal binary binner
+
+Splits each numeric column at the cut point with the strongest chi-square association with the binary
+target, and returns 0/1 per column. The importance in its feature table is the strength of that split.
+
+```{r obb}
+obb = BIN.RML.OBB(name = 'obb', features.include = num)
+obb$fit(Xtr, ytr)
+obb$objects$model[c('Column', 'split')]
+head(obb$predict(Xte), 3)
+```
+
+### BIN.SMBINNING.OB: optimal binning with smbinning
+
+Bins each numeric column with `smbinning::smbinning` (conditional inference trees) into a categorical
+column. `percentageOfRecords` (default 0.05) is the minimum share of rows per bin. Column names must not
+contain dots.
+
+```{r smb, eval = has_smbinning}
+smb = BIN.SMBINNING.OB(name = 'smb', features.include = c('age', 'income'))
+smb$fit(Xtr, ytr)
+head(smb$predict(Xte), 3)
+```
+
+### BIN.RML.GROUPER: grouping categories
+
+Groups the values of each categorical column by their target rate, so that values with similar rates
+share a group. `encoding = 'target_ratio'` (default) clusters the rates and picks the number of groups
+with a chi-square test.
+
+```{r grouper}
+grp = BIN.RML.GROUPER(name = 'grp', features.include = 'region')
+grp$fit(Xtr, ytr)
+unique(cbind(Xte['region'], group = grp$predict(Xte)[[1]]))
+```
+
+### Clustering: BIN.KMEANS.KMC and BIN.SKLEARN.KMC
+
+Both cluster the rows on the numeric columns with k-means and return the cluster number of each row
+(the nearest centre for new rows). `BIN.KMEANS.KMC` uses `stats::kmeans` with `num_clusters` (default
+5); `BIN.SKLEARN.KMC` uses scikit-learn's `KMeans` with `n_clusters` (default 3). Scale the columns first,
+otherwise the column with the largest range dominates the distances:
+
+```{r kmeans}
+km = BIN.KMEANS.KMC(name = 'km', verbose = 0, num_clusters = 4, transformers = list(
+  MAP.RML.ZFS(name = 'z', features.include = num)))
+km$fit(Xtr)
+table(km$predict(Xte)[[1]])
+```
+
+A cluster number is a category, so a target encoder can turn it into a feature:
+
+```{r kmeans-te}
+cluster_te = ENC.RML.TE(name = 'cluster_rate', verbose = 0, transformers = list(km))
+cluster_te$fit(Xtr, ytr)
+head(cluster_te$predict(Xte), 3)
+```
+
+```{r kmeans-sk, eval = has_sklearn}
+skm = BIN.SKLEARN.KMC(name = 'skm', verbose = 0, n_clusters = 4L, transformers = list(
+  MAP.RML.ZFS(name = 'z', features.include = num)))
+skm$fit(Xtr)
+table(skm$predict(Xte)[[1]])
+```
+
+The functions `elbow()`, `best_num_clusters()` and `cluster_tree()` help choose the number of clusters;
+see `vignette('rml-ensembles-and-tools')`.
+
+## Feature generators
+
+| Class | Output |
+| --- | --- |
+| `FET.RML.D2MUL` | Product of every pair of numeric columns, named `<a>_X_<b>` |
+| `FET.SKLEARN.MFG` | scikit-learn's `PolynomialFeatures` (`degree`, `interaction_only`, ...) |
+
+```{r d2mul}
+d2 = FET.RML.D2MUL(name = 'd2', features.include = c('age', 'visits', 'balance'))
+d2$fit(Xtr)
+head(d2$predict(Xte), 3)
+```
+
+```{r mfg, eval = has_sklearn}
+mfg = FET.SKLEARN.MFG(name = 'poly', degree = 2L, interaction_only = TRUE, include_bias = FALSE,
+                      features.include = c('age', 'visits'))
+mfg$fit(Xtr)
+head(mfg$predict(Xte), 3)
+```
+
+## Function transformers
+
+Function transformers apply a fixed function to each numeric column.
+
+| Class | Output | Arguments |
+| --- | --- | --- |
+| `FNT.RML.LOG` | `log(x + intercept)` | `intercept` (1), `apply_abs` (TRUE: use `abs(x)`) |
+| `FNT.RML.INV` | `1/x`, limited to `trim` | `trim` (10000) |
+| `FNT.RML.LOGIT` | logit of x, after min-max scaling to [0, 1] | `apply_mms` (TRUE) |
+| `FNT.RML.POLY` | `v, v^2, ..., v^n_terms` with `v = gain*x + intercept`, named `<column>_T<k>` | `n_terms` (3), `gain` (1), `intercept` (0), `apply_abs` (FALSE) |
+
+```{r fnt}
+lg = FNT.RML.LOG(name = 'log', features.include = 'income')
+lg$fit(Xtr); head(lg$predict(Xte), 3)
+
+inv = FNT.RML.INV(name = 'inv', features.include = 'visits')
+inv$fit(Xtr); head(inv$predict(Xte), 3)
+
+pl = FNT.RML.POLY(name = 'poly', n_terms = 3, gain = 1/50, features.include = 'age')
+pl$fit(Xtr); head(pl$predict(Xte), 3)
+
+lt = FNT.RML.LOGIT(name = 'logit', features.include = 'balance')
+lt$fit(Xtr); head(lt$predict(Xte), 3)
+```
+
+## Putting it together
+
+A logistic regression whose features are the log of income, polynomial terms of age, the scaled
+balance and target-encoded categories, compared with the same regression on the raw numeric columns:
+
+```{r together}
+raw = CLS.STATS.LR(name = 'raw', features.include = num)
+engineered = CLS.STATS.LR(name = 'engineered', verbose = 0, transformers = list(
+  FNT.RML.LOG(name = 'log', features.include = 'income'),
+  FNT.RML.POLY(name = 'age', n_terms = 2, gain = 1/50, features.include = 'age'),
+  MAP.RML.ZFS(name = 'z', features.include = c('balance', 'visits')),
+  ENC.RML.TE(name = 'te', features.include = c('region', 'channel'))))
+raw$fit(Xtr, ytr)
+engineered$fit(Xtr, ytr)
+c(raw = gini(raw), engineered = gini(engineered))
+```
+
+The fitted network can be listed with `info.transformers()`:
+
+```{r info}
+engineered$info.transformers()[c('name', 'class', 'type')]
+```
+
+## Writing your own transformer
+
+A transformer is a class that inherits from `MODEL` and implements `model.fit(X, y)` and
+`model.predict(X)`. `X` in `model.fit` holds only the columns the model may use; set
+`objects$features` to the subset it really uses, so that `predict` passes those columns.
+`model.predict` returns a `data.frame`; its column names become `<name>_<column>`.
+
+```{r custom}
+MAP.RML.RANK = setRefClass('MAP.RML.RANK', contains = 'MODEL', methods = list(
+  initialize = function(...){
+    callSuper(...)
+    type <<- 'Mapper'; description <<- 'Rank of each value among training values (0 to 1)'
+    package <<- 'rml'; package_language <<- 'R'
+    if(is.empty(name)){name <<- 'RNK' %>% paste0(sample(10000:99999, 1))}
+  },
+  model.fit = function(X, y = NULL){
+    objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+    objects$model <<- lapply(X[objects$features$fname], function(v) sort(v))
+  },
+  model.predict = function(X){
+    out = mapply(function(v, ref) findInterval(v, ref)/length(ref), X[objects$features$fname], objects$model)
+    as.data.frame(matrix(out, nrow = nrow(X), dimnames = list(NULL, objects$features$fname)))
+  }
+))
+rk = MAP.RML.RANK(name = 'rank', features.include = c('income', 'balance'))
+rk$fit(Xtr)
+head(rk$predict(Xte), 3)
+```

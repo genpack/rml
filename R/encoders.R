@@ -557,8 +557,8 @@ ENC.RML.ME = setRefClass('ENC.RML.ME', contains = 'MODEL',
                              package_language <<- 'R'
                              reserved_words   <<- c(reserved_words, 'segmentation_features')
                              
-                             config$model.class  <<- verify(config$model.class, 'character')
-                             config$model.config <<- verify(config$model.config, 'list')
+                             config$model.class  <<- verify(config$model.class, 'character', lengths = 1, default = 'CLS.STATS.LR')
+                             config$model.config <<- verify(config$model.config, 'list', default = list(verbose = 0))
                              config$min_rows     <<- verify(config$min_rows, c('numeric', 'integer'), lengths = 1, default = 100)
                              if(is.empty(name)){name <<- 'ME' %>% paste0(sample(10000:99999, 1))}
                              objects$model <<- list()
@@ -586,7 +586,8 @@ ENC.RML.ME = setRefClass('ENC.RML.ME', contains = 'MODEL',
                                  www = which(Xcol == val)
                                  if(length(www) > config$min_rows){
                                    objects$model[[col]][[vlc]] <<- do.call(what = config$model.class, args = config$model.config)
-                                   objects$model[[col]][[vlc]]$fit(X[www,], y[www])
+                                   # the segment column is constant within a segment, so it is left out
+                                   objects$model[[col]][[vlc]]$fit(X[www, setdiff(colnames(X), col), drop = FALSE], y[www])
                                  }
                                }
                              }
