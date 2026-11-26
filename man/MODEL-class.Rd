@@ -39,8 +39,8 @@ is passed to the underlying algorithm (for example \code{max_depth} to xgboost).
 
 \item{\code{transformers}}{\code{list} of models whose outputs are the input features of this model.}
 
-\item{\code{gradient_transformers}}{\code{list} of models (or column names of \code{X}) this model is boosted by:
-the model learns to correct their output. Several outputs are combined by \code{gradient_transformers_aggregator}.}
+\item{\code{gradient_transformers}}{\code{list} of base models (or column names of \code{X}) this model boosts:
+they are boosted by this model, which learns to correct their output. Several outputs are combined by \code{gradient_transformers_aggregator}.}
 
 \item{\code{yin_transformers,yout_transformers}}{\code{list} reserved for target transformation functions.}
 
@@ -61,7 +61,7 @@ features used, with class and importance), \code{fitting_time} (when fitting fin
   \item{\code{performance.cv(X, y, metrics)}}{Repeated train/test cross-validation on a deep copy of the model.}
   \item{\code{deep_copy(name_suffix = NULL)}}{Copy of the model, its transformers and gradient transformers.}
   \item{\code{info.features()}, \code{info.model()}, \code{info.transformers()}, \code{info.edge_list()}}{Information about the features and the network of models.}
-  \item{\code{info.network()}}{\code{list(nodes, links)} of the model network: transformers feed their parent, gradient transformers boost it.}
+  \item{\code{info.network()}}{\code{list(nodes, links)} of the model network: transformers feed their parent, gradient transformers are boosted by it.}
   \item{\code{plot.network(plotter)}}{Draws the network: \code{'visNetwork'} (interactive, through rvis if installed, otherwise visNetwork) or \code{'igraph'} (static).}
   \item{\code{model.save(path)}, \code{model.load(path)}}{Save or load native model files; use \code{\link{model_save}} and \code{\link{model_load}}.}
   \item{\code{supports_gradient_transformers()}}{TRUE if training uses the output of gradient transformers.}

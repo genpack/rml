@@ -11,6 +11,6 @@
 gb_supporting_classifiers
 }
 \description{
-Names of the classifier classes that can be boosted by gradient transformers (see the gradient boosting vignette).
+Names of the classifier classes that can have gradient transformers, i.e. boost a base model (see the gradient boosting vignette).
 }
 \keyword{datasets}

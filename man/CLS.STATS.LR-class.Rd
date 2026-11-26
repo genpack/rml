@@ -19,7 +19,7 @@ y = as.numeric(X$a - X$b + rnorm(300) > 0)
 m = CLS.STATS.LR(name = 'lr')
 m$fit(X, y)
 head(m$predict(X))
-# boosted by xgboost (requires the xgboost package):
+# a logistic regression boosting an xgboost model, i.e. xgboost boosted by LR (requires the xgboost package):
 if(requireNamespace('xgboost', quietly = TRUE)){
   m2 = CLS.STATS.LR(gradient_transformers = list(CLS.XGBOOST(nrounds = 10, verbose = 0)))
   m2$fit(X, y)

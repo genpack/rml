@@ -30,8 +30,8 @@ library(magrittr)
 #' @field config \code{list} all settings of the model.
 #' @field fitted \code{logical} TRUE once the model is trained.
 #' @field transformers \code{list} of models whose outputs are the input features of this model.
-#' @field gradient_transformers \code{list} of models (or column names of \code{X}) this model is boosted by:
-#'   the model learns to correct their output. Several outputs are combined by \code{gradient_transformers_aggregator}.
+#' @field gradient_transformers \code{list} of base models (or column names of \code{X}) this model boosts:
+#'   they are boosted by this model, which learns to correct their output. Several outputs are combined by \code{gradient_transformers_aggregator}.
 #' @field yin_transformers,yout_transformers \code{list} reserved for target transformation functions.
 #' @field objects \code{list} fitted state: \code{model} (the trained object), \code{features} (table of the
 #'   features used, with class and importance), \code{fitting_time} (when fitting finished), \code{fitting_duration} (seconds), \code{n_output}.
@@ -47,7 +47,7 @@ library(magrittr)
 #'   \item{\code{performance.cv(X, y, metrics)}}{Repeated train/test cross-validation on a deep copy of the model.}
 #'   \item{\code{deep_copy(name_suffix = NULL)}}{Copy of the model, its transformers and gradient transformers.}
 #'   \item{\code{info.features()}, \code{info.model()}, \code{info.transformers()}, \code{info.edge_list()}}{Information about the features and the network of models.}
-#'   \item{\code{info.network()}}{\code{list(nodes, links)} of the model network: transformers feed their parent, gradient transformers boost it.}
+#'   \item{\code{info.network()}}{\code{list(nodes, links)} of the model network: transformers feed their parent, gradient transformers are boosted by it.}
 #'   \item{\code{plot.network(plotter)}}{Draws the network: \code{'visNetwork'} (interactive, through rvis if installed, otherwise visNetwork) or \code{'igraph'} (static).}
 #'   \item{\code{model.save(path)}, \code{model.load(path)}}{Save or load native model files; use \code{\link{model_save}} and \code{\link{model_load}}.}
 #'   \item{\code{supports_gradient_transformers()}}{TRUE if training uses the output of gradient transformers.}
@@ -765,7 +765,7 @@ MODEL = setRefClass('MODEL',
 
     # Nodes and links of the model network, used by plot.network().
     # Links: 'feeds' from a transformer (or INPUT) to the model using its output as features,
-    # 'boosts' from a gradient transformer to the model it boosts.
+    # 'boosted by' from a gradient transformer (base model) to the model that boosts it.
     info.network = function(){
       edge = function(s, t, r) data.frame(source = s, target = t, relation = r, stringsAsFactors = FALSE)
       collect = function(m){
@@ -777,7 +777,7 @@ MODEL = setRefClass('MODEL',
         }
         for(gt in m$gradient_transformers){
           if(inherits(gt, 'MODEL')){
-            out[[length(out) + 1]] <- edge(gt$name, m$name, 'boosts')
+            out[[length(out) + 1]] <- edge(gt$name, m$name, 'boosted by')
             out[[length(out) + 1]] <- collect(gt)
           } else {
             out[[length(out) + 1]] <- edge('INPUT', m$name, paste('offset', gt))
@@ -809,7 +809,7 @@ MODEL = setRefClass('MODEL',
     plot.network = function(plotter = c('visNetwork', 'igraph'), ...){
       plotter = match.arg(plotter)
       net = info.network()
-      link_colors = c(feeds = '#7f8c8d', boosts = '#e67e22', prediction = '#2c3e50')
+      link_colors = c(feeds = '#7f8c8d', 'boosted by' = '#e67e22', prediction = '#2c3e50')
       net$links$color = ifelse(net$links$relation %in% names(link_colors), link_colors[net$links$relation], '#3498db')
       if(plotter == 'visNetwork' && !requireNamespace('visNetwork', quietly = TRUE) && requireNamespace('igraph', quietly = TRUE)){
         message("Package 'visNetwork' is not installed: drawing a static igraph chart instead.")
@@ -824,7 +824,7 @@ MODEL = setRefClass('MODEL',
         assert(requireNamespace('visNetwork', quietly = TRUE), "plot.network() needs package 'visNetwork' (or use plotter = 'igraph')")
         nodes = net$nodes %>% dplyr::mutate(group = type)
         edges = net$links %>% dplyr::transmute(from = source, to = target, label = relation, color = color, arrows = 'to',
-                                               dashes = relation == 'boosts')
+                                               dashes = relation == 'boosted by')
         return(visNetwork::visNetwork(nodes, edges, ...) %>%
                  visNetwork::visHierarchicalLayout(direction = 'LR', sortMethod = 'directed') %>%
                  visNetwork::visLegend(useGroups = TRUE) %>%
@@ -846,9 +846,9 @@ MODEL = setRefClass('MODEL',
                           vertex.color = pal[match(igraph::V(g)$type, types)], vertex.shape = 'rectangle',
                           vertex.size = 120/max(depth + 1), vertex.size2 = 15, vertex.label = igraph::V(g)$label, vertex.label.cex = 0.85,
                           vertex.label.color = 'black', edge.color = net$links$color, edge.arrow.size = 0.4,
-                          edge.lty = ifelse(net$links$relation == 'boosts', 2, 1), ...)
+                          edge.lty = ifelse(net$links$relation == 'boosted by', 2, 1), ...)
       graphics::legend('topleft', legend = types, fill = pal, bty = 'n', cex = 0.85, inset = c(0, -0.02), xpd = TRUE)
-      graphics::legend('topright', legend = c('feeds (transformer)', 'boosts (gradient transformer)'), col = link_colors[c('feeds', 'boosts')], lty = c(1, 2), bty = 'n', cex = 0.85, inset = c(0, -0.02), xpd = TRUE)
+      graphics::legend('topright', legend = c('feeds (transformer)', 'boosted by (gradient transformer)'), col = link_colors[c('feeds', 'boosted by')], lty = c(1, 2), bty = 'n', cex = 0.85, inset = c(0, -0.02), xpd = TRUE)
       invisible(net)
     },
 

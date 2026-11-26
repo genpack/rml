@@ -1250,7 +1250,7 @@ evaluate_features = function(X, y, metrics = 'gini', extra_info = T, ...){
 
 #' Classifiers that support gradient transformers
 #'
-#' Names of the classifier classes that can be boosted by gradient transformers (see the gradient boosting vignette).
+#' Names of the classifier classes that can have gradient transformers, i.e. boost a base model (see the gradient boosting vignette).
 #' @format \code{character} vector.
 #' @export
 gb_supporting_classifiers = c('CLS.XGBOOST', 'CLS.KERAS.DNN', 'CLS.STATS.LR')

@@ -9,7 +9,7 @@
 rml wraps algorithms from R and Python packages (stats, xgboost, keras, scikit-learn, category_encoders and
 others) in reference classes with one interface: \code{model$fit(X, y)} and \code{model$predict(X)}.
 Models can be chained: a model's \code{transformers} produce its input features, and its
-\code{gradient_transformers} are the models it is boosted by.
+\code{gradient_transformers} are its base models, which it boosts by learning to correct their output.
 }
 \details{
 Start with \code{vignette('rml-getting-started', package = 'rml')} and see \code{\link{MODEL-class}} for

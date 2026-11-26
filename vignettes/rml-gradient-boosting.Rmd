@@ -15,11 +15,11 @@ knitr::opts_chunk$set(eval = has_xgboost)
 
 Gradient boosting trains a sequence of models where each one corrects the errors of the ones before it.
 Libraries such as xgboost do this with decision trees only. In rml any model can be the starting point of
-another. A model's `gradient_transformers` are the models it is **boosted by**: the model starts from
-their output and learns to correct it.
+another. A model's `gradient_transformers` are its **base models**: the model starts from their output and
+learns to correct it, so it **boosts** them.
 
-Throughout this vignette, "A is boosted by B" means B is a gradient transformer of A:
-`A = <class>(gradient_transformers = list(B))`.
+Throughout this vignette, "A is boosted by B" means A is a gradient transformer of B: A is the base model
+and B learns the correction, `B = <class>(gradient_transformers = list(A))`.
 
 ```{r, message = FALSE}
 library(rml)
@@ -35,17 +35,17 @@ gini = function(m) m$performance(X[-train, ], y[-train], metrics = 'gini')
 ## Regression: training on the residual
 
 For a regressor, the gradient transformer's prediction g is subtracted from the target, so the model
-learns `y - g`. At prediction the two are added back: `prediction = g + model output`. Here an xgboost
-regressor is boosted by a linear model:
+learns `y - g`. At prediction the two are added back: `prediction = g + model output`. Here a linear
+model is boosted by an xgboost regressor:
 
 ```{r regression}
 y_reg = 3*X$x1 + 4*sin(3*X$x3) + rnorm(n, sd = 0.3)
 lm_model = REG.STATS.LNR(name = 'lm')
-xgb_boosted_by_lm = REG.XGBOOST(name = 'xgb_lm', nrounds = 100, max_depth = 3, eta = 0.1,
+lm_boosted_by_xgb = REG.XGBOOST(name = 'lm_xgb', nrounds = 100, max_depth = 3, eta = 0.1,
                                 gradient_transformers = list(lm_model))
-xgb_boosted_by_lm$fit(X[train, ], y_reg[train])
+lm_boosted_by_xgb$fit(X[train, ], y_reg[train])
 c(linear_model = lm_model$performance(X[-train, ], y_reg[-train], metrics = 'mae'),
-  xgb_boosted_by_lm = xgb_boosted_by_lm$performance(X[-train, ], y_reg[-train], metrics = 'mae'))
+  lm_boosted_by_xgb = lm_boosted_by_xgb$performance(X[-train, ], y_reg[-train], metrics = 'mae'))
 ```
 
 Any regressor gets this behaviour automatically from the `REGRESSOR` base class.
@@ -55,7 +55,7 @@ Any regressor gets this behaviour automatically from the `REGRESSOR` base class.
 For a classifier the correction is added on the log-odds (logit) scale:
 `P(y = 1) = sigmoid(g + f(x))`, where g is the gradient transformer's logit and f is what the model
 learns. The model must minimise the logistic loss of `g + f`, so this needs support from the algorithm.
-These classifiers support it:
+These classifiers can boost a base model:
 
 | Class | How g is used during training |
 | --- | --- |
@@ -68,39 +68,39 @@ probabilities they are converted to logits; if it already returns logits (`retur
 used as they are, so the conversion never happens twice. A gradient transformer must not use
 `return = 'class'`.
 
-An xgboost model boosted by a logistic regression, and a logistic regression boosted by xgboost:
+A logistic regression boosted by xgboost, and an xgboost model boosted by a logistic regression:
 
 ```{r classification}
 lr  = CLS.STATS.LR(name = 'lr')
 xgb = CLS.XGBOOST(name = 'xgb', nrounds = 60, max_depth = 3, eta = 0.1)
-xgb_boosted_by_lr = CLS.XGBOOST(name = 'xgb_lr', nrounds = 60, max_depth = 3, eta = 0.1,
+lr_boosted_by_xgb = CLS.XGBOOST(name = 'lr_xgb', nrounds = 60, max_depth = 3, eta = 0.1,
                                 gradient_transformers = list(lr))
-lr_boosted_by_xgb = CLS.STATS.LR(name = 'lr_xgb', gradient_transformers = list(xgb))
-xgb_boosted_by_lr$fit(X[train, ], y[train])
+xgb_boosted_by_lr = CLS.STATS.LR(name = 'xgb_lr', gradient_transformers = list(xgb))
 lr_boosted_by_xgb$fit(X[train, ], y[train])
+xgb_boosted_by_lr$fit(X[train, ], y[train])
 c(logistic_regression = gini(lr), xgboost = gini(xgb),
-  xgb_boosted_by_lr = gini(xgb_boosted_by_lr), lr_boosted_by_xgb = gini(lr_boosted_by_xgb))
+  lr_boosted_by_xgb = gini(lr_boosted_by_xgb), xgb_boosted_by_lr = gini(xgb_boosted_by_lr))
 ```
 
-Fitting `xgb_boosted_by_lr` also fitted `lr`, and fitting `lr_boosted_by_xgb` fitted `xgb`, because they
+Fitting `lr_boosted_by_xgb` also fitted `lr`, and fitting `xgb_boosted_by_lr` fitted `xgb`, because they
 were not yet fitted. A gradient transformer that is already fitted is used as it is, so it can be a model
 trained earlier on different data.
 
 ## Chains
 
 A gradient transformer can have its own gradient transformers. "LR boosted by XGB, boosted by DNN" means
-the logistic regression has the xgboost model as its gradient transformer, and the xgboost model has the
-neural network as its gradient transformer:
+the logistic regression is the base model and a gradient transformer of the xgboost model, and the
+xgboost model is a gradient transformer of the neural network:
 
 ```{r chain-dnn, eval = FALSE}
-dnn = CLS.KERAS.DNN(name = 'dnn', num_layers = 2, epochs = 10)
-xgb = CLS.XGBOOST(name = 'xgb', nrounds = 50, gradient_transformers = list(dnn))
-lr  = CLS.STATS.LR(name = 'lr', gradient_transformers = list(xgb))
-lr$fit(X, y)   # fits dnn, then xgb on top of dnn, then lr on top of xgb
+lr  = CLS.STATS.LR(name = 'lr')
+xgb = CLS.XGBOOST(name = 'xgb', nrounds = 50, gradient_transformers = list(lr))
+dnn = CLS.KERAS.DNN(name = 'dnn', num_layers = 2, epochs = 10, gradient_transformers = list(xgb))
+dnn$fit(X, y)   # fits lr, then xgb on top of lr, then dnn on top of xgb
 ```
 
-The same chain with models available everywhere: a logistic regression boosted by a deep xgboost, which
-is boosted by a shallow xgboost:
+The same kind of chain with models available everywhere: a shallow xgboost boosted by a deeper xgboost,
+boosted by a logistic regression:
 
 ```{r chain}
 shallow = CLS.XGBOOST(name = 'shallow', nrounds = 30, max_depth = 2, eta = 0.1)

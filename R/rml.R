@@ -58,7 +58,7 @@
 #                               objective 'binary:logistic' (default); CLS.STATS.LR supports gradient transformers (glm offset);
 #                               classifier gradient transformers are read as logits; unsupported classifiers raise an error;
 #                               row sampling keeps the gradient.
-#                             * New: info.network(), plot.network() rewritten (boosting links; rvis::rvisPlot, visNetwork or igraph),
+#                             * New: info.network(), plot.network() rewritten ('boosted by' links; rvis::rvisPlot, visNetwork or igraph),
 #                               hp_booster() exported, options(rml.verbose), objects$fitting_duration, python_setup help page.
 #                             * Python: whole numbers are passed to Python as int (python_args()); CLS.SKLEARN.LR max_iter = 1000;
 #                               python_address no longer passed to scikit-learn.
@@ -71,6 +71,8 @@
 #                               pipelines, gradient boosting, reference, transformers, ensembles and tools, troubleshooting,
 #                               showcase); testthat suite (66 tests).
 #                             * FET.RML.D2MULC no longer exported (depends on functions that do not exist).
+# 2.0.1 (27 November 2026)  - Documentation: boosting terminology corrected. If A is a gradient transformer of B, A is the base
+#                             model and is boosted by B. Vignettes, help pages and the 'boosted by' links of plot.network() updated.
 #
 # Versioning: x.y.z - increase z for a minor change or bug fix, y for a major change, x when features or packages are added.
 
@@ -81,7 +83,7 @@
 #' rml wraps algorithms from R and Python packages (stats, xgboost, keras, scikit-learn, category_encoders and
 #' others) in reference classes with one interface: \code{model$fit(X, y)} and \code{model$predict(X)}.
 #' Models can be chained: a model's \code{transformers} produce its input features, and its
-#' \code{gradient_transformers} are the models it is boosted by.
+#' \code{gradient_transformers} are its base models, which it boosts by learning to correct their output.
 #'
 #' Start with \code{vignette('rml-getting-started', package = 'rml')} and see \code{\link{MODEL-class}} for
 #' the settings shared by all models.

@@ -135,11 +135,11 @@ if(has_pyxgb){
                                     transformers = features())))
 }
 
-# an ensemble of the two best-known algorithms, and a logistic regression boosted by xgboost
+# an ensemble of the two best-known algorithms, and xgboost boosted by a logistic regression
 zoo$average = ENS.RML.AGGR(name = 'average', transformers = list(
   CLS.STATS.LR(name = 'avg_lr', transformers = features()),
   CLS.XGBOOST(name = 'avg_xgb', nrounds = 200, max_depth = 3, eta = 0.05, transformers = features())))
-zoo$boosted = CLS.STATS.LR(name = 'lr_boosted_by_xgb', transformers = features(),
+zoo$boosted = CLS.STATS.LR(name = 'xgb_boosted_by_lr', transformers = features(),
   gradient_transformers = list(CLS.XGBOOST(name = 'gt_xgb', nrounds = 100, max_depth = 3, eta = 0.05,
                                            transformers = features())))
 
@@ -225,8 +225,8 @@ DT::datatable(grid, rownames = FALSE, filter = 'top', options = list(dom = 'tp',
 
 ## A deep network of models
 
-rml models are building blocks: any model can feed another (a transformer) or be corrected by another
-(a gradient transformer). The network below has six levels:
+rml models are building blocks: any model can feed another (a transformer) or be boosted by another
+(as its gradient transformer). The network below has six levels:
 
 * `xgb_core`: an xgboost model whose features are target-encoded categories, the raw numeric columns,
   and the output of a small logistic regression `lr_seed`;
@@ -234,7 +234,7 @@ rml models are building blocks: any model can feed another (a transformer) or be
   debt and utilisation columns;
 * `ensemble`: the average of `lr_on_xgb` and a k-means based model `cluster_model`;
 * `final`: the top model. Its transformers are the ensemble, a clustering of customers and an
-  interaction generator, and it is boosted by a shallow xgboost.
+  interaction generator, and it boosts a shallow xgboost (its gradient transformer).
 
 The final model is a deep neural network when keras is installed, and a logistic regression otherwise.
 
@@ -252,7 +252,7 @@ cluster_model = CLS.STATS.LR(name = 'cluster_model', transformers = list(
   ENC.RML.TE(name = 'cluster_rate', transformers = list(clusters)),
   MAP.RML.IDT(name = 'raw_cm', features.include = c('income', 'age'))))
 ensemble  = ENS.RML.AGGR(name = 'ensemble', transformers = list(lr_on_xgb, cluster_model))
-booster   = CLS.XGBOOST(name = 'booster', nrounds = 60, max_depth = 2, eta = 0.1,
+base_xgb  = CLS.XGBOOST(name = 'base_xgb', nrounds = 60, max_depth = 2, eta = 0.1,
                         features.include = c('late_30d', 'utilisation'))
 top_inputs = list(ensemble,
   FET.RML.D2MUL(name = 'interactions', features.include = c('late_30d', 'utilisation', 'debt_ratio')),
@@ -260,9 +260,9 @@ top_inputs = list(ensemble,
 
 final = if(has_keras){
   CLS.KERAS.DNN(name = 'final', num_layers = 2, first_layer_nodes = 32, epochs = 20,
-                transformers = top_inputs, gradient_transformers = list(booster))
+                transformers = top_inputs, gradient_transformers = list(base_xgb))
 } else {
-  CLS.STATS.LR(name = 'final', transformers = top_inputs, gradient_transformers = list(booster))
+  CLS.STATS.LR(name = 'final', transformers = top_inputs, gradient_transformers = list(base_xgb))
 }
 final$fit(Xtr, ytr)
 c(final = final$performance(Xte, yte, metrics = 'gini'),
@@ -278,7 +278,7 @@ networks with `performance.cv()`, shows whether the extra levels pay off.
 ### Drawing the network
 
 `plot.network()` draws the network. Solid grey links show a transformer feeding its parent; the dashed
-orange link shows a gradient transformer boosting the model it points to. With visNetwork installed
+orange link, labelled "boosted by", goes from a base model (a gradient transformer) to the model that boosts it. With visNetwork installed
 the graph is interactive: drag nodes, zoom, and hover for each model's class, description and
 number of outputs.
 
