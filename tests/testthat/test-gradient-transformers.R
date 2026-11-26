@@ -64,8 +64,19 @@ test_that("regressors are trained on the residual of the gradient transformer", 
   expect_equal(pred, base + m$model.predict(d$X)[[1]], tolerance = 1e-6)
 })
 
-test_that("classifiers without gradient support refuse gradient transformers", {
+test_that("CLS.STATS.LR learns a correction on top of its gradient transformer (glm offset)", {
   d = make_binary_data()
-  m = CLS.STATS.LR(gradient_transformers = list(CLS.STATS.LR(return = 'logit')))
+  g = CLS.XGBOOST(name = 'g', nrounds = 20, max_depth = 2)
+  m = CLS.STATS.LR(name = 'lr_on_xgb', gradient_transformers = list(g))
+  m$fit(d$X, d$y)
+  offset = logit_fwd(g$predict(d$X)[[1]])
+  ref = stats::glm(y ~ ., data = cbind(d$X, y = d$y), family = binomial, offset = offset)
+  expect_equal(unname(m$predict(d$X)[[1]]), unname(stats::predict(ref, type = 'response')), tolerance = 1e-6)
+})
+
+test_that("classifiers without gradient support refuse gradient transformers", {
+  skip_if_not(has_python_module('sklearn'), 'scikit-learn not available')
+  d = make_binary_data()
+  m = CLS.SKLEARN.LR(gradient_transformers = list(CLS.STATS.LR(return = 'logit')))
   expect_error(m$fit(d$X, d$y), 'does not support gradient transformers')
 })

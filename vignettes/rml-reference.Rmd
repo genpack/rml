@@ -128,7 +128,7 @@ All classifiers are binary: they model the probability of class 1.
 | --- | --- | --- |
 | `CLS.XGBOOST` | xgboost | `nrounds` (100), `nthread` (1), `objective` (`'binary:logistic'`), `early_stopping_rounds`, `show_progress` (FALSE), `print_every_n`, `obj` (custom objective), `feval` (custom metric), `maximize`, `xgb_model`, `callbacks`, plus any booster parameter (`max_depth`, `eta`, `subsample`, ...). Supports gradient transformers. |
 | `CLS.KERAS.DNN` | keras | `num_layers` (1), `first_layer_nodes` (128), `layer_nodes_ratio` (0.4), `layers_activation` ('relu'), `layers_dropout` (0.25), `layers` (custom list), `epochs` (5), `batch_size` (32), `optimizer` ('adam'), `learning_rate` (1e-4), `loss`, kernel/activity L1/L2 penalties, `initializer_*`. Supports gradient transformers. |
-| `CLS.STATS.LR` | stats | Logistic regression with `glm`. Feature importance from coefficient p-values. |
+| `CLS.STATS.LR` | stats | Logistic regression with `glm`. Feature importance from coefficient p-values. Supports gradient transformers (as a glm offset). |
 | `CLS.SKLEARN.LR` | sklearn | `LogisticRegression` arguments (`C`, `penalty`, `solver`, ...). Numeric features only. |
 | `CLS.SKLEARN.DT` | sklearn | `DecisionTreeClassifier` arguments (`max_depth`, ...). |
 | `CLS.SKLEARN.KNN` | sklearn | `KNeighborsClassifier` arguments (`n_neighbors`, ...). |

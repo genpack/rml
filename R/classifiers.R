@@ -255,6 +255,7 @@ CLS.STATS.LR = setRefClass('CLS.STATS.LR', contains = "CLASSIFIER",
                            get.features.weight = function(){
                              objects$model.summary <<- summary(objects$model)
                              pv   = objects$model.summary$coefficients[-1, 'Pr(>|z|)'] %>% na2zero
+                             names(pv) <- gsub('`', '', names(pv))
                              # Usually NA p-values appear when there is a perfect fit (100% R-squared), so each feature shall be considerd as important!?
                              keep = (pv < 0.1)
                              weights = pv
@@ -264,9 +265,18 @@ CLS.STATS.LR = setRefClass('CLS.STATS.LR', contains = "CLASSIFIER",
                            },
                            
                            model.fit = function(X, y){
-                             arguments = config %>% list.remove(reserved_words)
-                             arguments$data <- X %>% cbind(y = y)
-                             arguments$formula <- "%s ~ %s" %>% sprintf('y', colnames(X) %>% paste(collapse = ' + ')) %>% as.formula
+                             arguments = config %>% list.remove(c(reserved_words, 'family'))
+                             data = as.data.frame(X)
+                             data$.rml_y <- as.numeric(y)
+                             rhs = paste0('`', colnames(X), '`', collapse = ' + ')
+                             # Output of gradient transformers (log-odds) enters as an offset, so the regression learns the correction on top of it:
+                             grad = attr(y, 'gradient')
+                             if(!is.null(grad)){
+                               data$.rml_offset <- as.numeric(grad)
+                               rhs = paste(rhs, 'offset(.rml_offset)', sep = ' + ')
+                             }
+                             arguments$data <- data
+                             arguments$formula <- as.formula(paste('.rml_y ~', rhs))
                              arguments$family <- stats::binomial
                              objects$model <<- do.call(stats::glm, args = arguments)
                              # Feature Importances:
@@ -276,7 +286,10 @@ CLS.STATS.LR = setRefClass('CLS.STATS.LR', contains = "CLASSIFIER",
                            
                            model.predict = function(X){
                              if(inherits(X, 'WIDETABLE')){X = wt_as_data_frame(X)}
-                             objects$model %>% stats::predict(X %>% na2zero, type = "response") %>% as.data.frame
+                             X = as.data.frame(X) %>% na2zero
+                             # Prediction of the regression alone; gradient transformer output is added later in transform_yout:
+                             X$.rml_offset <- 0
+                             objects$model %>% stats::predict(X, type = "response") %>% unname %>% as.data.frame
                            }
                            
                            # get.function = function(...){

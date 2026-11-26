@@ -1212,7 +1212,7 @@ evaluate_features = function(X, y, metrics = 'gini', extra_info = T, ...){
   return(features)
 }
 
-gb_supporting_classifiers = c('CLS.XGBOOST', 'CLS.KERAS.DNN')
+gb_supporting_classifiers = c('CLS.XGBOOST', 'CLS.KERAS.DNN', 'CLS.STATS.LR')
 ##
 add_classifier = function(input = list(fetlog = NULL, modlog = data.frame(), modlist = list()),
                           templates = default_templates,
