@@ -1,4 +1,12 @@
 # mltools.R
+#' @title Accuracy and F1 between binary vectors
+#' @description
+#' \code{cross_accuracy} is the share of agreeing elements (or of disagreeing ones if larger). \code{cross_f1} is the F1 score of \code{v1} as prediction of \code{v2}.
+#' If \code{v1} is a matrix, the score is computed for each column.
+#' @param v1 \code{logical} vector or matrix (predictions).
+#' @param v2 \code{logical} vector (actual classes).
+#' @return \code{numeric} score(s).
+#' @rdname binary_agreement
 #' @export
 cross_accuracy = function(v1, v2){
   N = length(v2)
@@ -12,16 +20,33 @@ cross_accuracy = function(v1, v2){
   return(a %>% sapply(function(x) max(x, 1-x)))
 }
 
+#' @title Error metrics for numeric predictions
+#' @description
+#' Root mean squared error, mean absolute error and median absolute error between two numeric vectors (missing values ignored).
+#' @param y1 \code{numeric} predictions.
+#' @param y2 \code{numeric} actual values.
+#' @return \code{numeric} scalar.
+#' @rdname error_metrics
+#' @examples
+#' rmse(c(1, 2, 3), c(1, 2, 5))
+#' mae(c(1, 2, 3), c(1, 2, 5))
 #' @export
 rmse = function(y1, y2){
   mean((y1 - y2)^2, na.rm = T) %>% sqrt
 }
 
+#' @rdname error_metrics
 #' @export
 mae = function(y1, y2){
   (y1 - y2) %>% abs %>% mean(na.rm = T)
 }
 
+#' Mean absolute percentage error
+#'
+#' \code{mape} is the mean of \code{|actual - pred|/|actual|} over non-zero actual values; \code{geo_mape} uses the geometric mean.
+#' @param actual \code{numeric} actual values.
+#' @param pred \code{numeric} predictions.
+#' @return \code{numeric} scalar.
 #' @export
 mape = function(actual, pred){
   assert(length(actual) == length(pred), "Lenghts of the two vectors must be identical!")
@@ -29,6 +54,7 @@ mape = function(actual, pred){
   abs((actual[tk] - pred[tk])/actual[tk]) %>% mean(na.rm = T)
 }
 
+#' @rdname mape
 #' @export
 geo_mape = function(actual, pred){
   assert(length(actual) == length(pred), "Lenghts of the two vectors must be identical!")
@@ -37,6 +63,7 @@ geo_mape = function(actual, pred){
 }
 
 
+#' @rdname error_metrics
 #' @export
 medae = function(y1, y2){
   (y1 - y2) %>% abs %>% median(na.rm = T)
@@ -60,6 +87,7 @@ r_squared = function(pred, actual){
 }
 
 
+#' @rdname binary_agreement
 #' @export
 cross_f1 = function(v1, v2){
   v2 = verify(v2, c('logical', 'integer', 'numeric'), null_allowed = F) %>% as.logical
@@ -84,6 +112,15 @@ cross_f1 = function(v1, v2){
 }
 
 # converts probabilities to logit
+#' @title Logit and inverse logit
+#' @description
+#' \code{logit_fwd} converts probabilities to log-odds (values are clipped away from 0 and 1); \code{logit_inv} converts log-odds to probabilities.
+#' @param x \code{numeric} vector.
+#' @return \code{numeric} vector of the same length.
+#' @rdname logit
+#' @examples
+#' logit_fwd(c(0.1, 0.5, 0.9))
+#' logit_inv(c(-2, 0, 2))
 #' @export
 logit_fwd = function(x) {
   x    = abs(x)
@@ -95,6 +132,7 @@ logit_fwd = function(x) {
 }
 
 # convert logit to probabilities
+#' @rdname logit
 #' @export
 logit_inv = function(x){
   e = exp(x)
@@ -102,9 +140,14 @@ logit_inv = function(x){
 }
 
 # todo: should work for WideTables as well
+#' @title Convert whole-number columns to integer
+#' @description
+#' Numeric columns holding only whole numbers are converted to integer.
+#' @param X \code{data.frame} or matrix.
+#' @return \code{data.frame}.
 #' @export
 int_ordinals = function(X){
-  if(inherits(X, 'WIDETABLE')) {X <- rbig::as.data.frame(X)}
+  if(inherits(X, 'WIDETABLE')) {X <- wt_as_data_frame(X)}
   if(inherits(X, 'matrix')) {X %<>% as.data.frame}
   nms = colnames(X)
   for (col in nms){
@@ -118,6 +161,17 @@ int_ordinals = function(X){
 
 
 # Internal Function
+#' @title Keras layer helpers
+#' @description
+#' Used by \code{\link{CLS.KERAS.DNN-class}} to build its layers.
+#' @param input_layer Keras tensor.
+#' @param layer \code{list} layer specification.
+#' @param config Model config.
+#' @param ... Passed to \code{layer_dense}.
+#' @return Keras tensor or list of layer specifications.
+#' @rdname keras_helpers
+#' @keywords internal
+#' @export
 add_keras_layer_dense = function(input_layer, layer, ...){
   input_layer %<>% layer_dense(
     units = verify(layer$units, c('numeric', 'integer'), lengths = 1, null_allowed = F) %>% as.integer,
@@ -139,6 +193,8 @@ add_keras_layer_dense = function(input_layer, layer, ...){
 }
 
 # Internal Function
+#' @rdname keras_helpers
+#' @export
 create_keras_layers = function(config){
   build_regularizer = function(l1, l2){
     if(l1 == 0){
@@ -174,9 +230,9 @@ create_keras_layers = function(config){
 
 #' This function gets a vector and returns a vector of logical which is TRUE if the corresponding value is an outlier
 #' 
-#' @field x \code{numeric} : Input vector
-#' @field sd_threshold \code{numeric} : Standard Deviation threshold as a criteria for outlier determination.
-#' @field recursive \code{logical} : TRUE if the process of outlier detection should continue with eliminated outliers
+#' @param x \code{numeric} : Input vector
+#' @param sd_threshold \code{numeric} : Standard Deviation threshold as a criteria for outlier determination.
+#' @param recursive \code{logical} : TRUE if the process of outlier detection should continue with eliminated outliers
 #' @return logical vector specifying which element of the given vector \code{x} is outlier.
 #' @export
 outlier = function(x, sd_threshold = 4, recursive = F){
@@ -201,12 +257,12 @@ outlier = function(x, sd_threshold = 4, recursive = F){
 
 #' This function gets a data.frame and replaces each cell with its rank among all the cells in its column.
 #' 
-#' @field X \code{data.frame} or \code{matrix}: Input table to be ranked
+#' @param X \code{data.frame} or \code{matrix}: Input table to be ranked
 #' @return \code{data.frame} containing ranked values. Suffix \code{_rank} is added to each column header. 
 #' @export
 ranker = function(X){
   X %<>% as.data.frame
-  for(col in rbig::colnames(X)){
+  for(col in wt_colnames(X)){
     v = X %>% pull(col)
     if(inherits(v, 'numeric')){
       X[, col %>% paste('rank', sep = '_')] <-  order(v)
@@ -215,6 +271,16 @@ ranker = function(X){
   return(X)
 }
 
+#' @title Clip outliers
+#' @description
+#' Replaces outliers (see \code{\link{outlier}}) of each column by the largest (or smallest) non-outlier value, or compresses them logarithmically.
+#' @param X \code{data.frame} of numeric columns.
+#' @param adaptive \code{logical} compress outliers with \code{log(1 + excess)} instead of clipping.
+#' @param ... Passed to \code{\link{outlier}}: \code{sd_threshold}, \code{recursive}.
+#' @return \code{data.frame}.
+#' @examples
+#' X = data.frame(a = c(rnorm(100), 50))
+#' max(trim_outliers(X)$a)
 #' @export
 trim_outliers = function(X, adaptive = F, ...){
   # Since this function will edit the table, WideTable object cannot be passed to it currently.
@@ -240,7 +306,7 @@ trim_outliers = function(X, adaptive = F, ...){
 
 #' Imputes missing values with the median of non-existing values in each column
 #' 
-#' @field X \code{data.frame} or \code{matrix}: Input table to be imputed
+#' @param X \code{data.frame} or \code{matrix}: Input table to be imputed
 #' @return \code{data.frame} with missing values replaced by imputed values
 #' @export
 na2median = function(X){
@@ -251,18 +317,20 @@ na2median = function(X){
 
 #' Use this function to get correlation of two vectors with various metrics.
 #' 
-#' @field x \code{vector or table} first vector. If a table or matrix is passed, correlation is measured for each column of the table.
-#' @field y \code{vector} second vector (must have the same number of elements/rows as vector/table \code{x})
-#' @field metrics \code{character} specifying which metrics you desire to be computed. Valid values are
+#' @param x \code{vector or table} first vector. If a table or matrix is passed, correlation is measured for each column of the table.
+#' @param y \code{vector} second vector (must have the same number of elements/rows as vector/table \code{x})
+#' @param metrics \code{character} specifying which metrics you desire to be computed. Valid values are
 #' \code{pearson, log_loss, aurc, gini, tp, fn, fp, tn, tpr, fnr, fpr, tnr, ppv, fdr, npv, pt, ts, csi, ba, 
 #' recall, sensitivity, hit_rate, miss_rate, f1, specificity, selectivity, fall_out, precision, accuracy, fmi, 
 #' informedness, markedness, mcc, for, lift, optsplit.chi, optsplit.f1}
+#' @param threshold \code{numeric} cut point turning \code{x} into binary predictions for threshold-based metrics (tp, f1, ...).
+#' @param quantiles \code{numeric} alternative to \code{threshold}: cut points are these quantiles of \code{x}.
 #' @return \code{list} The values of specified correlation metrics between two given vectors by the specified metrics. 
 #' @export
 correlation = function(x, y, metrics = 'pearson', threshold = NULL, quantiles = NULL){
 
   if(inherits(x, c('data.frame', 'WIDETABLE', 'matrix'))){
-    if(!inherits(x, 'WIDETABLE')){cols = rbig::colnames(x)} else {cols = colnames(x)}
+    if(!inherits(x, 'WIDETABLE')){cols = wt_colnames(x)} else {cols = colnames(x)}
     if(is.null(cols)){cols = sequence(ncol(x))}
     out = list()
     for(col in cols){
@@ -280,7 +348,7 @@ correlation = function(x, y, metrics = 'pearson', threshold = NULL, quantiles = 
 
     for (metric in metrics %^% 'optsplit.chi'){
       assert(length(unique(y)) == 2, "Only works for binary y")
-      cbind(feature = x, label = y) %>% optSplit.chi(num_col = 'feature', cat_col = 'label') -> res
+      data.frame(feature = x, label = y) %>% optSplit.chi(num_col = 'feature', cat_col = 'label') -> res
       out[[metric]] <- res$correlation
       out[[metric %>% paste('cutpoint', sep = '.')]] <- res$split
       out[[metric %>% paste('pvalue', sep = '.')]] <- res$pvalue
@@ -288,25 +356,21 @@ correlation = function(x, y, metrics = 'pearson', threshold = NULL, quantiles = 
 
     for (metric in metrics %^% 'optsplit.f1'){
       assert(length(unique(y)) == 2, "Only works for binary y")
-      cbind(feature = x, label = y) %>% optSplit.f1(num_col = 'feature', cat_col = 'label') -> res
+      data.frame(feature = x, label = y) %>% optSplit.f1(prob_col = 'feature', label_col = 'label') -> res
       out[[metric]] <- res$f1
       out[[metric %>% paste('cutpoint', sep = '.')]] <- res$split
     }
     
     subset = metrics %^% c('aurc', 'gini')
     if(length(subset) > 0){
-      aurc = AUC::auc(AUC::roc(x %>% vect.map, y %>% as.factor))
+      aurc = auc_binary(x, y)
       for (metric in subset){
         if(metric == 'aurc') out[[metric]] = aurc else out[[metric]] = 2*aurc - 1
       }
     }
     
     for(metric in metrics %^% 'log_loss'){
-      lossfun = rfun::logistic$copy()
-      lossfun$reset()
-      lossfun$inputs$x = x
-      lossfun$inputs$y = y
-      out[[metric]] <- lossfun$get.output() %>% mean
+      out[[metric]] <- log_loss(x, y)
     }
     
     for(metric in metrics %^% c('mae', 'rmse', 'medae', 'r_squared', 'mape', 'geo_mape')){
@@ -347,6 +411,10 @@ correlation = function(x, y, metrics = 'pearson', threshold = NULL, quantiles = 
 }
 
 # Groups features based on count of their unique values
+#' @title Group columns by number of distinct values
+#' @param X \code{data.frame}.
+#' @param nominals_only \code{logical} only consider categorical columns.
+#' @return Named \code{list} of column names: \code{unique}, \code{binary}, \code{triple}, \code{lest10}, \code{lest20}, \code{lest50}, \code{numers}.
 #' @export
 group_features = function(X, nominals_only = F){
   if(nominals_only) X = X[nominals(X)]
@@ -364,6 +432,7 @@ group_features = function(X, nominals_only = F){
 }
 
 # Returns binary Chi-Squared statistics for two binary columns
+#' @rdname spark_tools
 #' @export
 spark.binchisq = function(tbl, col1, col2){
   tbl %>% rename(x = col1, y = col2) %>% dplyr::select(x, y) %>%
@@ -378,6 +447,11 @@ spark.binchisq = function(tbl, col1, col2){
 }
 
 # Transfer to package Optimer
+#' @title One-dimensional search (experimental)
+#' @param fun Function to maximise.
+#' @param domain Range.
+#' @param ... Passed to \code{fun}.
+#' @keywords internal
 #' @export
 optimSearch1d = function(fun, domain, ...){
   mx = max(domain)
@@ -408,9 +482,21 @@ optimSearch1d = function(fun, domain, ...){
   return(x)
 }
 
+#' @title Optimal binary split of a score
+#' @description
+#' Finds the cut point of a numeric column that best separates a binary label: by chi-square association (\code{optSplit.chi}) or by F1 score (\code{optSplit.f1}).
+#' The \code{Columns} versions do this for several columns. \code{dte} returns the confusion table for a grid of cut points.
+#' @param tbl,df \code{data.frame} holding the columns.
+#' @param num_col,prob_col Name of the numeric (score) column.
+#' @param cat_col,label_col Name of the binary label column.
+#' @param columns Names of the numeric columns to split.
+#' @param breaks Number of grid points.
+#' @param fun Optional function applied to the score first.
+#' @return \code{list} (one column) or \code{data.frame} (several columns) with the cut point (\code{split}) and its score.
+#' @rdname optimal_split
 #' @export
 optSplit.chi = function(tbl, num_col, cat_col, fun = NULL){
-  tbl %<>% rename(x = num_col, y = cat_col) %>% dplyr::select(x, y)
+  tbl %<>% rename(x = all_of(num_col), y = all_of(cat_col)) %>% dplyr::select(x, y)
   if(!is.null(fun)){tbl %<>% mutate(x = fun(x))}
   N = nrow(tbl)
   b = tbl %>% pull('y') %>% mean
@@ -423,10 +509,22 @@ optSplit.chi = function(tbl, num_col, cat_col, fun = NULL){
   out <- tbl %>% tail(1) %>% dplyr::select(split = x, correlation = chi) %>% as.list
 
   #out$chisq  <- N*out$chisq
-  out$pvalue <- pchisq(out$correlation, df = 1, lower.tail = F)
+  out$pvalue <- pchisq(N*out$correlation, df = 1, lower.tail = F)
   return(out)
 }
 
+#' @title Optimal splits and scores on Spark tables
+#' @description
+#' Spark (sparklyr) versions of \code{\link{optSplit.chi}}, \code{\link{optSplit.f1}}, \code{\link{dte}} and \code{\link{scorer}}, computed inside Spark.
+#' @param tbl Spark table.
+#' @param num_col,prob_col,prediction_col Score column.
+#' @param cat_col,label_col,actual_col Binary label column.
+#' @param col1,col2 Columns of the chi-square test.
+#' @param columns Score columns.
+#' @param breaks Number of grid points.
+#' @param fun Optional function applied to the score first.
+#' @return Same as the non-Spark versions.
+#' @rdname spark_tools
 #' @export
 spark.optSplit.chi = function(tbl, num_col, cat_col, breaks = 1000, fun = NULL){
   tbl %<>% rename(xxx = num_col, yy = cat_col) %>% dplyr::select(xxx, yy)
@@ -464,6 +562,7 @@ spark.optSplit.chi = function(tbl, num_col, cat_col, breaks = 1000, fun = NULL){
 # label_col: column name containing actual class labels
 # dte stands for decision threshold evaluator:
 # Returns a table containing performance metrics for each decision threshoild
+#' @rdname spark_tools
 #' @export
 spark.dte = function(tbl, prob_col, label_col, breaks = 1000, fun = NULL){
   tbl %<>% rename(xxx = prob_col, yy = label_col) %>% dplyr::select(xxx, yy)
@@ -487,6 +586,7 @@ spark.dte = function(tbl, prob_col, label_col, breaks = 1000, fun = NULL){
     dplyr::select(split, tp, fp, tn, fn, precision, recall, f1)
 }
 
+#' @rdname optimal_split
 #' @export
 optSplitColumns.f1 = function(df, columns = NULL, label_col = 'label', fun = NULL){
   defcols = numerics(df) %-% label_col
@@ -499,27 +599,26 @@ optSplitColumns.f1 = function(df, columns = NULL, label_col = 'label', fun = NUL
     res  <- chif(res1$f1 > res2$f1, res1, res2)
     res  <- c(Column = col, res) %>% as.data.frame
     if(i == 1){sp = res} else {sp %<>% rbind(res)}
-    print(res)
   }
   return(sp)
 }
 
+#' @rdname optimal_split
 #' @export
 optSplitColumns.chi = function(df, columns = numerics(df), label_col = 'label', fun = NULL){
   columns %<>% setdiff(label_col)
-  for(i in sequence(length(columns))){
-    col = columns[i]
-    if(length(unique(df[,col])) > 1){
+  sp = list()
+  for(col in columns){
+    if(length(unique(df[[col]])) > 1){
       res <- df %>% optSplit.chi(num_col = col, cat_col = label_col, fun = fun)
-      res <- c(Column = col, res) %>% as.data.frame
-      if(i == 1){sp = res} else {sp %<>% rbind(res)}
-      print(res)
+      sp[[col]] <- c(Column = col, res) %>% as.data.frame
     }
   }
-  return(sp)
+  return(do.call(rbind, unname(sp)))
 }
 
 
+#' @rdname spark_tools
 #' @export
 spark.optSplitColumns.chi = function(tbl, columns, label_col = 'label', fun = NULL){
   for(i in sequence(length(columns))){
@@ -527,13 +626,13 @@ spark.optSplitColumns.chi = function(tbl, columns, label_col = 'label', fun = NU
     res <- tbl %>% spark.optSplit.chi(num_col = col, cat_col = label_col, fun = fun)
     res <- c(Column = col, res) %>% as.data.frame
     if(i == 1){sp = res} else {sp %<>% rbind(res)}
-    print(res)
   }
   return(sp)
 }
 
+#' @rdname spark_tools
 #' @export
-spark.optSplitColumns.f1 = function(tbl, columns, label_col = 'label'){
+spark.optSplitColumns.f1 = function(tbl, columns, label_col = 'label', fun = NULL){
   for(i in sequence(length(columns))){
     col = columns[i]
     res1 <- tbl %>% spark.optSplit.f1(prob_col = col, label_col = label_col, fun = fun)
@@ -542,7 +641,6 @@ spark.optSplitColumns.f1 = function(tbl, columns, label_col = 'label'){
     res  <- chif(res1$f1 > res2$f1, res1, res2)
     res  <- c(Column = col, res) %>% as.data.frame
     if(i == 1){sp = res} else {sp %<>% rbind(res)}
-    print(res)
   }
   return(sp)
 }
@@ -551,9 +649,10 @@ spark.optSplitColumns.f1 = function(tbl, columns, label_col = 'label'){
 # label_col: column name containing actual class labels
 # dte stands for decision threshold evaluator:
 # Returns a table containing performance metrics for each decision threshoild
+#' @rdname optimal_split
 #' @export
 dte = function(df, prob_col, label_col, breaks = 1000, fun = NULL){
-  df %<>% rename(xxx = prob_col, yy = label_col) %>% dplyr::select(xxx, yy)
+  df %<>% rename(xxx = all_of(prob_col), yy = all_of(label_col)) %>% dplyr::select(xxx, yy)
 
   if(!is.null(fun)){df %<>% mutate(xxx = fun(xxx))}
 
@@ -574,6 +673,7 @@ dte = function(df, prob_col, label_col, breaks = 1000, fun = NULL){
     dplyr::select(split, tp, fp, tn, fn, precision, recall, f1)
 }
 
+#' @rdname optimal_split
 #' @export
 optSplit.f1 = function(df, prob_col, label_col, breaks = 1000, fun = NULL){
   df %>% dte(prob_col, label_col, breaks, fun = fun) %>% arrange(desc(f1)) %>%
@@ -581,12 +681,14 @@ optSplit.f1 = function(df, prob_col, label_col, breaks = 1000, fun = NULL){
 }
 
 # finds the optimal decision threshold to maximize f1 score
+#' @rdname spark_tools
 #' @export
 spark.optSplit.f1 = function(tbl, prob_col, label_col, breaks = 1000, fun = NULL){
   tbl %>% spark.dte(prob_col, label_col, breaks, fun = fun) %>% arrange(desc(f1)) %>%
     head(1) %>% collect %>% as.list
 }
 
+#' @rdname spark_tools
 #' @export
 spark.scorer = function(tbl, prediction_col, actual_col){
   tbl %>% rename(x = prediction_col, y = actual_col) %>%
@@ -613,9 +715,9 @@ all_binary_predictive_scores = c('tp', 'fn', 'fp', 'tn', 'tpr', 'fnr', 'fpr', 't
 
 #' Computes various predictive performance scores between two binary columns of a table
 #' 
-#' @field df \code{data.frame, tibble, data.table} or \code{matrix}: Input table containing at least two columns with binary data
-#' @field prediction_col \code{character} header of the column containing predicted binary classes
-#' @field actual_col \code{character} header of the column containing actual binary classes
+#' @param df \code{data.frame, tibble, data.table} or \code{matrix}: Input table containing at least two columns with binary data
+#' @param prediction_col \code{character} header of the column containing predicted binary classes
+#' @param actual_col \code{character} header of the column containing actual binary classes
 #' @return \code{list} containing various scores. Returned scores are:
 #' tp (True Positive), tn (True Negative), fp (False Positive), fn (False Negative),
 #' tpr (True Positive Rate) or recall ro sensitivity or hit_rate,
@@ -635,7 +737,7 @@ all_binary_predictive_scores = c('tp', 'fn', 'fp', 'tn', 'tpr', 'fnr', 'fpr', 't
 #' @export
 scorer = function(df, prediction_col, actual_col){
   df %>% as.data.frame %>% 
-    rename(x = prediction_col, y = actual_col) %>%
+    rename(x = all_of(prediction_col), y = all_of(actual_col)) %>%
     group_by(x,y) %>% summarise(count = length(x)) %>% ungroup %>% 
     mutate(x = as.logical(x), y = as.logical(y)) -> scores
 
@@ -687,8 +789,11 @@ scorer = function(df, prediction_col, actual_col){
 
 #' Computes actual performance scores assuming the test set is down-sampled for class 0, by 'weight' times
 #' The precision is expected to be lower than scorer, but recall remains the same.
+#' @param tbl \code{data.frame}.
+#' @param prediction_col,actual_col Column names of predicted and actual binary classes.
+#' @param weight Down-sampling factor of class 0.
 scorer_downsampled = function(tbl, prediction_col, actual_col, weight = 2){
-  tbl %>% rename(x = prediction_col, y = actual_col) %>%
+  tbl %>% rename(x = all_of(prediction_col), y = all_of(actual_col)) %>%
     group_by(x,y) %>% summarise(count = length(x)) -> scores
 
   TP = scores %>% filter(x, y)   %>% pull('count')
@@ -706,6 +811,9 @@ scorer_downsampled = function(tbl, prediction_col, actual_col, weight = 2){
   )
 }
 
+#' @title Remove constant columns
+#' @param X \code{data.frame} or matrix.
+#' @return The input without columns that have a single value.
 #' @export
 remove_invariant_features = function(X){
   fsds = X %>% apply(2, function(x) length(unique(x)))
@@ -719,7 +827,7 @@ get_map = function(X, y, source, target, encoding = 'target_ratio'){
   if(encoding == 'target_ratio'){
     suppressWarnings({X %>% cbind(label = y) %>% group_by_(source) %>% summarise(cnt  = length(label), ratio = mean(label), suml = sum(label)) %>% arrange(ratio) -> tbl})
   } else if (encoding == 'flasso'){
-    fl = CLS.FLASSO(lambda1 = 5, lambda2 = 1, transformers = DUMMIFIER(name = 'D', features.include = source))
+    fl = CLS.HDPENREG.FLASSO(lambda1 = 5, lambda2 = 1, transformers = list(ENC.FASTDUMMIES.OHE(name = 'D', features.include = source)))
     fl$fit(X, y)
     fl$objects$features$fname %>%
       gsub(pattern = paste0('D_', source, '_'), replacement = '') %>%
@@ -728,7 +836,7 @@ get_map = function(X, y, source, target, encoding = 'target_ratio'){
   } else stop('Unknown encoding ', encoding)
 
   nr = tbl %>% pull(ratio) %>% unique %>% length
-  elbow(tbl['ratio'], max.num.clusters = nr) -> res
+  elbow(tbl['ratio'], max.num.clusters = nr, doPlot = FALSE) -> res
   logpval = c()
 
   for(clust in res$clst){
@@ -808,6 +916,18 @@ get_chisq_scores = function(X, y, cats){
 }
 
 # Internal function used by grouper module
+#' @title Category grouping maps
+#' @description
+#' Used by \code{\link{BIN.RML.GROUPER-class}}: \code{fit_map_new} learns a grouping of the values of categorical columns, \code{predict_map} applies it.
+#' @param X \code{data.frame}.
+#' @param y Binary target.
+#' @param cats Categorical column names.
+#' @param encoding \code{'target_ratio'} or \code{'flasso'}.
+#' @param maplist Output of \code{fit_map_new}.
+#' @return A list of maps, or the mapped \code{data.frame}.
+#' @rdname category_maps
+#' @keywords internal
+#' @export
 fit_map_new = function(X, y, cats, encoding = 'target_ratio'){
   allmaps  = list()
   scores   = get_chisq_scores(X, y, cats)
@@ -839,6 +959,8 @@ fit_map_new = function(X, y, cats, encoding = 'target_ratio'){
 }
 
 # Internal function used by grouper module
+#' @rdname category_maps
+#' @export
 predict_map = function(X, maplist){
   if(inherits(maplist, 'character')){
     return(X[maplist])
@@ -975,6 +1097,21 @@ sfs.regression <- function (D, tt_ratio = 0.7, yfun = function(x){x}, yfun.inv =
   return(output)
 }
 
+#' @title Save and load models
+#' @description
+#' \code{model_save} writes the model (as RDS) and the native files of Python-based or keras models into the folder \code{<path>/<model name>}. \code{model_load} reads it back.
+#' @param model Model object.
+#' @param model_name Name of the saved model (its folder name).
+#' @param path Parent folder.
+#' @param update \code{logical} rebuild the object with the current class definitions (see \code{\link{model_update}}).
+#' @return \code{model_load} returns the model.
+#' @rdname model_save
+#' @examples
+#' X = data.frame(a = rnorm(100)); y = as.numeric(X$a > 0)
+#' m = CLS.STATS.LR(name = 'lr'); m$fit(X, y)
+#' folder = tempfile()
+#' model_save(m, folder)
+#' m2 = model_load('lr', folder)
 #' @export
 model_save = function(model, path = getwd()){
   if(!file.exists(path)) {dir.create(path)}
@@ -983,6 +1120,7 @@ model_save = function(model, path = getwd()){
   model %>% saveRDS(path %>% paste0('/', model$name, '.rds'))
 }
 
+#' @rdname model_save
 #' @export
 model_load = function(model_name, path = getwd(), update = F){
   path %<>% paste(model_name, sep = '/')
@@ -993,6 +1131,13 @@ model_load = function(model_name, path = getwd(), update = F){
   return(model)
 }
 
+#' @title Reset a model
+#' @description
+#' Marks the model (and optionally its transformers and gradient transformers) as unfitted.
+#' @param model Model object.
+#' @param reset_transformers \code{logical}.
+#' @param reset_gradient_transformers \code{logical}.
+#' @return Nothing; the model is changed in place.
 #' @export
 model_reset = function(model, reset_transformers = T, reset_gradient_transformers = T){
   model$fitted <- FALSE
@@ -1006,6 +1151,9 @@ model_reset = function(model, reset_transformers = T, reset_gradient_transformer
   }
 }
 
+#' @title Memory used by a model
+#' @param model Model object.
+#' @return \code{list} with the size of config, objects and transformers.
 #' @export
 model_size = function(model){
   t_size = list(config = 0, objects = 0, transformers = 0)
@@ -1020,6 +1168,11 @@ model_size = function(model){
        transformers = object.size(model$transformers) + t_size$config + t_size$objects + t_size$transformers)
 }
 
+#' @title Features used by a model network
+#' @description
+#' Input features of the model and all its transformers and gradient transformers.
+#' @param model Model object.
+#' @return \code{character} vector.
 #' @export
 model_features = function(model){
   if(model$fitted){
@@ -1038,6 +1191,11 @@ model_features = function(model){
   return(fet %>% unique)
 }
 
+#' @title Rebuild a model with current class definitions
+#' @description
+#' Creates a new object of the same class with the config and fitted state of \code{model}, recursively for its transformers. Useful after loading a model saved with an older version of rml.
+#' @param model Model object.
+#' @return Model object.
 #' @export
 model_update = function(model){
   
@@ -1073,7 +1231,7 @@ model_update = function(model){
 
 #' Changes duplicated transformer names of a given model to ensure all transformers have distinct names 
 #' 
-#' @field model Any object inheriting from class \code{MODEL} 
+#' @param model Any object inheriting from class \code{MODEL} 
 #' @return None
 #' @export 
 model_make_unique_transformer_names = function(model){
@@ -1088,16 +1246,16 @@ model_make_unique_transformer_names = function(model){
   }
 }
 
-#' Returns model type and types of its transformers recursively
-#' 
-#' @field model Any object inheriting from class \code{MODEL} 
-#' @return \code{character} vector containing model type and all its transformer types
-
+#' Model types of a model network
+#'
+#' Returns the type of the model and of its transformers, recursively.
+#' @param model Any object inheriting from class \code{MODEL}.
+#' @return \code{character} vector containing model type and all its transformer types.
 #' @export
 model_types = function(model){
   mdlns = model$type
   for(tr in model$transformers){
-    mdlns = c(mdlns, transformer_types(tr))
+    mdlns = c(mdlns, model_types(tr))
   }
   return(mdlns %>% unique)
 }
@@ -1105,19 +1263,23 @@ model_types = function(model){
 # converts given categorical columns to integer
 # take to gener
 int_columns = function(x, cats){
-  X %<>% as.data.frame
+  x %<>% as.data.frame
   for(i in intersect(cats, colnames(x))){
-    X[, i] <- X[, i] %>% as.integer
+    x[, i] <- x[, i] %>% as.integer
   }
   return(x)
 }
 
 # converts all columns to numeric
 # take to gener
+#' @title Convert all columns to numeric
+#' @param x \code{data.frame}.
+#' @return \code{data.frame}.
+#' @export
 numerize_columns = function(x){
-  X %<>% as.data.frame
+  x %<>% as.data.frame
   for(i in colnames(x))
-    X[,i] <- as.numeric(x[,i])
+    x[,i] <- as.numeric(x[,i])
   return(x)
 }
 
@@ -1180,9 +1342,9 @@ extract_informative_features = function(X, y, subset_size = 200, cumulative_gain
 
 #' Returns desired moments of a given numeric vector
 #' 
-#' @field v \code{numeric} input vector for which moments are to be computed
-#' @field m \code{integer} desired moment orders
-#' @field na.rm \code{logical} should missing values be removed?
+#' @param v \code{numeric} input vector for which moments are to be computed
+#' @param m \code{integer} desired moment orders
+#' @param na.rm \code{logical} should missing values be removed?
 #' @return \code{numeric} output vector containing moment values
 #' @export 
 moment = function(v, m = c(1,2), na.rm = T){
@@ -1194,6 +1356,14 @@ moment = function(v, m = c(1,2), na.rm = T){
 }
 
 # Internal function used in fit method of abstract class MODEL
+#' @title Summary statistics of columns
+#' @description
+#' Statistics used in the feature table of a model when \code{eda.enabled = TRUE}. Numeric columns get raw moments \code{M1..M4}, missing, value and distinct counts and quantiles; categorical columns get counts and example values.
+#' @param X \code{data.frame} (or WIDETABLE).
+#' @param probs Quantile probabilities.
+#' @return \code{data.frame} with one row per column, \code{fname} holding the column name.
+#' @rdname feature_info
+#' @export
 feature_info_numeric = function(X, probs = seq(0, 1, 0.25)){
   X = X[numerics(X)]
   if(inherits(X, 'WIDETABLE')){
@@ -1204,16 +1374,25 @@ feature_info_numeric = function(X, probs = seq(0, 1, 0.25)){
     }
     return(out)
   } else if(inherits(X, c('data.frame', 'matrix', 'tibble', 'data.table'))){
-    X %>% as.matrix %>% apply(2, moment, m = 1:4) %>% t %>%
-      cbind(
-        X %>% as.matrix %>% apply(2, function(v) {c(n_missing = sum(is.na(v)), n_values = sum(!is.na(v)), n_unique = length(unique(v)))}) %>% t) %>%
-      cbind(
-        X %>% as.matrix %>% apply(2, quantile, probs = probs, na.rm = T) %>% t) %>%
-      as.data.frame %>% rownames2Column('fname')
+    # Vectorised over columns (much faster than apply() on wide tables):
+    M   = as.matrix(X)
+    out = data.frame(fname = colnames(M), stringsAsFactors = F)
+    for(k in 1:4){out[[paste0('M', k)]] <- unname(colSums(M^k, na.rm = T))}
+    nmis = unname(colSums(is.na(M)))
+    out$n_missing = nmis
+    out$n_values  = nrow(M) - nmis
+    out$n_unique  = vapply(seq_len(ncol(M)), function(i) length(unique(M[, i])), integer(1))
+    qnt = apply(M, 2, quantile, probs = probs, na.rm = T, names = F)
+    qnt = matrix(qnt, nrow = length(probs))
+    qnames = paste0(format(100*probs, trim = T), '%')
+    for(i in seq_along(probs)){out[[qnames[i]]] <- qnt[i, ]}
+    out
   } else stop('X has unknown class!')
 }
 
 # Internal function used in fit method of abstract class MODEL
+#' @rdname feature_info
+#' @export
 feature_info_categorical = function(X){
   X = X[nominals(X)]
   if(inherits(X, 'WIDETABLE')){
@@ -1238,7 +1417,14 @@ feature_info_categorical = function(X){
 }
 
 
-#' @export 
+#' @title Recode categorical values
+#' @description
+#' Replaces the values of categorical columns using lookup lists.
+#' @param X \code{data.frame}.
+#' @param encodings Named \code{list}: for each column name, a named list or vector mapping old values to new values.
+#' @param remove_space \code{logical} remove white space from the new values.
+#' @return \code{data.frame}.
+#' @export
 encode_nominals = function(X, encodings = list(), remove_space = T){
   for(ft in names(encodings) %^% colnames(X)){
     u = encodings[[ft]] %>% unlist
@@ -1256,7 +1442,15 @@ encode_nominals = function(X, encodings = list(), remove_space = T){
 # smart divide, replaces zero denominators with the meinimum non-zero value multiplied by a gain
 # This gain should be a value smaller than one. Default is 0.1
 # internal function
-#' @export 
+#' @title Division without infinite values
+#' @description
+#' Divides \code{x} by \code{y}, replacing zero denominators by \code{gain} times the smallest non-zero absolute denominator (with the sign kept).
+#' @param x \code{numeric} numerator.
+#' @param y \code{numeric} denominator.
+#' @param gain Multiplier of the smallest non-zero denominator.
+#' @param tolerance Values within this distance of 0 count as zero.
+#' @return \code{numeric} vector.
+#' @export
 smart_divide = function(x, y, gain = 0.1, tolerance = .Machine$double.eps){
   w0 = which(equal(y, 0.0, tolerance = tolerance))
   if(length(w0) > 0){
@@ -1300,7 +1494,15 @@ ensemble_lift = function(y, yh_A, yh_B, r, r_A){
 # bucket_moments(df, 'Age', c('Height', 'Weight'), ncuts = 10)
 # All variables must be numeric
 # todo: Add moments of higher degrees like: sum of squares, sum of cubes, degree 4, 5, ...
-#' @export 
+#' @title Bucket sums and counts
+#' @description
+#' Cuts \code{df} into quantile buckets of each column of \code{variable_set_1} and reports, for each column of \code{variable_set_2}, the bucket sum and count and their cumulative values.
+#' @param df \code{data.frame}.
+#' @param variable_set_1 Columns used to make the buckets.
+#' @param variable_set_2 Columns summed in each bucket.
+#' @param ncuts Number of quantile buckets.
+#' @return \code{data.frame} with one row per bucket and pair of columns.
+#' @export
 bucket_moments = function(df, variable_set_1, variable_set_2, ncuts = 100){
   out   = NULL
   for(f1 in variable_set_1){
@@ -1339,7 +1541,17 @@ fit_models.old = function(models, X, y){
   return(models)
 }
 
-#' Trains a given list of model objects and returns a trained list of models
+#' Fit or predict a list of models
+#'
+#' \code{fit_models} trains each model of a list, optionally in parallel; \code{predict_models} binds their predictions column-wise.
+#' Used by \code{transform_x()} to fit and run transformers.
+#' @param models \code{list} of model objects.
+#' @param X Features.
+#' @param y Target.
+#' @param num_cores Number of cores (1 runs sequentially).
+#' @param verbose Verbosity level.
+#' @param remove_failed_models \code{logical} drop models that fail to fit instead of stopping.
+#' @return \code{fit_models}: list of fitted models. \code{predict_models}: \code{data.frame}.
 #' @export
 fit_models = function(models, X, y, num_cores = 1, verbose = 1, remove_failed_models = T){
   # if(is.null(names(models))){names(models) <- paste0('M', sequence(length(models)))}
@@ -1384,7 +1596,7 @@ fit_models = function(models, X, y, num_cores = 1, verbose = 1, remove_failed_mo
   
   ## Remove unfitted (failed) models:
   if(remove_failed_models){
-    fitted = models %>% lapply(function(x) {x$fitted}) %>% unlist %>% which
+    fitted = which(vapply(models, function(x) isTRUE(x$fitted), logical(1)))
     failed = models %>% length %>% sequence %>% setdiff(fitted)
     
     nt = length(fitted)
@@ -1397,20 +1609,22 @@ fit_models = function(models, X, y, num_cores = 1, verbose = 1, remove_failed_mo
   return(models)
 }
 
-#' Calls \code{predict} method of each model in the given list and retunrs results in a data.frame
+#' @rdname fit_models
 #' @export
 predict_models = function(models, X, num_cores = 1, verbose = 1){
   num_cores = verify(num_cores, c('numeric', 'integer'), lengths = 1, domain = c(1, parallel::detectCores()), default = 1)
   
-  fitted = models %>% lapply(function(x) {x$fitted}) %>% unlist %>% which
+  fitted = which(vapply(models, function(x) isTRUE(x$fitted), logical(1)))
   failed = models %>% length %>% sequence %>% setdiff(fitted)
   
   if(verbose > 0 & length(failed) > 0){
-    print("%s models are not fitted! No columns will be generated from these models.")
+    cat('\n', sprintf("%s model(s) not fitted, no columns will be generated from them: %s", length(failed),
+                      paste(names(models)[failed] %>% {if(is.null(.)) failed else .}, collapse = ', ')), '\n')
   }
   
   models %<>% list.extract(fitted)
   nt = length(models)
+  if(nt == 0){return(data.frame(row.names = sequence(nrow(X)))[, integer(0), drop = FALSE])}
   if((num_cores > 1) & (nt > 1)){
     requirements = models %>% lapply(function(x) x$packages_required) %>% unlist %>% unique
     cl = rutils::setup_multicore(n_jobs = num_cores)
@@ -1449,6 +1663,15 @@ predict_models = function(models, X, num_cores = 1, verbose = 1){
 }
 
 # Runs cross validation for each model in the baglist:
+#' @title Cross-validate a list of models
+#' @description
+#' Runs \code{performance.cv()} for each model and stores the result in \code{objects$performance.cv}. The \code{multicore} version runs the models in parallel.
+#' @param models Named \code{list} of models.
+#' @param X Features.
+#' @param y Target.
+#' @param n_jobs Number of cores.
+#' @return The list of models.
+#' @rdname evaluate_models
 #' @export
 evaluate_models = function(models, X, y){
   for(i in names(models)){
@@ -1456,7 +1679,7 @@ evaluate_models = function(models, X, y){
     res = try(models[[i]]$performance.cv(X, y), silent = T)
     cat('Done!', '\n')
     if(inherits(res, 'try-error')){
-      models[[i]]$objects$performance.cv <- sprintf("Model %s evaluation failed! %s", model$name, res %>% as.character)
+      models[[i]]$objects$performance.cv <- sprintf("Model %s evaluation failed! %s", i, res %>% as.character)
     } else {
       models[[i]]$objects$performance.cv <- res
     }
@@ -1466,6 +1689,7 @@ evaluate_models = function(models, X, y){
 }
 
 
+#' @rdname evaluate_models
 #' @export
 evaluate_models.multicore = function(models, X, y, n_jobs = parallel::detectCores() - 1){
   cl = rutils::setup_multicore(n_jobs = n_jobs)
@@ -1480,7 +1704,7 @@ evaluate_models.multicore = function(models, X, y, n_jobs = parallel::detectCore
     model = models[[i]]
     res = try(model$performance.cv(X, y), silent = T)
     if(inherits(res, 'try-error')){
-      model$objects$performance.cv = sprintf("Model %s evaluation failed! %s", model$name, res %>% as.character)
+      model$objects$performance.cv = sprintf("Model %s evaluation failed! %s", i, res %>% as.character)
     } else {
       model$objects$performance.cv <- res
     }
@@ -1490,6 +1714,17 @@ evaluate_models.multicore = function(models, X, y, n_jobs = parallel::detectCore
   gc()
 }
 
+#' @title Fit, score and rank a list of models
+#' @description
+#' Fits each model on the training set, predicts the test set and scores the predictions.
+#' @param modlist \code{list} of models.
+#' @param X_train,y_train Training data.
+#' @param X_test,y_test Test data.
+#' @param num_cores Cores for fitting and prediction.
+#' @param metrics Metrics of \code{\link{correlation}}; the first ranks the models.
+#' @param quantiles Optional quantiles for threshold-based metrics.
+#' @param reported_parameters Config names added to the results table.
+#' @return \code{list(best_model, best_performance, results)}.
 #' @export
 service_models = function(modlist, X_train, y_train, X_test, y_test, num_cores = 1, metrics = 'gini', quantiles = NULL, reported_parameters = character()){
   modlist %<>% fit_models(X = X_train, y = y_train, num_cores = num_cores, verbose = 1)
@@ -1516,27 +1751,31 @@ service_models = function(modlist, X_train, y_train, X_test, y_test, num_cores =
   
   rutils::warnif(length(pf) < length(modlist), 'Some models failed to predict!')
   
-  pfdf = pf %>% lapply(unlist) %>% purrr::reduce(rbind) %>% as.data.frame %>% {rownames(.)<-names(pf);.}
-  print(pfdf)
+  # one row per model, one column per metric (correlation() returns plain numbers for a single metric)
+  pfdf = pf %>% lapply(function(p) {p = unlist(p); if(is.null(names(p))) names(p) <- metrics[seq_along(p)]; as.data.frame(as.list(p))}) %>%
+    dplyr::bind_rows() %>% as.data.frame %>% {rownames(.)<-names(pf);.}
   
   for(i in rownames(pfdf)){
     cfg = modlist[[i]]$config
     for(j in reported_parameters){
-      pfdf[i, j] <- cfg[[j]]
+      val = cfg[[j]]
+      pfdf[i, j] <- if(is.null(val) || length(val) != 1) NA else val
     }
   }
 
   modlist %>% list.extract(rownames(pfdf)) %>% lapply(function(x) x$objects$features %>% dplyr::mutate(model = x$name, fitting_time = as.character(x$objects$fitting_time))) %>% 
     purrr::reduce(dplyr::bind_rows) %>% 
-    dplyr::left_join(pfdf %>% rutils::rownames2Column('model')) -> ptab
+    dplyr::left_join(pfdf %>% rutils::rownames2Column('model'), by = 'model') -> ptab
   
-  ord = order(ptab[[names(pf[[1]])[1]]], decreasing = T)[1]
+  ord = order(ptab[[colnames(pfdf)[1]]], decreasing = T)[1]
   for(i in sequence(length(modlist))){modlist[[i]]$release_model()}
-  return(list(best_model = modlist[[ptab$model[ord]]], best_performance = max(ptab[[names(pf[[1]])[1]]]), results = ptab))
+  return(list(best_model = modlist[[ptab$model[ord]]], best_performance = max(ptab[[colnames(pfdf)[1]]], na.rm = TRUE), results = ptab))
 }
 
 
 
+#' @rdname column_tools
+#' @export
 column_rename = function(tbl, ...){
   ns = c(...) %>% verify('character')
   lb = names(ns)
@@ -1545,6 +1784,14 @@ column_rename = function(tbl, ...){
   parse(text = scr) %>% eval
 }
 
+#' @title Drop or rename columns
+#' @description
+#' \code{column_drop} removes the named columns if present. \code{column_rename} renames columns given as \code{new = 'old'} pairs.
+#' @param tbl \code{data.frame}.
+#' @param ... Column names (\code{column_drop}) or named character values \code{new = 'old'} (\code{column_rename}).
+#' @return \code{data.frame}.
+#' @rdname column_tools
+#' @export
 column_drop = function(tbl, ...){
   ns = c(...) %>% verify('character') %>% intersect(colnames(tbl))
   return(tbl[colnames(tbl) %>% setdiff(ns)])

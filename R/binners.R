@@ -1,6 +1,24 @@
 #' @include transformers.R
 
 # previously KMEANS
+#' @title K-means cluster binner (stats::kmeans)
+#' @name BIN.KMEANS.KMC-class
+#' @aliases BIN.KMEANS.KMC
+#' @description
+#' Clusters the rows on the numeric columns with \code{kmeans} and returns the number of the nearest cluster centre.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{num_clusters}}{Number of clusters. Default 5.}
+#' }
+#' @examples
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = BIN.KMEANS.KMC(num_clusters = 3)
+#' m$fit(X, y)
+#' head(m$predict(X))
 #' @export BIN.KMEANS.KMC
 BIN.KMEANS.KMC = setRefClass('BIN.KMEANS.KMC', contains = 'MODEL', methods = list(
   initialize = function(...){
@@ -9,7 +27,6 @@ BIN.KMEANS.KMC = setRefClass('BIN.KMEANS.KMC', contains = 'MODEL', methods = lis
     description      <<- 'KMeans Clustering'
     package          <<- 'rml'
     package_language <<- 'R'
-    type     <<- ' from package kmeans'
     if(is.empty(name)){name <<- 'KMC' %>% paste0(sample(10000:99999, 1))}
     config$num_clusters <<- verify(config$num_clusters, c('numeric', 'integer'), default = 5)
     
@@ -22,14 +39,28 @@ BIN.KMEANS.KMC = setRefClass('BIN.KMEANS.KMC', contains = 'MODEL', methods = lis
   },
   
   model.predict = function(X){
-    bibi = function(u){
-      objects$model$centers %>% apply(1, function(v) rutils::difference(u, v)) %>% order %>% first
-    }
-    X %>% as.matrix %>% apply(1, bibi) %>% as.data.frame %>% {colnames(.)<-NULL;.}
+    # number of the nearest cluster centre (squared euclidean distance), vectorised over rows:
+    M  = as.matrix(X[objects$features$fname])
+    C  = objects$model$centers
+    D2 = outer(rowSums(M^2), rowSums(C^2), '+') - 2*M %*% t(C)
+    data.frame(cluster = max.col(-D2, ties.method = 'first'))
   }
 ))
 
 # previously GROUPER
+#' @title Categorical feature grouper
+#' @name BIN.RML.GROUPER-class
+#' @aliases BIN.RML.GROUPER
+#' @description
+#' Groups the values of categorical columns into fewer groups by their target rate.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{encoding}}{\code{'target_ratio'} (default) or \code{'flasso'}.}
+#' }
+#' @export BIN.RML.GROUPER
 BIN.RML.GROUPER = setRefClass('BIN.RML.GROUPER', contains = "MODEL", methods = list(
   initialize = function(...){
     callSuper(...)
@@ -60,6 +91,26 @@ BIN.RML.GROUPER = setRefClass('BIN.RML.GROUPER', contains = "MODEL", methods = l
 # This model is using stupid package smbinning. It only divides to 5 buckets, so it's not really optimal binning but better than nothing!
 # Also, make sure there is no '.' character in column labels because the package author has problem with dots!!!!!!
 # previously SMBINNING
+#' @title Optimal binner (smbinning)
+#' @name BIN.SMBINNING.OB-class
+#' @aliases BIN.SMBINNING.OB
+#' @description
+#' Bins each numeric column with \code{smbinning::smbinning} (conditional inference trees).
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{percentageOfRecords}}{Minimum share of rows per bin (0 to 0.5). Default 0.05.}
+#' }
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = BIN.SMBINNING.OB()
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export BIN.SMBINNING.OB
 BIN.SMBINNING.OB = setRefClass('BIN.SMBINNING.OB', contains = "MODEL",
    methods = list(
@@ -133,6 +184,20 @@ BIN.SMBINNING.OB = setRefClass('BIN.SMBINNING.OB', contains = "MODEL",
 )
 
 
+#' @title Optimal binary binner
+#' @name BIN.RML.OBB-class
+#' @aliases BIN.RML.OBB
+#' @description
+#' Splits each numeric column at the cut point that maximises the chi-square association with the binary target and
+#' returns 0/1 per column. Importance is the strength of that association.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @examples
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = BIN.RML.OBB()
+#' m$fit(X, y)
+#' head(m$predict(X))
 #' @export BIN.RML.OBB
 BIN.RML.OBB = setRefClass('BIN.RML.OBB', contains = "MODEL", methods = list(
   initialize = function(...){
@@ -167,21 +232,50 @@ BIN.RML.OBB = setRefClass('BIN.RML.OBB', contains = "MODEL", methods = list(
 ))
 
 
+#' @title K-means cluster binner (scikit-learn)
+#' @name BIN.SKLEARN.KMC-class
+#' @aliases BIN.SKLEARN.KMC
+#' @description
+#' Wraps \code{sklearn.cluster.KMeans} on the numeric columns and returns the cluster label of each row.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
+#'
+#' Inherits from \code{\link{TRM.SKLEARN-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{n_clusters}}{Number of clusters. Default 3.}
+#' }
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = BIN.SKLEARN.KMC(n_clusters = 4)
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export BIN.SKLEARN.KMC
 BIN.SKLEARN.KMC = setRefClass(
   'BIN.SKLEARN.KMC',
   contains = 'TRM.SKLEARN',
   methods = list(
     initialize = function(...){
-      callSuper(model.module = 'cluster', model.class = 'k_means', ...)
+      callSuper(model.module = 'cluster', model.class = 'KMeans', ...)
       type             <<- 'Binner'
       description      <<- 'KMeans Clustering'
-      
-      config[['pp.remove_nominal_features']] <<- T
-      config[['pp.remove_numeric_features']] <<- F
-      
+
       if(is.empty(name)){name <<- 'KMC' %>% paste0(sample(10000:99999, 1))}
       config$n_clusters <<- verify(config$n_clusters, c('integer', 'numeric'), lengths = 1, domain = c(1,1000), default = 3) %>% as.integer
+    },
+
+    model.fit = function(X, y = NULL){
+      objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
+      callSuper(X[objects$features$fname], y)
+    },
+
+    # Returns the cluster number of each row
+    model.predict = function(X){
+      if(inherits(X, 'WIDETABLE')){X = wt_as_matrix(X)}
+      retrieve_model()
+      data.frame(cluster = as.integer(objects$model$predict(X %>% data.matrix)))
     }
 ))
-

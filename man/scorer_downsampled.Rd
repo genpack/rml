@@ -7,6 +7,13 @@ The precision is expected to be lower than scorer, but recall remains the same.}
 \usage{
 scorer_downsampled(tbl, prediction_col, actual_col, weight = 2)
 }
+\arguments{
+\item{tbl}{\code{data.frame}.}
+
+\item{prediction_col, actual_col}{Column names of predicted and actual binary classes.}
+
+\item{weight}{Down-sampling factor of class 0.}
+}
 \description{
 Computes actual performance scores assuming the test set is down-sampled for class 0, by 'weight' times
 The precision is expected to be lower than scorer, but recall remains the same.

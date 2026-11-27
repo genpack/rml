@@ -1,0 +1,235 @@
+---
+title: "4. Model and argument reference"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{4. Model and argument reference}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+This vignette lists every argument rml understands and every model class it provides. Arguments are
+passed to a constructor (`CLS.XGBOOST(nrounds = 50)`) or as a list (`CLS.XGBOOST(config = list(nrounds =
+50))`); both end up in `model$config` and can be changed there before fitting. Names not listed here are
+passed to the underlying algorithm.
+
+## Constructor arguments of every model
+
+| Argument | Default | Description |
+| --- | --- | --- |
+| `name` | random, e.g. `XGB12345` | Model name; used as prefix of output columns and as file name when saving. |
+| `transformers` | `list()` | Models whose outputs become this model's input features. |
+| `gradient_transformers` | `list()` | Models (or column names of `X`) whose output this model learns to correct. |
+| `config` | `list()` | Alternative way to pass any of the arguments below. |
+
+## Common arguments (class `MODEL`)
+
+### Input columns
+
+| Argument | Default | Description |
+| --- | --- | --- |
+| `features.include` | all | Input columns to use, applied before transformers. |
+| `features.exclude` | none | Input columns to drop, applied before transformers. |
+| `features.include.at` | all | Columns to keep after the transformers ran. |
+| `features.exclude.at` | none | Columns to drop after the transformers ran. |
+| `column_filters` | `list(list(column = 'n_unique', filter = ' > 1'))` | Filters on the feature table `objects$features`. Each item has a `column` of that table and a `filter` written as R code, e.g. `' > 1'`. The default drops constant columns. |
+| `pp.coerce_integer_features` | `FALSE` | Converts numeric columns holding only whole numbers to integer (treated as ordinal/categorical by some encoders). |
+
+### Output
+
+| Argument | Default | Description |
+| --- | --- | --- |
+| `name_in_output` | `TRUE` | Prefix output column names with the model name. |
+| `keep_columns` | `FALSE` | Also return the input columns the model did not use. |
+| `keep_features` | `FALSE` | Also return the input columns the model used. |
+| `pass_columns` | all | When passing input columns, only pass these. |
+| `remove_columns` | none | When passing input columns, never pass these. |
+| `save_predictions` | `FALSE` | Cache the last prediction and reuse it if `predict()` is called again with the same data. |
+
+### Preprocessing (training only, except where stated)
+
+| Argument | Default | Description |
+| --- | --- | --- |
+| `pp.mask_missing_values` | `NULL` | Value replacing missing values. Applied in training and prediction. |
+| `pp.trim_outliers` | `FALSE` | Clip outliers in each column to the largest non-outlier value. |
+| `pp.trim_outliers.sd_threshold` | 4 | A value is an outlier if it is further than this many standard deviations from the mean. |
+| `pp.trim_outliers.adaptive` | `FALSE` | Compress outliers logarithmically instead of clipping. |
+| `pp.trim_outliers.recursive` | `FALSE` | Recompute mean and sd after removing outliers until none is left. |
+| `eda.enabled` | `FALSE` | Add moments, quantiles, missing and unique counts to `objects$features` (usable in `column_filters`). |
+
+### Row sampling (binary targets)
+
+| Argument | Default | Description |
+| --- | --- | --- |
+| `smp.enabled` | `FALSE` | Turn sampling on. |
+| `smp.method` | `'upsample'` | `'upsample'`, `'downsample'` or `'smote'` (Python package smote_variants). |
+| `smp.class_ratio` | `NULL` | Target share of class 1 after sampling. Without it only random row sampling is done. |
+| `smp.sample_ratio` | 1 | Share of rows to keep after balancing. |
+| `smp.num_rows` | all | Maximum number of rows to keep. |
+| `smp.config` | `list()` | Arguments for the SMOTE oversampler; `model` selects the smote_variants class (default `distance_SMOTE`). |
+
+### Feature elimination
+
+| Argument | Default | Description |
+| --- | --- | --- |
+| `fe.enabled` | `FALSE` | After training, drop features with importance below the threshold and retrain. |
+| `fe.importance_threshold` | 0 | Importance threshold. |
+| `fe.quantile` | `NULL` | If set, the threshold is this quantile of the importances. |
+| `fe.recursive` | `FALSE` | Repeat until no feature is below the threshold. |
+
+### Target transformation and boosting
+
+| Argument | Default | Description |
+| --- | --- | --- |
+| `yin_transformer_function` | `NULL` | Function applied to `y` before training, e.g. `log`. |
+| `yin_transformer_arguments` | `NULL` | Extra argument passed to that function. |
+| `yout_transformer_function` | `NULL` | Function applied to the model output, e.g. `exp`. |
+| `yout_transformer_arguments` | `NULL` | Extra argument passed to that function. |
+| `gradient_transformers_aggregator` | `mean` | Combines several gradient transformer outputs row by row. |
+
+### Cross-validation and metrics
+
+| Argument | Default | Description |
+| --- | --- | --- |
+| `metrics` | classifiers `'pearson'`, regressors `'mae'` | Default metrics of `performance()` and `performance.cv()`. |
+| `cv.ntrain` | 1 | Number of training samples. |
+| `cv.ntest` | 5 | Number of test samples per training sample. |
+| `cv.train_ratio` | 0.5 | Share of rows in each training sample. |
+| `cv.test_ratio` | 0.2 | Share of the remaining rows in each test sample. |
+| `cv.set` | `NULL` | List of validation sets `list(list(X = ..., y = ...))` used instead of random test samples. `CLS.XGBOOST` also uses them for early stopping. |
+| `cv.reset_transformer` | `TRUE` | Refit the transformers in each cross-validation round. |
+
+### Runtime
+
+| Argument | Default | Description |
+| --- | --- | --- |
+| `verbose` | 1 | 0 silences progress messages. |
+| `mc.num_cores` | 1 | Cores used to fit and run transformers in parallel. |
+| `remove_failed_transformers` | `TRUE` | Drop transformers that fail to fit instead of stopping. |
+
+## Classifier arguments (class `CLASSIFIER`)
+
+All classifiers are binary: they model the probability of class 1.
+
+| Argument | Default | Description |
+| --- | --- | --- |
+| `return` | `'probs'` | `'probs'`, `'logit'` (log-odds) or `'class'` (0/1). |
+| `return_type_in_output` | `TRUE` | Add the return type to the output column name. |
+| `threshold` | 0.5 | Probability threshold for `return = 'class'`. |
+| `threshold_determination` | `'set_as_config'` | `'maximum_f1'`, `'maximum_chi'` or `'label_rate_quantile'` choose the threshold on the training data. |
+| `metric` | `'gini'` (`'f1'` for class output) | Main metric of the model, used by search tools. |
+
+## Classifiers
+
+| Class | Package | Key arguments (passed to the algorithm unless noted) |
+| --- | --- | --- |
+| `CLS.XGBOOST` | xgboost | `nrounds` (100), `nthread` (1), `objective` (`'binary:logistic'`), `early_stopping_rounds`, `show_progress` (FALSE), `print_every_n`, `obj` (custom objective), `feval` (custom metric), `maximize`, `xgb_model`, `callbacks`, plus any booster parameter (`max_depth`, `eta`, `subsample`, ...). Supports gradient transformers. |
+| `CLS.KERAS.DNN` | keras | `num_layers` (1), `first_layer_nodes` (128), `layer_nodes_ratio` (0.4), `layers_activation` ('relu'), `layers_dropout` (0.25), `layers` (custom list), `epochs` (5), `batch_size` (32), `optimizer` ('adam'), `learning_rate` (1e-4), `loss`, kernel/activity L1/L2 penalties, `initializer_*`. Supports gradient transformers. |
+| `CLS.STATS.LR` | stats | Logistic regression with `glm`. Feature importance from coefficient p-values. Supports gradient transformers (as a glm offset). |
+| `CLS.SKLEARN.LR` | sklearn | `LogisticRegression` arguments (`C`, `penalty`, `solver`, ...). Numeric features only. |
+| `CLS.SKLEARN.DT` | sklearn | `DecisionTreeClassifier` arguments (`max_depth`, ...). |
+| `CLS.SKLEARN.KNN` | sklearn | `KNeighborsClassifier` arguments (`n_neighbors`, ...). |
+| `CLS.SKLEARN.SVM` | sklearn | `SVC` arguments; `probability` is always TRUE. |
+| `CLS.SKLEARN.MNB` | sklearn | `MultinomialNB` on integer columns. |
+| `CLS.SKLEARN.XGB` | xgboost (Python) | `XGBClassifier` arguments (`n_estimators`, `max_depth`, ...). |
+| `CLS.MLR` | mlr | `model_type`: any mlr classification learner (default `classif.gbm`). |
+| `CLS.HDPENREG.FLASSO` | HDPenReg | Fused lasso logistic regression: `lambda1`, `lambda2`. |
+| `CLS.SPARKLYR.GBT` | sparklyr | Spark gradient boosted trees; `spark_home`, `spark_config`, `connection`. |
+| `CLS.E1071.NB` | e1071 | Naive Bayes. |
+
+## Regressors
+
+| Class | Package | Key arguments |
+| --- | --- | --- |
+| `REG.STATS.LNR` | stats | Linear regression with `lm`; drops collinear features. `sfs.enabled` runs stepwise feature selection. |
+| `REG.XGBOOST` | xgboost | `nrounds` (100) plus booster parameters. |
+| `REG.SKLEARN.XGB` | xgboost (Python) | `XGBRegressor` arguments. |
+
+Every regressor supports gradient transformers (it trains on the residual).
+
+## Transformers
+
+| Class | Package | Output | Key arguments |
+| --- | --- | --- | --- |
+| `MAP.RML.IDT` | rml | Input columns unchanged | |
+| `MAP.RML.ZFS` | rml | `(x - mean)/sd` per numeric column | |
+| `MAP.RML.MMS` | rml | `(x - min)/(max - min)` per numeric column | |
+| `MAP.STATS.PCA` | stats | Principal components | `num_components` (5), `center`, `scale` |
+| `MAP.SKLEARN.ZFS`, `MAP.SKLEARN.MMS`, `MAP.SKLEARN.NRM`, `MAP.SKLEARN.QT` | sklearn | StandardScaler, MinMaxScaler, Normalizer, QuantileTransformer | sklearn arguments |
+| `MAP.PYLMNN.LMNN` | pylmnn | Large margin nearest neighbour projection | `num_components`, `num_neighbors`, `epochs` |
+| `ENC.RML.TE` | rml | Categorical columns replaced by their class-1 rate | |
+| `ENC.RML.FE` | rml | Aggregate of each numeric column per category | `aggregator` ('mean'), `categoricals`, `action_by_original` |
+| `ENC.RML.ME` | rml | A model fitted per category value | `model.class`, `model.config`, `min_rows` (100), `segmentation_features` |
+| `ENC.SKLEARN.OHE` | sklearn | One-hot columns | `max_domain` (25), OneHotEncoder arguments |
+| `ENC.FASTDUMMIES.OHE` | fastDummies | One-hot columns | `max_domain` (25) |
+| `ENC.CATEGORY_ENCODERS.TE`, `.CATB`, `.JSTN`, `.HLMRT` | category_encoders | Target, CatBoost, James-Stein, Helmert encodings | category_encoders arguments |
+| `BIN.RML.OBB` | rml | 0/1 split of each numeric column at its optimal chi-square cut | |
+| `BIN.SMBINNING.OB` | smbinning | Optimal bins | `percentageOfRecords` (0.05) |
+| `BIN.KMEANS.KMC` | stats | Cluster number from k-means | `num_clusters` (5) |
+| `BIN.SKLEARN.KMC` | sklearn | Cluster number from KMeans | `n_clusters` (3) |
+| `FET.RML.D2MUL` | rml | Products of all pairs of numeric columns | |
+| `FET.SKLEARN.MFG` | sklearn | PolynomialFeatures | `degree`, ... |
+| `FNT.RML.LOG` | rml | `log(x + intercept)` | `intercept` (1), `apply_abs` (TRUE) |
+| `FNT.RML.INV` | rml | `1/x`, trimmed | `trim` (10000) |
+| `FNT.RML.LOGIT` | rml | Logit of each column | `apply_mms` (TRUE) |
+| `FNT.RML.POLY` | rml | Powers of `gain*x + intercept` | `n_terms` (3), `gain` (1), `intercept` (0), `apply_abs` (FALSE) |
+| `BIN.RML.GROUPER` | rml | Categories grouped by target rate | `encoding` ('target_ratio') |
+| `CATCONCATER` | rml | Categorical values of a row joined with '-' | |
+| `ENS.RML.AGGR` | rml | Row-wise aggregate of its inputs | `aggregator` ('mean') |
+| `ENS.RML.BS` | rml | Output of one of two classifiers, chosen per row by a supervisor | `pupils`, `model_class` ('CLS.XGBOOST'), `model_config` |
+
+Python-based classes need the reticulate package and the Python module installed. Set `python_address`
+to choose the Python executable.
+
+## Writing your own model class
+
+Inherit from `CLASSIFIER`, `REGRESSOR` or `MODEL` and implement two methods:
+
+* `model.fit(X, y)`: train on the data.frame `X` and store the fitted object in `objects$model`.
+  `objects$features` lists the features; filter it if the model only uses some of them, and add an
+  `importance` column if available.
+* `model.predict(X)`: return a one-column data.frame (a probability of class 1 for classifiers).
+
+Everything else (transformers, sampling, feature selection, output naming, thresholds, boosting of
+regressors, cross-validation, saving) comes from the base classes.
+
+```{r custom, message = FALSE}
+library(rml)
+
+CLS.RML.NB = setRefClass('CLS.RML.NB', contains = 'CLASSIFIER', methods = list(
+  initialize = function(...){
+    callSuper(...)
+    description <<- 'Gaussian naive Bayes (example)'
+    package     <<- 'rml'
+    if(length(name) == 0){name <<- 'GNB'}
+  },
+  model.fit = function(X, y){
+    objects$features <<- objects$features[objects$features$fclass %in% c('numeric', 'integer'), ]
+    X = X[objects$features$fname]
+    objects$model <<- list(
+      prior = mean(y),
+      mu1 = colMeans(X[y == 1, , drop = FALSE]), sd1 = apply(X[y == 1, , drop = FALSE], 2, sd),
+      mu0 = colMeans(X[y == 0, , drop = FALSE]), sd0 = apply(X[y == 0, , drop = FALSE], 2, sd))
+  },
+  model.predict = function(X){
+    m = objects$model
+    ll = function(mu, s) rowSums(sapply(names(mu), function(f) dnorm(X[[f]], mu[f], s[f], log = TRUE)))
+    lo = log(m$prior/(1 - m$prior)) + ll(m$mu1, m$sd1) - ll(m$mu0, m$sd0)
+    data.frame(prob = 1/(1 + exp(-lo)))
+  }
+))
+
+set.seed(3)
+X = data.frame(a = rnorm(500), b = rnorm(500))
+y = as.numeric(X$a + rnorm(500) > 0)
+nb = CLS.RML.NB(name = 'nb', transformers = list(MAP.RML.ZFS(name = 'z')), verbose = 0)
+nb$fit(X, y)
+head(nb$predict(X), 3)
+nb$performance(X, y, metrics = 'gini')
+```
+
+Note: methods inherited from rml classes run in the environment of your class, which is why rml
+attaches magrittr, dplyr and rutils when it is loaded.

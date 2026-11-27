@@ -6,28 +6,119 @@
 
 library(magrittr)
 
-#' Abstract Model Class
-
-#' @description  Reference Class \code{MODEL} is the highest level of herarchy in a series of classes defined in the \code{rml} package.
-#' All transformers, classifiers, regressors and survival models inherit from this class.
+#' @title Abstract base class of all rml models
+#' @name MODEL-class
+#' @aliases MODEL
+#' @description
+#' \code{MODEL} is the root of the rml class hierarchy. Every classifier, regressor and transformer
+#' (encoder, mapper, binner, feature generator, function transformer, ensembler) inherits from it.
+#' Subclasses only implement \code{model.fit(X, y)} and \code{model.predict(X)}; \code{MODEL} provides
+#' everything else: input column selection, transformers, gradient transformers, row sampling,
+#' preprocessing, feature elimination, output naming, cross-validation, saving and copying.
 #'
-#' @field name character containing name of the model
+#' Arguments passed to the constructor (or inside \code{config = list(...)}) are stored in the
+#' \code{config} field. Names listed in the \code{reserved_words} field are rml settings; any other name
+#' is passed to the underlying algorithm (for example \code{max_depth} to xgboost).
 #'
-#' @field type character containing model type. Specifies transformer type
-#' @field package character specifies name of the package model is using
-#' @field package_language character specifies programming language of the package either R or Python.
-#' @field description character descripbes what the model is.
-#' @field config list containing all parameters and settings of the model. Values depend on the model class.
-#' @field fitted logical specifies if the model is fitted (trained) or not
+#' @field name \code{character} model name. Used as prefix of output columns and as file name when saving.
+#' @field type \code{character} model type, e.g. \code{'Binary Classifier'}, \code{'Encoder'}.
+#' @field package \code{character} name of the package providing the algorithm.
+#' @field package_language \code{character} \code{'R'} or \code{'Python'}.
+#' @field packages_required \code{character} packages loaded on parallel workers.
+#' @field description \code{character} short description of the algorithm.
+#' @field reserved_words \code{character} config names used by rml and not passed to the algorithm.
+#' @field config \code{list} all settings of the model.
+#' @field fitted \code{logical} TRUE once the model is trained.
+#' @field transformers \code{list} of models whose outputs are the input features of this model.
+#' @field gradient_transformers \code{list} of base models (or column names of \code{X}) this model boosts:
+#'   they are boosted by this model, which learns to correct their output. Several outputs are combined by \code{gradient_transformers_aggregator}.
+#' @field yin_transformers,yout_transformers \code{list} reserved for target transformation functions.
+#' @field objects \code{list} fitted state: \code{model} (the trained object), \code{features} (table of the
+#'   features used, with class and importance), \code{fitting_time} (when fitting finished), \code{fitting_duration} (seconds), \code{n_output}.
 #'
-#' @field transformers list containing all transformer objects. Each transformer is an instance inheriting from MODEL class.
-#' @field gradient_transformers list containing all gradient transformer objects. Each gradient transformer is an instance inheriting from MODEL class.
-#' @field yin_transformers list of functions.
-#' @field yout_transformers list of functions.
-#' @field objects list containing additional data
-#' @field objects$features data.frame containing list of features and their characteristics. This table is created after fitting the model.
-#' @field objects$fitting_time POSIXct containing time when the model's training is complete. Created after the model is fitted.
+#' @section Methods:
+#' \describe{
+#'   \item{\code{fit(X, y)}}{Trains the model and all its transformers and gradient transformers. Does nothing if already fitted.}
+#'   \item{\code{predict(X)}}{Returns a data.frame of model outputs, named \code{<name>_<output>}.}
+#'   \item{\code{reset(reset_transformers = TRUE, reset_gradient_transformers = TRUE, set_features.include = TRUE)}}{Makes the model unfitted.
+#'     With no transformers and \code{set_features.include = TRUE}, the features used so far are written to \code{features.include},
+#'     so refitting uses the same features.}
+#'   \item{\code{performance(X, y, metrics)}}{Score of the predictions against \code{y} (classifiers and regressors), see \code{\link{correlation}}.}
+#'   \item{\code{performance.cv(X, y, metrics)}}{Repeated train/test cross-validation on a deep copy of the model.}
+#'   \item{\code{deep_copy(name_suffix = NULL)}}{Copy of the model, its transformers and gradient transformers.}
+#'   \item{\code{info.features()}, \code{info.model()}, \code{info.transformers()}, \code{info.edge_list()}}{Information about the features and the network of models.}
+#'   \item{\code{info.network()}}{\code{list(nodes, links)} of the model network: transformers feed their parent, gradient transformers are boosted by it.}
+#'   \item{\code{plot.network(plotter, legend)}}{Draws the network: \code{'DiagrammeR'} (default; Graphviz layout, boxes fitted to labels, hover a node for details), \code{'visNetwork'} (interactive, through rvis if installed, otherwise visNetwork) or \code{'igraph'} (static). Falls back to the next installed package.}
+#'   \item{\code{model.save(path)}, \code{model.load(path)}}{Save or load native model files; use \code{\link{model_save}} and \code{\link{model_load}}.}
+#'   \item{\code{supports_gradient_transformers()}}{TRUE if training uses the output of gradient transformers.}
+#' }
 #'
+#' @section Configuration:
+#' Input columns:
+#' \describe{
+#'   \item{\code{features.include}, \code{features.exclude}}{Input columns to use or drop, before transformers run.}
+#'   \item{\code{features.include.at}, \code{features.exclude.at}}{Columns to keep or drop after the transformers ran.}
+#'   \item{\code{column_filters}}{List of filters on the feature table, each \code{list(column = , filter = )} with \code{filter} written
+#'     as R code. Default \code{list(list(column = 'n_unique', filter = ' > 1'))} removes constant columns.}
+#'   \item{\code{pp.coerce_integer_features}}{Convert numeric columns holding whole numbers to integer. Default FALSE.}
+#' }
+#' Output:
+#' \describe{
+#'   \item{\code{name_in_output}}{Prefix output column names with the model name. Default TRUE.}
+#'   \item{\code{keep_columns}}{Also return the input columns the model did not use. Default FALSE.}
+#'   \item{\code{keep_features}}{Also return the input columns the model used. Default FALSE.}
+#'   \item{\code{pass_columns}, \code{remove_columns}}{Restrict which input columns are passed when either switch above is on.}
+#'   \item{\code{save_predictions}}{Reuse the last prediction when \code{predict()} is called again with the same data. Default FALSE.}
+#' }
+#' Preprocessing:
+#' \describe{
+#'   \item{\code{pp.mask_missing_values}}{Value replacing missing values, in training and prediction.}
+#'   \item{\code{pp.trim_outliers}}{Clip outliers of each column in the training data. Default FALSE. Related:
+#'     \code{pp.trim_outliers.sd_threshold} (4), \code{pp.trim_outliers.adaptive} (FALSE), \code{pp.trim_outliers.recursive} (FALSE).}
+#'   \item{\code{eda.enabled}}{Add moments, quantiles, missing and unique counts to \code{objects$features}. Default FALSE.}
+#' }
+#' Row sampling (binary targets):
+#' \describe{
+#'   \item{\code{smp.enabled}}{Turn sampling on. Default FALSE.}
+#'   \item{\code{smp.method}}{\code{'upsample'} (default), \code{'downsample'} or \code{'smote'} (Python package smote_variants).}
+#'   \item{\code{smp.class_ratio}}{Target share of class 1 after balancing.}
+#'   \item{\code{smp.sample_ratio}, \code{smp.num_rows}}{Share or maximum number of rows kept.}
+#'   \item{\code{smp.config}}{Arguments of the SMOTE oversampler; \code{model} selects the smote_variants class.}
+#' }
+#' Feature elimination:
+#' \describe{
+#'   \item{\code{fe.enabled}}{Drop features with importance not above the threshold and retrain. Default FALSE.}
+#'   \item{\code{fe.importance_threshold}}{Threshold, default 0. \code{fe.quantile} sets it as a quantile of the importances instead.}
+#'   \item{\code{fe.recursive}}{Repeat until no feature is below the threshold. Default FALSE.}
+#' }
+#' Target transformation and boosting:
+#' \describe{
+#'   \item{\code{yin_transformer_function}, \code{yin_transformer_arguments}}{Function (and extra argument) applied to \code{y} before training.}
+#'   \item{\code{yout_transformer_function}, \code{yout_transformer_arguments}}{Function (and extra argument) applied to the output.}
+#'   \item{\code{gradient_transformers_aggregator}}{Function combining several gradient transformer outputs per row. Default \code{mean}.}
+#' }
+#' Cross-validation and metrics:
+#' \describe{
+#'   \item{\code{metrics}}{Default metrics of \code{performance()}.}
+#'   \item{\code{cv.ntrain}, \code{cv.ntest}}{Number of training samples (1) and test samples per training sample (5).}
+#'   \item{\code{cv.train_ratio}, \code{cv.test_ratio}}{Share of rows for training (0.5) and of the remaining rows for testing (0.2).}
+#'   \item{\code{cv.set}}{List of validation sets \code{list(list(X = , y = ))} used instead of random test samples.}
+#'   \item{\code{cv.reset_transformer}}{Refit transformers in each cross-validation round. Default TRUE.}
+#' }
+#' Runtime:
+#' \describe{
+#'   \item{\code{verbose}}{0 silences progress messages. Default 1, or the value of \code{options(rml.verbose = )} so that \code{options(rml.verbose = 0)} silences all models of a session.}
+#'   \item{\code{mc.num_cores}}{Cores used to fit and run transformers in parallel. Default 1.}
+#'   \item{\code{remove_failed_transformers}}{Drop transformers that fail to fit instead of stopping. Default TRUE.}
+#' }
+#' @seealso \code{\link{CLASSIFIER-class}}, \code{\link{REGRESSOR-class}}, \code{vignette('rml-reference', package = 'rml')}
+#' @examples
+#' X = data.frame(a = rnorm(200), b = rnorm(200))
+#' y = as.numeric(X$a + rnorm(200) > 0)
+#' model = CLS.STATS.LR(name = 'lr', transformers = list(MAP.RML.ZFS(name = 'z')), verbose = 0)
+#' model$fit(X, y)
+#' head(model$predict(X))
+#' model$objects$features
 #' @export MODEL
 #' @exportClass MODEL
 MODEL = setRefClass('MODEL',
@@ -48,7 +139,8 @@ MODEL = setRefClass('MODEL',
       }
       
       
-      packages_required <<- c('magrittr', 'dplyr', 'rutils', 'rml', 'rbig', 'reticulate')
+      # Packages loaded on parallel workers (rml loads its own imports):
+      packages_required <<- c('rml')
 
       reserved_words <<- c('keep_columns', 'keep_features', 
                          'name_in_output', 'metrics', 
@@ -71,7 +163,7 @@ MODEL = setRefClass('MODEL',
                          'ts.enabled', 'ts.id_col', 'ts.time_col', 
                          'return_features', 'feature_subset_size', 'gradient_transformers_aggregator', 'save_predictions',
                          'yin_transformer_function', 'yin_transformer_arguments', 'yout_transformer_function', 'yout_transformer_arguments',
-                         'metric', 'transformers', 'fitted')
+                         'metric', 'transformers', 'fitted', 'python_address')
       
       for(pn in c('keep_columns', 'keep_features', 'cv.restore_model', 'fe.enabled', 'mc.enabled', 
                   'pp.coerce_integer_features', 'pp.trim_outliers', 
@@ -96,10 +188,11 @@ MODEL = setRefClass('MODEL',
         settings[[pn]] <- verify(settings[[pn]], 'logical', lengths = 1, domain = c(T,F), default = T)
       }
       
-      settings$verbose <- verify(config$verbose, c('numeric', 'integer'), lengths = 1, default = 1) %>% as.integer
+      settings$verbose <- verify(settings$verbose, c('numeric', 'integer'), lengths = 1, default = getOption('rml.verbose', 1)) %>% as.integer
       settings$column_filters  <- verify(settings$column_filters, 'list', default = list(list(column = 'n_unique', filter = ' > 1')))
 
-      settings$metrics   <- verify(settings$metrics,  'character', default = 'pearson')
+      # Default metrics are set by subclasses (CLASSIFIER: 'pearson', REGRESSOR: 'mae')
+      settings$metrics   <- verify(settings$metrics,  'character', null_allowed = T)
       settings$cv.split_method <- verify(settings$cv.split_method, lengths = 1, 'character', default = 'shuffle')
       
       settings$cv.ntest  <- verify(settings$cv.ntest , c('numeric', 'integer'), lengths = 1, domain = c(1, Inf), default = 5) %>% as.integer
@@ -145,7 +238,10 @@ MODEL = setRefClass('MODEL',
     
     reset               = function(reset_transformers = T, reset_gradient_transformers = T, set_features.include = T){
       fitted <<- FALSE
-      if(set_features.include & (length(transformers) == 0)){
+      # A fitted model without transformers keeps the features it used (after elimination) for the next fit.
+      # An unfitted model has no feature table, so its features.include is left as it is
+      # (otherwise a second reset() would set it to NULL and the model would use all columns).
+      if(set_features.include & (length(transformers) == 0) & !is.null(objects$features$fname)){
         config$features.include <<- objects$features$fname
       }
       objects$features <<- NULL
@@ -194,7 +290,7 @@ MODEL = setRefClass('MODEL',
       if(!fitted) stop(paste('from', name, 'of type', type, ':', 'Model not fitted!', '\n'))
       if(inherits(X, 'matrix')){X %<>% as.data.frame}
       XORG = transform_x(X)
-      zero = objects$features$fname %-% rbig::colnames(XORG)
+      zero = objects$features$fname %-% wt_colnames(XORG)
       if(length(zero) > 0){
         for(z in zero) XORG[,z] <- 0
         cat('Warning from ', name, ': Features ', paste(zero, collapse = ','), ' were not generated by transformers! Filled with zero.', '\n')
@@ -212,7 +308,7 @@ MODEL = setRefClass('MODEL',
         
         if(!is.null(config$pp.mask_missing_values)){
           # This will edit the table, so WideTables cannot be used yet.
-          if(inherits(XFET, 'WIDETABLE')){XFET = rbig::as.data.frame(XFET)}
+          if(inherits(XFET, 'WIDETABLE')){XFET = wt_as_data_frame(XFET)}
           for(i in sequence(ncol(XFET))){
             wna = which(is.na(XFET[[i]]))
             if(length(wna) > 0){
@@ -228,6 +324,9 @@ MODEL = setRefClass('MODEL',
       }
 
       XOUT = transform_yout(X, XOUT)
+      if(is.null(colnames(XOUT))){
+        colnames(XOUT) <- chif(ncol(XOUT) == nrow(objects$features), objects$features$fname, chif(ncol(XOUT) == 1, '', as.character(sequence(ncol(XOUT)))))
+      }
       colnames(XOUT)[which(colnames(XOUT) %in% c('.'))] <- ''
       if((ncol(XOUT) > 0) & config$name_in_output) colnames(XOUT) <- name %>% paste(colnames(XOUT), sep = ifelse(colnames(XOUT) == '', '', '_'))
 
@@ -285,13 +384,13 @@ MODEL = setRefClass('MODEL',
 
     fit.quad = function(X, y){
       fit.fe(X, y)
-      clmns = rbig::colnames(X)
+      clmns = wt_colnames(X)
       XP    = X[objects$features$fname]
       for(i in 1:ncol(X)){
         v  = X[,i]
         Xi <- X %>% as.matrix %>% apply(2, function(u) u*v) %>% as.data.frame %>% {colnames(.) <- clmns %>% paste(clmns[i], sep = 'X');.}
         XP = XP %>% cbind(Xi)
-        objects$features <<- rbig::colnames(XP) %>% sapply(function(i) XP %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
+        objects$features <<- wt_colnames(XP) %>% sapply(function(i) XP %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
         fit.fe(XP, y)
         XP  = XP[objects$features$fname]
       }
@@ -309,16 +408,29 @@ MODEL = setRefClass('MODEL',
       rep(objects$model$mean, N) %>% as.data.frame
     },
 
+    # TRUE if the model's training uses the output of its gradient transformers.
+    # Regressors and non-classifier models always can (the residual is computed in transform_yin).
+    # Classifiers need algorithm-specific loss changes; override this method in your own class once supported.
+    supports_gradient_transformers = function(){
+      !inherits(.self, 'CLASSIFIER') || inherits(.self, gb_supporting_classifiers)
+    },
+
     fit = function(X, y = NULL){
+      fit_start = Sys.time(); was_fitted = fitted
       if(!fitted){
+        if(length(gradient_transformers) > 0){
+          assert(supports_gradient_transformers(), sprintf("Model %s of class %s does not support gradient transformers yet. Supported classifiers: %s", name, class(.self)[1], paste(gb_supporting_classifiers, collapse = ', ')))
+        }
         if(inherits(X, 'matrix')){X %<>% as.data.frame}
         y = transform_yin(X, y)
-        if(!is.null(config[['features.include']])){X = X[config$features.include %^% rbig::colnames(X)]}
-        if(!is.null(config[['features.exclude']])){X = X[rbig::colnames(X) %-% config$features.exclude]}
+        if(!is.null(config[['features.include']])){X = X[config$features.include %^% wt_colnames(X)]}
+        if(!is.null(config[['features.exclude']])){X = X[wt_colnames(X) %-% config$features.exclude]}
         X = transform_x(X, y)
-        if(!is.null(config[['features.include.at']])){X = X[config$features.include.at %^% rbig::colnames(X)]}
-        if(!is.null(config[['features.exclude.at']])){X = X[rbig::colnames(X) %-% config$features.exclude.at]}
+        if(!is.null(config[['features.include.at']])){X = X[config$features.include.at %^% wt_colnames(X)]}
+        if(!is.null(config[['features.exclude.at']])){X = X[wt_colnames(X) %-% config$features.exclude.at]}
         if(config$smp.enabled){
+          # Row sampling must keep the gradient attribute (output of gradient transformers) aligned with y:
+          y_grad = attr(y, 'gradient')
           smp_method <- verify(config$smp.method, 'character', domain = c('upsample', 'downsample', 'smote'), default = 'upsample') 
 
           actual_ratio = mean(y)
@@ -354,6 +466,7 @@ MODEL = setRefClass('MODEL',
                 w0 = which(y == 0) %>% sample(as.integer(n1*(1.0 - rr)/rr), replace = T)
               }
             } else if (smp_method == 'smote'){
+              assert(is.null(y_grad), "SMOTE sampling cannot be used with gradient transformers: synthetic rows have no gradient transformer output. Use 'upsample' or 'downsample' instead.")
               sv = reticulate::import('smote_variants')
               smote_model = verify(config$smp.config[['model']], 'character', domain = names(sv), lengths = 1, default = 'distance_SMOTE')
               config$smp.config[['proportion']] <<- verify(config$smp.config[['proportion']], 'numeric', lengths = 1, default = config$smp.class_ratio/(1.0 - config$smp.class_ratio))
@@ -375,6 +488,7 @@ MODEL = setRefClass('MODEL',
           
           ind_2 = n_train_rows %>% sequence %>% sample(n_rows)
           X = X[ind[ind_2],]; y = y[ind[ind_2]]
+          if(!is.null(y_grad)){attr(y, 'gradient') <- y_grad[ind[ind_2]]}
         }
         
         # This code chunk must only be here. Please don't relocate it from here!
@@ -386,7 +500,7 @@ MODEL = setRefClass('MODEL',
         if(inherits(X, 'WIDETABLE')){
           objects$features <<- X$meta %>% distinct(column, .keep_all = T) %>% select(fname = column, fclass = class, n_unique = n_unique)
         } else {
-          objects$features <<- colnames(X) %>% sapply(function(i) X %>% pull(i) %>% class) %>% as.data.frame %>% {colnames(.)<-'fclass';.} %>% rownames2Column('fname') %>% mutate(fname = as.character(fname), fclass = as.character(fclass))
+          objects$features <<- data.frame(fname = colnames(X), fclass = vapply(as.list(X), function(v) class(v)[1], character(1)), stringsAsFactors = F, row.names = NULL)
         }
         nums = objects$features$fclass %in% c('numeric', 'integer')
         cats = objects$features$fclass %in% c('character', 'integer', 'factor')
@@ -405,7 +519,7 @@ MODEL = setRefClass('MODEL',
             assert(is.character(fitem$column), "Element 'column' must be character. %s was of class %s!" %>% sprintf(fitem$column, class(fitem$column)[1]))
             assert(is.character(fitem$filter), "Element 'filter' must be character. %s was of class %s!" %>% sprintf(fitem$filter, class(fitem$filter)[1]))
             if((fitem$column == 'n_unique') & !('n_unique' %in% colnames(objects$features))){
-              objects$features$n_unique <<- rbig::colnames(X) %>% sapply(function(x) X %>% pull(x) %>% unique %>% length) %>% unlist
+              objects$features$n_unique <<- vapply(objects$features$fname, function(x) length(unique(X[[x]])), integer(1), USE.NAMES = F)
             }
             script = 'objects$features'
             script %<>% paste("filter(%s %s)" %>% sprintf(fitem$column, fitem$filter), sep = " %>% ")
@@ -420,7 +534,7 @@ MODEL = setRefClass('MODEL',
         # todo: missing values could be imputed by aggregations of non-missing values like mean, median or most_frequent
         if(!is.null(config$pp.mask_missing_values)){
           # This will edit the table, so WideTables cannot be used yet.
-          if(inherits(X, 'WIDETABLE')){X = rbig::as.data.frame(X)}
+          if(inherits(X, 'WIDETABLE')){X = wt_as_data_frame(X)}
           for(i in sequence(ncol(X))){
             wna = which(is.na(X[[i]]))
             if(length(wna) > 0){
@@ -448,6 +562,8 @@ MODEL = setRefClass('MODEL',
       }
       fitted <<- TRUE
       objects$fitting_time <<- Sys.time()
+      # seconds spent fitting this model, including its transformers and gradient transformers
+      if(!was_fitted){objects$fitting_duration <<- as.numeric(difftime(objects$fitting_time, fit_start, units = 'secs'))}
     },
 
     transform_x = function(X, y = NULL){
@@ -539,55 +655,59 @@ MODEL = setRefClass('MODEL',
       return(XT)
     },
 
+    # Returns the aggregated output of gradient transformers (a numeric vector with one value per row of X), or 0 if there is none.
+    # Each gradient transformer can be a column name in X (an offset column) or a model inheriting from MODEL.
+    # Only the transformer's own output columns are used (columns it passes through via keep_columns/keep_features are ignored).
+    # Classifier outputs are always used on the logit scale, because classifiers boost in log-odds space.
     y_gradient = function(X, y = NULL){
       nt = length(gradient_transformers)
-      if(nt > 0){
-        for(i in sequence(nt)){
-          transformer = gradient_transformers[[i]]
-          if(inherits(transformer, 'character')){
-            assert(transformer %in% rbig::colnames(X))
-            if(i == 1){
-              YT = X[transformer]
-            } else {
-              YT = cbind(YT, X[transformer])
-            }
-          } else if (inherits(transformer, 'MODEL')){
-            if(!transformer$fitted) {transformer$fit(X, y)}
-
-            if(i == 1){
-              YT = transformer$predict(X)
-            } else {
-              YT = cbind(YT, transformer$predict(X) %>% {.[colnames(.) %-% colnames(YT)]})
-            }
+      if(nt == 0){return(0)}
+      YT = list()
+      for(i in sequence(nt)){
+        transformer = gradient_transformers[[i]]
+        if(inherits(transformer, 'character')){
+          assert(transformer %in% wt_colnames(X), sprintf("Gradient transformer column '%s' not found in the data!", transformer))
+          YT[[i]] <- as.numeric(X[[transformer]])
+        } else if (inherits(transformer, 'MODEL')){
+          if(!transformer$fitted) {transformer$fit(X, y)}
+          out = transformer$predict(X)
+          nout = transformer$objects$n_output
+          if(is.null(nout)){nout = ncol(out)}
+          out = out[, ncol(out) - rev(sequence(nout)) + 1, drop = F]
+          v = as.numeric(out[[1]])
+          if(inherits(transformer, 'CLASSIFIER')){
+            ret = transformer$config[['return']]
+            assert(ret != 'class', sprintf("Gradient transformer %s must not return classes. Set its config 'return' to 'logit'.", transformer$name))
+            if(ret == 'probs'){v = logit_fwd(v)}
           }
-          yt = YT %>% as.matrix %>% apply(1, config$gradient_transformers_aggregator)
-        }
-      } else {yt = 0}
-      return(yt)
+          YT[[i]] <- v
+        } else {stop(sprintf("Gradient transformer %s must be a column name or a MODEL object!", i))}
+      }
+      if(nt == 1){return(YT[[1]])}
+      do.call(cbind, YT) %>% apply(1, config$gradient_transformers_aggregator)
     },
 
     transform_yin = function(X, y){
-      grad = y_gradient(X, y)
-      if(sum(abs(grad)) > .Machine$double.eps){
-        attr(y, 'gradient') <- grad
-      }
       if(!is.null(config$yin_transformer_function)){
         y = do.call(what = config$yin_transformer_function, args = list(y, config$yin_transformer_arguments))
+      }
+      if(length(gradient_transformers) > 0){
+        attr(y, 'gradient') <- y_gradient(X, y)
       }
       return(y)
     },
 
+    # Adds the output of gradient transformers to the model output (the model was trained on the residual),
+    # then applies the output transformer function if one is configured.
     transform_yout = function(X, Y){
-      if(!is.null(config$yout_transformer_function)){
-        Y = do.call(what = config$yout_transformer_function, args = list(Y, config$yout_transformer_arguments))
-      }
       if(length(gradient_transformers) > 0){
         grad = y_gradient(X)
-
         for(i in numerics(Y)){
-          Y[, i] <- Y[, i] + grad
+          Y[[i]] <- Y[[i]] + grad
         }
-        # todo: apply y_transformers (list of functions)
+      }
+      if(!is.null(config$yout_transformer_function)){
+        Y = do.call(what = config$yout_transformer_function, args = list(Y, config$yout_transformer_arguments))
       }
       return(Y)
     },
@@ -634,40 +754,144 @@ MODEL = setRefClass('MODEL',
       return(info)
     },
 
+    # One row per model in the network (this model and all its transformers and gradient transformers, recursively)
     info.transformers = function(){
       tbl = do.call(data.frame, info.model() %>% list.add(stringsAsFactors = F))
-
-      for(tr in transformers){
-        tbl_tr = do.call(data.frame, tr$info.model() %>% list.add(stringsAsFactors = F))
-        tbl %<>% rbind(tbl_tr)
+      for(tr in c(transformers, gradient_transformers)){
+        if(inherits(tr, 'MODEL')){tbl = dplyr::bind_rows(tbl, tr$info.transformers())}
       }
-      return(tbl)
+      return(tbl %>% dplyr::distinct(name, .keep_all = TRUE))
     },
 
-    plot.network = function(plotter = 'visNetwork', ...){
-      nodes = xgb$info.transformers()
-      rownames(nodes) <- nodes$name
-      nodes['INPUT', 'name'] <- 'INPUT'
-      nodes['INPUT', 'type'] <- 'Data'
-      nodes['INPUT', 'class'] <- 'INPUT'
-      nodes['INPUT', 'description'] <- 'Features'
-      nodes['OUTPUT', 'name'] <- 'OUTPUT'
-      nodes['OUTPUT', 'type'] <- 'Final Prediction'
-      nodes['OUTPUT', 'class'] <- 'OUTPUT'
-      nodes['OUTPUT', 'description'] <- ''
-      nodes$outputs[is.na(nodes$outputs)] <- '?'
-      nodes[is.na(nodes)] <- 'NULL'
-      nodes$type %<>% as.factor
+    # Nodes and links of the model network, used by plot.network().
+    # Links: 'feeds' from a transformer (or INPUT) to the model using its output as features,
+    # 'boosted by' from a gradient transformer (base model) to the model that boosts it.
+    info.network = function(){
+      edge = function(s, t, r) data.frame(source = s, target = t, relation = r, stringsAsFactors = FALSE)
+      collect = function(m){
+        out = list()
+        if(is.empty(m$transformers)){out[[length(out) + 1]] <- edge('INPUT', m$name, 'feeds')}
+        for(tr in m$transformers){
+          out[[length(out) + 1]] <- edge(tr$name, m$name, 'feeds')
+          out[[length(out) + 1]] <- collect(tr)
+        }
+        for(gt in m$gradient_transformers){
+          if(inherits(gt, 'MODEL')){
+            out[[length(out) + 1]] <- edge(gt$name, m$name, 'boosted by')
+            out[[length(out) + 1]] <- collect(gt)
+          } else {
+            out[[length(out) + 1]] <- edge('INPUT', m$name, paste('offset', gt))
+          }
+        }
+        do.call(rbind, out)
+      }
+      links = collect(.self) %>% rbind(data.frame(source = name, target = 'OUTPUT', relation = 'prediction', stringsAsFactors = FALSE)) %>% dplyr::distinct()
 
-      nodes$description = paste(nodes$class, nodes$description, nodes$type, sep = '\n')
+      tbl   = info.transformers()
+      nodes = data.frame(id = tbl$name, class = tbl$class, type = tbl$type,
+                         description = tbl$description, package = tbl$package,
+                         outputs = if(is.null(tbl$outputs)) NA_integer_ else as.integer(tbl$outputs),
+                         fitted = tbl$fitted, stringsAsFactors = FALSE)
+      nodes = rbind(data.frame(id = 'INPUT', class = 'INPUT', type = 'Data', description = 'Input features', package = '', outputs = NA_integer_, fitted = TRUE, stringsAsFactors = FALSE),
+                    nodes,
+                    data.frame(id = 'OUTPUT', class = 'OUTPUT', type = 'Prediction', description = 'Final prediction', package = '', outputs = NA_integer_, fitted = TRUE, stringsAsFactors = FALSE))
+      nodes$label = ifelse(nodes$id %in% c('INPUT', 'OUTPUT'), nodes$id, paste0(nodes$id, '\n', nodes$class))
+      nodes$title = paste0('<b>', nodes$id, '</b><br>', nodes$class, '<br>', nodes$description,
+                           ifelse(is.na(nodes$outputs), '', paste0('<br>outputs: ', nodes$outputs)))
+      links$outputs = nodes$outputs[match(links$source, nodes$id)]
+      list(nodes = nodes, links = links)
+    },
 
-      links = xgb$info.edge_list() %>% {colnames(.) <- c('source', 'target');.} %>% as.data.frame %>%
-        mutate(source = as.character(source), target = as.character(target)) %>%
-        left_join(nodes %>% select(source = name, outputs), by = 'source')
-
-      rvis::viserPlot(list(nodes = nodes, links = links), source = 'source', target = 'target', linkWidth = 'outputs', key = 'name', label = 'description',
-                       color = 'type', config = list(...), linkLabel = 'outputs', type = 'graph', plotter = plotter)
-
+    # Draws the network of models.
+    # plotter = 'DiagrammeR': Graphviz layout through DiagrammeR::grViz() (htmlwidget, hover a node for details).
+    # plotter = 'visNetwork': interactive htmlwidget (drag and zoom), through package rvis if installed, otherwise package visNetwork.
+    # plotter = 'igraph': static plot with base graphics, laid out with package igraph.
+    # If the chosen package is not installed, the next available one in this order is used.
+    # Arguments in ... are passed to DiagrammeR::grViz, rvis (as config) or visNetwork::visNetwork; for igraph, main and cex.
+    plot.network = function(plotter = c('DiagrammeR', 'visNetwork', 'igraph'), legend = TRUE, ...){
+      plotter = match.arg(plotter)
+      net = info.network()
+      link_colors = c(feeds = '#7f8c8d', 'boosted by' = '#e67e22', prediction = '#2c3e50')
+      net$links$color = ifelse(net$links$relation %in% names(link_colors), link_colors[net$links$relation], '#3498db')
+      plotters = c('DiagrammeR', 'visNetwork', 'igraph')
+      available = plotters[sapply(plotters, requireNamespace, quietly = TRUE)]
+      assert(length(available) > 0, "plot.network() needs one of the packages 'DiagrammeR', 'visNetwork' or 'igraph'")
+      if(!plotter %in% available){
+        alt = available[which(match(available, plotters) > match(plotter, plotters))[1]]
+        if(is.na(alt)) alt = available[1]
+        message(sprintf("Package '%s' is not installed: using '%s' instead.", plotter, alt))
+        plotter = alt
+      }
+      if(plotter == 'DiagrammeR'){
+        return(DiagrammeR::grViz(network_dot(net, legend = legend), ...))
+      }
+      if(plotter == 'visNetwork'){
+        if(requireNamespace('rvis', quietly = TRUE) && requireNamespace('visNetwork', quietly = TRUE)){
+          # shape 'box' makes every node a rectangle sized to its own label
+          net$nodes$shape = 'box'
+          return(rvis::rvisPlot(type = 'graph', plotter = 'visNetwork', obj = net, key = 'id', label = 'label', color = 'type',
+                                shape = 'shape', tooltip = 'title', source = 'source', target = 'target', linkLabel = 'relation',
+                                linkColor = 'color', config = list(...)) %>%
+                   visNetwork::visNodes(margin = 10))
+        }
+        assert(requireNamespace('visNetwork', quietly = TRUE), "plot.network() needs package 'visNetwork' (or use plotter = 'igraph')")
+        nodes = net$nodes %>% dplyr::mutate(group = type, shape = 'box')
+        edges = net$links %>% dplyr::transmute(from = source, to = target, label = relation, color = color, arrows = 'to',
+                                               dashes = relation == 'boosted by')
+        return(visNetwork::visNetwork(nodes, edges, ...) %>%
+                 visNetwork::visNodes(margin = 10) %>%
+                 visNetwork::visHierarchicalLayout(direction = 'LR', sortMethod = 'directed') %>%
+                 visNetwork::visLegend(enabled = legend, useGroups = TRUE) %>%
+                 visNetwork::visOptions(highlightNearest = TRUE))
+      }
+      assert(requireNamespace('igraph', quietly = TRUE), "plotter = 'igraph' needs package 'igraph'")
+      g = igraph::graph_from_data_frame(net$links[c('source', 'target', 'relation')], vertices = net$nodes[c('id', 'type', 'label')])
+      types = unique(net$nodes$type)
+      pal   = unname(network_palette(types))
+      # left to right: column = longest path from INPUT, rows ordered by igraph's Sugiyama layout to reduce crossings
+      sorted = igraph::topo_sort(g, mode = 'out')
+      depth  = stats::setNames(rep(0, igraph::vcount(g)), igraph::V(g)$name)
+      for(v in igraph::V(g)$name[sorted]){
+        for(w in igraph::neighbors(g, v, mode = 'out')$name){depth[w] <- max(depth[w], depth[v] + 1)}
+      }
+      lay = igraph::layout_with_sugiyama(g, layers = depth + 1)$layout[seq_len(igraph::vcount(g)), , drop = FALSE]
+      xs  = unname(depth); ys = lay[, 1]
+      # one row unit per node in each column, keeping Sugiyama's order, centred vertically
+      ys  = stats::ave(ys, xs, FUN = function(u) rank(u, ties.method = 'first') - (length(u) + 1)/2)
+      args = list(...)
+      cex  = if(is.null(args$cex)) 0.85 else args$cex
+      labels = igraph::V(g)$label
+      # draw with base graphics so every box is sized to fit its own label; legends go in the bottom margin
+      op = graphics::par(mar = c(ifelse(legend, 4, 0.5), 0.5, ifelse(is.null(args$main), 0.5, 2.5), 0.5))
+      on.exit(graphics::par(op), add = TRUE)
+      graphics::plot.new()
+      graphics::plot.window(xlim = c(-0.3, max(xs) + 0.3), ylim = c(min(ys) - 0.55, max(ys) + 0.55))
+      if(!is.null(args$main)) graphics::title(main = args$main)
+      measure = function(cex){
+        list(w = graphics::strwidth(labels, cex = cex) + 1.0*graphics::strwidth('M', cex = cex),
+             h = graphics::strheight(labels, cex = cex) + 0.9*graphics::strheight('M', cex = cex))
+      }
+      m = measure(cex)
+      # shrink the text if the widest box would overlap the next column or the tallest box the next row
+      shrink = min(1, 0.93/max(m$w), 0.9/max(m$h))
+      if(shrink < 1){cex = cex*shrink; m = measure(cex)}
+      src = match(net$links$source, igraph::V(g)$name); trg = match(net$links$target, igraph::V(g)$name)
+      graphics::arrows(x0 = xs[src] + m$w[src]/2, y0 = ys[src], x1 = xs[trg] - m$w[trg]/2, y1 = ys[trg],
+                       length = 0.08, col = net$links$color, lwd = 1.3,
+                       lty = ifelse(net$links$relation == 'boosted by', 2, 1))
+      graphics::rect(xs - m$w/2, ys - m$h/2, xs + m$w/2, ys + m$h/2,
+                     col = pal[match(igraph::V(g)$type, types)], border = 'grey30')
+      graphics::text(xs, ys, labels, cex = cex)
+      if(!legend) return(invisible(net))
+      lcex = 0.8
+      xmid = graphics::grconvertX(0.5, 'nfc')
+      graphics::legend(xmid, graphics::grconvertY(0, 'nfc'), xjust = 0.5, yjust = 0, legend = types, fill = pal, text.width = graphics::strwidth(types, cex = 0.8),
+                       bty = 'n', cex = lcex, horiz = TRUE, xpd = NA)
+      graphics::legend(xmid, graphics::grconvertY(0.045, 'nfc'), xjust = 0.5, yjust = 0,
+                       legend = c('feeds (transformer)', 'boosted by (gradient transformer)'),
+                       col = link_colors[c('feeds', 'boosted by')], lty = c(1, 2), lwd = 1.3, bty = 'n', cex = lcex,
+                       horiz = TRUE, xpd = NA)
+      invisible(net)
     },
 
     # info.transformers = function(){
@@ -713,7 +937,7 @@ MODEL = setRefClass('MODEL',
     
     # todo: add k-fold, chronological shuffle, chronological split
     performance.cv = function(X, y, metrics = config$metrics, ...){
-      cvmodel = .self$copy()
+      cvmodel = .self$deep_copy()
 
       # Split by shuffling: todo: support other splitting methods(i.e.: chronological)
       N       = nrow(X)
@@ -739,7 +963,7 @@ MODEL = setRefClass('MODEL',
           }
         } else {
           for(vset in config$cv.set){
-            scores = c(scores, cvmodel$performance(vset$X, vset$y, metrics = config$metrics))
+            scores[[length(scores) + 1]] <- cvmodel$performance(vset$X, vset$y, metrics = metrics, ...)
           }
         }
       }

@@ -52,6 +52,31 @@
 #   PCA: Principal Component Analysis Mapper
 #   NRM: Normalizer
 
+#' @title Wrapper for scikit-learn transformers and models
+#' @name TRM.SKLEARN-class
+#' @aliases TRM.SKLEARN
+#' @description
+#' Superclass of all scikit-learn based classes. It creates \code{sklearn.<model.module>.<model.class>} with the
+#' non-reserved config arguments, fits it on the numeric matrix of the input and calls its \code{transform()} method
+#' at prediction. Python models are saved with joblib by \code{model_save()}.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{model.module}}{sklearn sub-module, e.g. \code{'preprocessing'}.}
+#'   \item{\code{model.class}}{sklearn class, e.g. \code{'StandardScaler'}.}
+#'   \item{\code{python_address}}{Path of the Python executable.}
+#' }
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = TRM.SKLEARN(model.module = 'preprocessing', model.class = 'StandardScaler')
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export TRM.SKLEARN
 TRM.SKLEARN = setRefClass(
   'TRM.SKLEARN',
@@ -118,14 +143,14 @@ TRM.SKLEARN = setRefClass(
     model.fit = function(X, y){
       if(!fitted){
         objects$module <<- reticulate::import(paste('sklearn', config[['model.module']], sep = '.'))
-        objects$model <<- do.call(objects$module[[config[['model.class']]]], args = config %>% rutils::list.remove(reserved_words))
-        if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
+        objects$model <<- do.call(objects$module[[config[['model.class']]]], args = python_args(config, reserved_words))
+        if(inherits(X, 'WIDETABLE')){X = wt_as_matrix(X)}
         objects$model$fit(X %>% data.matrix, y)
       }
     },
     
     model.predict = function(X){
-      if(inherits(X, 'WIDETABLE')){X = rbig::as.matrix(X)}
+      if(inherits(X, 'WIDETABLE')){X = wt_as_matrix(X)}
       retrieve_model()
       out = objects$model$transform(X %>% data.matrix) %>% as.data.frame()
       
@@ -133,6 +158,12 @@ TRM.SKLEARN = setRefClass(
       # If your naming strategy is different, write your own model.predict() method for any wrapper inheriting from this class.
       if(ncol(out) == nrow(objects$features)){
         colnames(out) <- objects$features$fname
+      } else {
+        # transformers that create new columns (e.g. PolynomialFeatures) name them with get_feature_names_out()
+        ns = try(as.character(objects$model$get_feature_names_out(objects$features$fname)), silent = TRUE)
+        if(!inherits(ns, 'try-error') && length(ns) == ncol(out)){
+          colnames(out) <- gsub(' ', '_X_', ns)
+        }
       }
       return(out)
     }
@@ -140,6 +171,14 @@ TRM.SKLEARN = setRefClass(
 
 
 
+#' @title Categorical concatenator
+#' @name CATCONCATER-class
+#' @aliases CATCONCATER
+#' @description
+#' Outputs one column joining the values of all categorical columns of a row with \code{'-'}.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @export CATCONCATER
 CATCONCATER = setRefClass('CATCONCATER', contains = "MODEL",
    methods = list(
      initialize = function(...){

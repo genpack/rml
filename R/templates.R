@@ -1,5 +1,9 @@
 ##### Untility Functions #####
 # Generates a random integer number
+#' @title Random integers
+#' @param n Count.
+#' @param min,max Range.
+#' @return \code{integer} vector.
 #' @export
 randint = function(n = 1, min = 0, max = 100){
   min + as.integer(runif(n = n)*(max - min + 1))
@@ -8,6 +12,12 @@ randint = function(n = 1, min = 0, max = 100){
 
 ##### Builders #####
 
+#' @title Build one model from a template
+#' @description
+#' Creates the model of \code{template$class} and sets its config from the template, drawing random values where the template gives a set or a random function. Transformers are not added; see \code{\link{build_model_from_template}}.
+#' @param model_name Name of the model.
+#' @param template \code{list} template.
+#' @return Model object, or \code{NULL} if the class cannot be created.
 #' @export
 build_model_instance_from_template = function(model_name = NULL, template){
   stopifnot(inherits(template, 'list'))
@@ -44,9 +54,11 @@ build_model_instance_from_template = function(model_name = NULL, template){
 #' The models's config parameter \code{features.include} will be set accordingly to extract specified features from the training dataset.
 #' features can also be a data frame of features (output of function evaluate_features)
 #' @param templates \code{list}: A named list of templates. Argument \code{template_name} must be among the names of this list.
+#' @param metric \code{character}: metric used to rank features when \code{features} is a table from \code{\link{evaluate_features}}.
+#' @param max_depth \code{integer}: Maximum depth of nested transformers. Prevents endless recursion when templates refer to each other.
 #' @return A object inheriting from class \code{MODEL}
 #' @export
-build_model_from_template = function(template_name, model_name = NULL, features = NULL, templates = default_templates, metric = 'gini'){
+build_model_from_template = function(template_name, model_name = NULL, features = NULL, templates = default_templates, metric = 'gini', max_depth = 4){
   stopifnot(inherits(templates, 'list'))
   temp_names = names(templates)
   verify(template_name, 'character', domain = temp_names)
@@ -55,10 +67,13 @@ build_model_from_template = function(template_name, model_name = NULL, features 
   # Add transformers to the model:
   for(item in templates[[template_name]]$transformers){
     chance = runif(1)
-    if(chance < item$probability){
+    # Templates referring to unknown template names are ignored:
+    candidates = intersect(item$templates, temp_names)
+    if((chance < item$probability) & (length(candidates) > 0) & (max_depth > 0)){
       nt = length(model$transformers)
-      tn = item$templates %>% sample(size = 1)
-      model$transformers[[nt + 1]] <- build_model_from_template(template_name = tn, features = features, templates = templates)
+      tn = candidates[sample.int(length(candidates), size = 1)]
+      trn = build_model_from_template(template_name = tn, features = features, templates = templates, metric = metric, max_depth = max_depth - 1)
+      if(!is.null(trn)){model$transformers[[nt + 1]] <- trn}
     }
   }
 
@@ -90,7 +105,7 @@ build_model_from_template = function(template_name, model_name = NULL, features 
         model$config$features.include = rownames(features)[ind]
       }
       else if(inherits(templates[[template_name]]$pass, 'character')){
-        model$config$features.include <- chif(is.null(model$config$features.include, templates[[template_name]]$pass, model$config$features.include %^% templates[[template_name]]$pass))
+        model$config$features.include <- chif(is.null(model$config$features.include), templates[[template_name]]$pass, model$config$features.include %^% templates[[template_name]]$pass)
       }
     }
 

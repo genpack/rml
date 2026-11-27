@@ -4,8 +4,21 @@
 \alias{correlation}
 \title{Use this function to get correlation of two vectors with various metrics.}
 \usage{
-correlation(x, y, metrics = "pearson", threshold = NULL,
-  quantiles = NULL)
+correlation(x, y, metrics = "pearson", threshold = NULL, quantiles = NULL)
+}
+\arguments{
+\item{x}{\code{vector or table} first vector. If a table or matrix is passed, correlation is measured for each column of the table.}
+
+\item{y}{\code{vector} second vector (must have the same number of elements/rows as vector/table \code{x})}
+
+\item{metrics}{\code{character} specifying which metrics you desire to be computed. Valid values are
+\code{pearson, log_loss, aurc, gini, tp, fn, fp, tn, tpr, fnr, fpr, tnr, ppv, fdr, npv, pt, ts, csi, ba, 
+recall, sensitivity, hit_rate, miss_rate, f1, specificity, selectivity, fall_out, precision, accuracy, fmi, 
+informedness, markedness, mcc, for, lift, optsplit.chi, optsplit.f1}}
+
+\item{threshold}{\code{numeric} cut point turning \code{x} into binary predictions for threshold-based metrics (tp, f1, ...).}
+
+\item{quantiles}{\code{numeric} alternative to \code{threshold}: cut points are these quantiles of \code{x}.}
 }
 \value{
 \code{list} The values of specified correlation metrics between two given vectors by the specified metrics.
@@ -13,16 +26,3 @@ correlation(x, y, metrics = "pearson", threshold = NULL,
 \description{
 Use this function to get correlation of two vectors with various metrics.
 }
-\section{Fields}{
-
-\describe{
-\item{\code{x}}{\code{vector or table} first vector. If a table or matrix is passed, correlation is measured for each column of the table.}
-
-\item{\code{y}}{\code{vector} second vector (must have the same number of elements/rows as vector/table \code{x})}
-
-\item{\code{metrics}}{\code{character} specifying which metrics you desire to be computed. Valid values are
-\code{pearson, log_loss, aurc, gini, tp, fn, fp, tn, tpr, fnr, fpr, tnr, ppv, fdr, npv, pt, ts, csi, ba, 
-recall, sensitivity, hit_rate, miss_rate, f1, specificity, selectivity, fall_out, precision, accuracy, fmi, 
-informedness, markedness, mcc, for, lift, optsplit.chi, optsplit.f1}}
-}}
-

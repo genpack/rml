@@ -4,7 +4,18 @@
 # The barchart shows counts of each class for all cases for which the selected feature values 
 # fall into the specified value range
 # packages plotly and crossbar are required
-#' @export 
+#' @title Interactive class counts by feature threshold
+#' @description
+#' Interactive plotly bar or pie chart of the count of each binary class for rows whose feature value is below a threshold chosen with a slider (requires plotly, crosstalk, reshape2).
+#' @param X \code{data.frame} of features.
+#' @param y Binary target.
+#' @param ncuts Number of thresholds.
+#' @param C0_tag,C1_tag Class labels.
+#' @param round_digits Rounding of thresholds.
+#' @param horizontal \code{logical} horizontal bars.
+#' @return A crosstalk widget.
+#' @rdname binary_class_plots
+#' @export
 binary_class_bar = function(X, y, ncuts = 1000, C0_tag = 'C0', C1_tag = 'C1', round_digits = 2, horizontal = T){
   
   cbind(X, label = y) %>% bucket_moments(colnames(X), 'label', ncuts = ncuts) -> res
@@ -35,7 +46,8 @@ binary_class_bar = function(X, y, ncuts = 1000, C0_tag = 'C0', C1_tag = 'C1', ro
   return(fig)
 }
 
-#' @export 
+#' @rdname binary_class_plots
+#' @export
 binary_class_pie = function(X, y, ncuts = 1000, C0_tag = 'C0', C1_tag = 'C1', round_digits = 2, horizontal = T){
   
   cbind(X, label = y) %>% bucket_moments(colnames(X), 'label', ncuts = ncuts) -> res
@@ -60,19 +72,31 @@ binary_class_pie = function(X, y, ncuts = 1000, C0_tag = 'C0', C1_tag = 'C1', ro
 
 #' This function plots density of vector \code{x} for elements for which \code{y} is 0 in black and
 #' another density plot for elements for which \code{y} is 1 in red.
-#' 
+#'
+#' Outliers are removed first. Both densities share one y axis, so neither curve is cut off.
+#'
+#' @param x \code{numeric} vector.
+#' @param y binary vector of the same length.
+#' @param main \code{character} chart title. Default is no title.
+#' @param xlab \code{character} x axis label.
+#' @param labels \code{character} names of class 0 and class 1, shown in the legend.
+#' @param legend \code{logical} add a legend? Default \code{TRUE}.
+#' @param ... further arguments passed to \code{plot()}.
 #' @export
-plot_bindensity = function(x, y){
+plot_bindensity = function(x, y, main = '', xlab = '', labels = c('0', '1'), legend = TRUE, ...){
   rmv = which(x %>% outlier(recursive = T))
   if(length(rmv) > 0){
     x = x[- rmv]
     y = y[- rmv]
   }
-  w0 = which(y == 0)
-  w1 = which(y == 1)
-  
-  x[w0] %>% density %>% plot
-  x[w1] %>% density %>% lines(col = 'red')
+  d0 = density(x[which(y == 0)], na.rm = TRUE)
+  d1 = density(x[which(y == 1)], na.rm = TRUE)
+  plot(d0, main = main, xlab = xlab, ylim = c(0, max(d0$y, d1$y)), ...)
+  lines(d1, col = 'red')
+  if(legend){
+    graphics::legend('topright', legend = labels, col = c('black', 'red'), lty = 1, bty = 'n', cex = 0.8)
+  }
+  invisible(list(d0 = d0, d1 = d1))
 }
 
 

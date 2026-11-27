@@ -4,41 +4,139 @@
 \name{MODEL-class}
 \alias{MODEL-class}
 \alias{MODEL}
-\title{Abstract Model Class}
+\title{Abstract base class of all rml models}
 \description{
-Reference Class \code{MODEL} is the highest level of herarchy in a series of classes defined in the \code{rml} package.
-All transformers, classifiers, regressors and survival models inherit from this class.
+\code{MODEL} is the root of the rml class hierarchy. Every classifier, regressor and transformer
+(encoder, mapper, binner, feature generator, function transformer, ensembler) inherits from it.
+Subclasses only implement \code{model.fit(X, y)} and \code{model.predict(X)}; \code{MODEL} provides
+everything else: input column selection, transformers, gradient transformers, row sampling,
+preprocessing, feature elimination, output naming, cross-validation, saving and copying.
+
+Arguments passed to the constructor (or inside \code{config = list(...)}) are stored in the
+\code{config} field. Names listed in the \code{reserved_words} field are rml settings; any other name
+is passed to the underlying algorithm (for example \code{max_depth} to xgboost).
 }
 \section{Fields}{
 
 \describe{
-\item{\code{name}}{character containing name of the model}
+\item{\code{name}}{\code{character} model name. Used as prefix of output columns and as file name when saving.}
 
-\item{\code{type}}{character containing model type. Specifies transformer type}
+\item{\code{type}}{\code{character} model type, e.g. \code{'Binary Classifier'}, \code{'Encoder'}.}
 
-\item{\code{package}}{character specifies name of the package model is using}
+\item{\code{package}}{\code{character} name of the package providing the algorithm.}
 
-\item{\code{package_language}}{character specifies programming language of the package either R or Python.}
+\item{\code{package_language}}{\code{character} \code{'R'} or \code{'Python'}.}
 
-\item{\code{description}}{character descripbes what the model is.}
+\item{\code{packages_required}}{\code{character} packages loaded on parallel workers.}
 
-\item{\code{config}}{list containing all parameters and settings of the model. Values depend on the model class.}
+\item{\code{description}}{\code{character} short description of the algorithm.}
 
-\item{\code{fitted}}{logical specifies if the model is fitted (trained) or not}
+\item{\code{reserved_words}}{\code{character} config names used by rml and not passed to the algorithm.}
 
-\item{\code{transformers}}{list containing all transformer objects. Each transformer is an instance inheriting from MODEL class.}
+\item{\code{config}}{\code{list} all settings of the model.}
 
-\item{\code{gradient_transformers}}{list containing all gradient transformer objects. Each gradient transformer is an instance inheriting from MODEL class.}
+\item{\code{fitted}}{\code{logical} TRUE once the model is trained.}
 
-\item{\code{yin_transformers}}{list of functions.}
+\item{\code{transformers}}{\code{list} of models whose outputs are the input features of this model.}
 
-\item{\code{yout_transformers}}{list of functions.}
+\item{\code{gradient_transformers}}{\code{list} of base models (or column names of \code{X}) this model boosts:
+they are boosted by this model, which learns to correct their output. Several outputs are combined by \code{gradient_transformers_aggregator}.}
 
-\item{\code{objects}}{list containing additional data}
+\item{\code{yin_transformers,yout_transformers}}{\code{list} reserved for target transformation functions.}
 
-\item{\code{objects$features}}{data.frame containing list of features and their characteristics. This table is created after fitting the model.}
-
-\item{\code{objects$fitting_time}}{POSIXct containing time when the model's training is complete. Created after the model is fitted.}
+\item{\code{objects}}{\code{list} fitted state: \code{model} (the trained object), \code{features} (table of the
+features used, with class and importance), \code{fitting_time} (when fitting finished), \code{fitting_duration} (seconds), \code{n_output}.}
 }}
 
 
+\section{Methods}{
+
+\describe{
+  \item{\code{fit(X, y)}}{Trains the model and all its transformers and gradient transformers. Does nothing if already fitted.}
+  \item{\code{predict(X)}}{Returns a data.frame of model outputs, named \code{<name>_<output>}.}
+  \item{\code{reset(reset_transformers = TRUE, reset_gradient_transformers = TRUE, set_features.include = TRUE)}}{Makes the model unfitted.
+    With no transformers and \code{set_features.include = TRUE}, the features used so far are written to \code{features.include},
+    so refitting uses the same features.}
+  \item{\code{performance(X, y, metrics)}}{Score of the predictions against \code{y} (classifiers and regressors), see \code{\link{correlation}}.}
+  \item{\code{performance.cv(X, y, metrics)}}{Repeated train/test cross-validation on a deep copy of the model.}
+  \item{\code{deep_copy(name_suffix = NULL)}}{Copy of the model, its transformers and gradient transformers.}
+  \item{\code{info.features()}, \code{info.model()}, \code{info.transformers()}, \code{info.edge_list()}}{Information about the features and the network of models.}
+  \item{\code{info.network()}}{\code{list(nodes, links)} of the model network: transformers feed their parent, gradient transformers are boosted by it.}
+  \item{\code{plot.network(plotter, legend)}}{Draws the network: \code{'DiagrammeR'} (default; Graphviz layout, boxes fitted to labels, hover a node for details), \code{'visNetwork'} (interactive, through rvis if installed, otherwise visNetwork) or \code{'igraph'} (static). Falls back to the next installed package.}
+  \item{\code{model.save(path)}, \code{model.load(path)}}{Save or load native model files; use \code{\link{model_save}} and \code{\link{model_load}}.}
+  \item{\code{supports_gradient_transformers()}}{TRUE if training uses the output of gradient transformers.}
+}
+}
+
+\section{Configuration}{
+
+Input columns:
+\describe{
+  \item{\code{features.include}, \code{features.exclude}}{Input columns to use or drop, before transformers run.}
+  \item{\code{features.include.at}, \code{features.exclude.at}}{Columns to keep or drop after the transformers ran.}
+  \item{\code{column_filters}}{List of filters on the feature table, each \code{list(column = , filter = )} with \code{filter} written
+    as R code. Default \code{list(list(column = 'n_unique', filter = ' > 1'))} removes constant columns.}
+  \item{\code{pp.coerce_integer_features}}{Convert numeric columns holding whole numbers to integer. Default FALSE.}
+}
+Output:
+\describe{
+  \item{\code{name_in_output}}{Prefix output column names with the model name. Default TRUE.}
+  \item{\code{keep_columns}}{Also return the input columns the model did not use. Default FALSE.}
+  \item{\code{keep_features}}{Also return the input columns the model used. Default FALSE.}
+  \item{\code{pass_columns}, \code{remove_columns}}{Restrict which input columns are passed when either switch above is on.}
+  \item{\code{save_predictions}}{Reuse the last prediction when \code{predict()} is called again with the same data. Default FALSE.}
+}
+Preprocessing:
+\describe{
+  \item{\code{pp.mask_missing_values}}{Value replacing missing values, in training and prediction.}
+  \item{\code{pp.trim_outliers}}{Clip outliers of each column in the training data. Default FALSE. Related:
+    \code{pp.trim_outliers.sd_threshold} (4), \code{pp.trim_outliers.adaptive} (FALSE), \code{pp.trim_outliers.recursive} (FALSE).}
+  \item{\code{eda.enabled}}{Add moments, quantiles, missing and unique counts to \code{objects$features}. Default FALSE.}
+}
+Row sampling (binary targets):
+\describe{
+  \item{\code{smp.enabled}}{Turn sampling on. Default FALSE.}
+  \item{\code{smp.method}}{\code{'upsample'} (default), \code{'downsample'} or \code{'smote'} (Python package smote_variants).}
+  \item{\code{smp.class_ratio}}{Target share of class 1 after balancing.}
+  \item{\code{smp.sample_ratio}, \code{smp.num_rows}}{Share or maximum number of rows kept.}
+  \item{\code{smp.config}}{Arguments of the SMOTE oversampler; \code{model} selects the smote_variants class.}
+}
+Feature elimination:
+\describe{
+  \item{\code{fe.enabled}}{Drop features with importance not above the threshold and retrain. Default FALSE.}
+  \item{\code{fe.importance_threshold}}{Threshold, default 0. \code{fe.quantile} sets it as a quantile of the importances instead.}
+  \item{\code{fe.recursive}}{Repeat until no feature is below the threshold. Default FALSE.}
+}
+Target transformation and boosting:
+\describe{
+  \item{\code{yin_transformer_function}, \code{yin_transformer_arguments}}{Function (and extra argument) applied to \code{y} before training.}
+  \item{\code{yout_transformer_function}, \code{yout_transformer_arguments}}{Function (and extra argument) applied to the output.}
+  \item{\code{gradient_transformers_aggregator}}{Function combining several gradient transformer outputs per row. Default \code{mean}.}
+}
+Cross-validation and metrics:
+\describe{
+  \item{\code{metrics}}{Default metrics of \code{performance()}.}
+  \item{\code{cv.ntrain}, \code{cv.ntest}}{Number of training samples (1) and test samples per training sample (5).}
+  \item{\code{cv.train_ratio}, \code{cv.test_ratio}}{Share of rows for training (0.5) and of the remaining rows for testing (0.2).}
+  \item{\code{cv.set}}{List of validation sets \code{list(list(X = , y = ))} used instead of random test samples.}
+  \item{\code{cv.reset_transformer}}{Refit transformers in each cross-validation round. Default TRUE.}
+}
+Runtime:
+\describe{
+  \item{\code{verbose}}{0 silences progress messages. Default 1, or the value of \code{options(rml.verbose = )} so that \code{options(rml.verbose = 0)} silences all models of a session.}
+  \item{\code{mc.num_cores}}{Cores used to fit and run transformers in parallel. Default 1.}
+  \item{\code{remove_failed_transformers}}{Drop transformers that fail to fit instead of stopping. Default TRUE.}
+}
+}
+
+\examples{
+X = data.frame(a = rnorm(200), b = rnorm(200))
+y = as.numeric(X$a + rnorm(200) > 0)
+model = CLS.STATS.LR(name = 'lr', transformers = list(MAP.RML.ZFS(name = 'z')), verbose = 0)
+model$fit(X, y)
+head(model$predict(X))
+model$objects$features
+}
+\seealso{
+\code{\link{CLASSIFIER-class}}, \code{\link{REGRESSOR-class}}, \code{vignette('rml-reference', package = 'rml')}
+}

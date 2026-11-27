@@ -1,3 +1,20 @@
+#' @title Polynomial feature generator (scikit-learn)
+#' @name FET.SKLEARN.MFG-class
+#' @aliases FET.SKLEARN.MFG
+#' @description
+#' Wraps \code{sklearn.preprocessing.PolynomialFeatures} (arguments \code{degree}, \code{interaction_only}, ...).
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
+#'
+#' Inherits from \code{\link{TRM.SKLEARN-class}}.
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = FET.SKLEARN.MFG(degree = 2L)
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
+#' @export FET.SKLEARN.MFG
 FET.SKLEARN.MFG = setRefClass(
   'FET.SKLEARN.MFG',
   contains = 'TRM.SKLEARN',
@@ -14,6 +31,20 @@ FET.SKLEARN.MFG = setRefClass(
 
 
 # previously : MULTIPLIER.BINARY
+#' @title Degree-2 multiplier
+#' @name FET.RML.D2MUL-class
+#' @aliases FET.RML.D2MUL
+#' @description
+#' Outputs the product of every pair of numeric columns, named \code{<a>_X_<b>}.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @examples
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = FET.RML.D2MUL()
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' @export FET.RML.D2MUL
 FET.RML.D2MUL = setRefClass('FET.RML.D2MUL', contains = 'MODEL', methods = list(
   initialize = function(...){
     callSuper(...)
@@ -127,7 +158,7 @@ FET.RML.MGB = setRefClass('FET.RML.MGB', contains = 'MODEL',
       
       top  = min(top, length(ord) - 1)
       
-      flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = rbig::colnames(X))
+      flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = wt_colnames(X))
       
       # keep = which(flist$safety == high_level | (is.na(flist$father) & is.na(flist$mother)))
       keep = which(flist$safety == high_level)
@@ -194,6 +225,28 @@ FET.RML.D2MULC = setRefClass('FET.RML.D2MULC', contains = 'FET.RML.D2MUL', metho
   }
 ))
 
+#' @title Polynomial function transformer
+#' @name FNT.RML.POLY-class
+#' @aliases FNT.RML.POLY
+#' @description
+#' For each numeric column x outputs the powers \code{v^1, ..., v^n_terms} of \code{v = gain*x + intercept}, named \code{<column>_T<k>}.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{n_terms}}{Highest power. Default 3.}
+#'   \item{\code{gain}}{Default 1.}
+#'   \item{\code{intercept}}{Default 0.}
+#'   \item{\code{apply_abs}}{Use the absolute value of v. Default FALSE.}
+#' }
+#' @examples
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = FNT.RML.POLY(n_terms = 2)
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' @export FNT.RML.POLY
 FNT.RML.POLY = setRefClass('FNT.RML.POLY', contains = 'MODEL', methods = list(
   initialize = function(...){
     callSuper(...)
@@ -222,10 +275,10 @@ FNT.RML.POLY = setRefClass('FNT.RML.POLY', contains = 'MODEL', methods = list(
       if(config$apply_abs){v = abs(v)}
       for(j in sequence(config$n_terms)){
         XOUT %<>% cbind(v^j)
-        ns   %<>% c(name %>% paste('_', i, '_T', j))
+        ns   %<>% c(paste0(i, '_T', j))
       }
     }
-    rbig:colnames(XOUT) <- ns
+    colnames(XOUT) <- ns
     return(XOUT %>% as.data.frame)
   }
   

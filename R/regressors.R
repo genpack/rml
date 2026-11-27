@@ -6,6 +6,28 @@
 # 1.0.0     16 September 2020    Initial Issue.
 # 1.0.1     26 August 2024       maler_words renamed to reserved_words
 
+#' @title Abstract base class of regressors
+#' @name REGRESSOR-class
+#' @aliases REGRESSOR
+#' @description
+#' Regressors predict a numeric target. Every regressor supports gradient transformers: it is trained on
+#' the residual \code{y - g}, where g is the aggregated gradient transformer output, and g is added back
+#' at prediction. Inherit from this class to write your own regressor.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{metrics}}{Default metrics of \code{performance()}, default \code{'mae'}.}
+#'   \item{\code{sig_level}}{Significance level used by some subclasses. Default 0.05.}
+#'   \item{\code{sfs.enabled}}{Stepwise feature selection where supported. Default FALSE.}
+#' }
+#' @seealso \code{\link{MODEL-class}}
+#' @examples
+#' X = data.frame(a = rnorm(200), b = runif(200))
+#' y = 2*X$a + sin(4*X$b) + rnorm(200, sd = 0.1)
+#' m = REG.STATS.LNR(name = 'lm')
+#' m$fit(X, y)
+#' m$performance(X, y, metrics = c('mae', 'rmse'))
+#' @export REGRESSOR
 REGRESSOR = setRefClass('REGRESSOR', contains = "MODEL",
  methods = list(
    initialize = function(...){
@@ -17,7 +39,7 @@ REGRESSOR = setRefClass('REGRESSOR', contains = "MODEL",
    },
    
    performance = function(X, y, metrics = config$metrics, ...){
-     yp = predict(X)[, 1]
+     yp = predict(X) %>% {.[[ncol(.)]]}
      # we transform y only if yin has a transformer function and yout has not. This means the y in training set has been transformed
      # so the input y needs to have the same transformation to be comparable to the original label.
      # if yout has transformer function as well, then yp is already transformed and should be compared to y directly not to the transformed y
@@ -42,6 +64,25 @@ REGRESSOR = setRefClass('REGRESSOR', contains = "MODEL",
 
 # A simple linear regression model. Features with linear dependency to others, will be removed to avoid singularity.
 # feature importances are based on p-values of coefficients.
+#' @title Linear regression (stats::lm)
+#' @name REG.STATS.LNR-class
+#' @aliases REG.STATS.LNR
+#' @description
+#' Ordinary least squares with \code{lm} on numeric features. Collinear features are removed until no coefficient is undefined.
+#' Feature importance is derived from coefficient p-values.
+#'
+#' Inherits from \code{\link{REGRESSOR-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{sfs.enabled}}{Run stepwise feature selection before fitting. Default FALSE.}
+#' }
+#' @examples
+#' X = data.frame(a = rnorm(300), b = runif(300))
+#' y = 2*X$a + sin(4*X$b) + rnorm(300, sd = 0.1)
+#' m = REG.STATS.LNR()
+#' m$fit(X, y)
+#' head(m$predict(X))
 #' @export REG.STATS.LNR
 REG.STATS.LNR = setRefClass('REG.STATS.LNR', contains = "REGRESSOR",
    methods = list(
@@ -90,7 +131,7 @@ REG.STATS.LNR = setRefClass('REG.STATS.LNR', contains = "REGRESSOR",
      },
 
      model.predict = function(X){
-       if(inherits(X, 'WIDETABLE')){X = rbig::as.data.frame(X)}
+       if(inherits(X, 'WIDETABLE')){X = wt_as_data_frame(X)}
        objects$model %>% stats::predict(X %>% na2zero) %>% as.data.frame
      },
 
@@ -143,6 +184,27 @@ REG.STATS.LNR = setRefClass('REG.STATS.LNR', contains = "REGRESSOR",
 )
 
 
+#' @title XGBoost regressor (R xgboost)
+#' @name REG.XGBOOST-class
+#' @aliases REG.XGBOOST
+#' @description
+#' Gradient boosted regression trees with \code{xgboost::xgb.train}. Booster parameters (\code{max_depth}, \code{eta},
+#' \code{objective}, ...) can be passed. Missing values are replaced by 0.
+#'
+#' Inherits from \code{\link{REGRESSOR-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{nrounds}}{Number of boosting rounds. Default 100.}
+#' }
+#' @examples
+#' X = data.frame(a = rnorm(300), b = runif(300))
+#' y = 2*X$a + sin(4*X$b) + rnorm(300, sd = 0.1)
+#' if(requireNamespace('xgboost', quietly = TRUE)){
+#'   m = REG.XGBOOST(nrounds = 30, max_depth = 3)
+#'   m$fit(X, y)
+#'   head(m$predict(X))
+#' }
 #' @export REG.XGBOOST
 REG.XGBOOST = setRefClass('REG.XGBOOST', contains = "REGRESSOR",
                      methods = list(
@@ -159,7 +221,7 @@ REG.XGBOOST = setRefClass('REG.XGBOOST', contains = "REGRESSOR",
                          if(is.null(config$nrounds)){config$nrounds <<- 100}
                          
                          # nrounds is passed as a separate argument not within argument params:
-                         reserved_words <<- c(reserved_words, 'nrounds', 'sig_level')
+                         reserved_words <<- c(reserved_words, 'nrounds', 'sig_level', 'sfs.enabled')
                        },
                        
                        model.fit = function(X, y){
@@ -171,14 +233,10 @@ REG.XGBOOST = setRefClass('REG.XGBOOST', contains = "REGRESSOR",
                            # Not supported yet
                          }
 
-                         xgb_train = xgboost::xgb.DMatrix(data = X %>% as.matrix, label = y)
-                         objects$model <<- xgboost::xgb.train(
-                           data = xgb_train, 
-                           nrounds = config$nrounds, 
-                           # watchlist = watchlist,
-                           params = config %>% list.remove(reserved_words))
+                         params = config %>% list.remove(reserved_words)
+                         objects$model <<- xgb_train(params = params, data = xgb_dmatrix(X, label = as.numeric(y)), nrounds = config$nrounds, verbose = 0)
                          
-                         imp = try(xgb.importance(model = objects$model) %>% select(fname = Feature, importance = Gain), silent = T)
+                         imp = try(xgboost::xgb.importance(model = objects$model) %>% as.data.frame %>% select(fname = Feature, importance = Gain), silent = T)
                          if(!inherits(imp, 'try-error')){
                            if(!is.null(objects$features$importance)) objects$features$importance <<- NULL
                            objects$features %>% dplyr::left_join(imp, by = 'fname') %>% na2zero ->> objects$features
@@ -188,13 +246,30 @@ REG.XGBOOST = setRefClass('REG.XGBOOST', contains = "REGRESSOR",
                        },
 
                        model.predict = function(X){
-                         objects$model %>% stats::predict(X %>% as.matrix) %>% as.data.frame
+                         X = X[objects$features$fname] %>% na2zero
+                         stats::predict(objects$model, xgb_dmatrix(X)) %>% as.data.frame
                        }
                        
                      )
 )
 
 
+#' @title XGBoost regressor (Python xgboost)
+#' @name REG.SKLEARN.XGB-class
+#' @aliases REG.SKLEARN.XGB
+#' @description
+#' Wraps \code{xgboost.XGBRegressor} through reticulate.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
+#'
+#' Inherits from \code{\link{REGRESSOR-class}}.
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = runif(300))
+#' y = 2*X$a + sin(4*X$b) + rnorm(300, sd = 0.1)
+#' m = REG.SKLEARN.XGB(n_estimators = 50L)
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export REG.SKLEARN.XGB
 REG.SKLEARN.XGB = setRefClass('REG.SKLEARN.XGB', contains = "REGRESSOR",
                              methods = list(
@@ -203,7 +278,7 @@ REG.SKLEARN.XGB = setRefClass('REG.SKLEARN.XGB', contains = "REGRESSOR",
                                  type               <<- 'Extreme Gradient Boosting for Regression'
                                  if(is.empty(name)){name <<- 'SKXGBREG' %>% paste0(sample(1000:9999, 1))}
                                  module_xgb = reticulate::import('xgboost')
-                                 objects$model     <<- do.call(module_xgb$XGBRegressor, config %>% list.remove(reserved_words))
+                                 objects$model     <<- do.call(module_xgb$XGBRegressor, python_args(config, reserved_words))
                                },
                                
                                model.fit = function(X, y){

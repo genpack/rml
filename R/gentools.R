@@ -26,6 +26,8 @@ createFeatures.logical = function(flist, nf, prefix = 'Feat', actions = c('AND',
       column2Rownames('name'))
 }
 # immunes a subset of features to the highest safety level
+#' @rdname legacy_genetic
+#' @export
 immune = function(flist, features, level, columns){
   flist[features, 'safety'] = level
   have_parents = which(!(features %in% columns))
@@ -38,6 +40,8 @@ immune = function(flist, features, level, columns){
 
 
 
+#' @rdname legacy_genetic
+#' @export
 getFeatureValue.logical = function(flist, name, dataset){
   if(length(name) > 1){
     out = NULL
@@ -48,7 +52,7 @@ getFeatureValue.logical = function(flist, name, dataset){
     return(out)
   }
 
-  if(name %in% rbig::colnames(dataset)){return(dataset[, name])}
+  if(name %in% wt_colnames(dataset)){return(dataset[, name])}
 
   if(name %in% rownames(flist)){
     if(flist[name, 'father'] %in% names(dataset)) {father = dataset[, flist[name, 'father']]} else {father = getFeatureValue.logical(flist, flist[name, 'father'], dataset)}
@@ -57,6 +61,8 @@ getFeatureValue.logical = function(flist, name, dataset){
   } else {stop('Feature name is not in the list!')}
 }
 
+#' @rdname legacy_genetic
+#' @export
 getFeatureValue.multiplicative = function(flist, name, dataset){
   if(length(name) > 1){
     out = NULL
@@ -67,7 +73,7 @@ getFeatureValue.multiplicative = function(flist, name, dataset){
     return(out)
   }
 
-  if(name %in% rbig::colnames(dataset)){return(dataset[, name])}
+  if(name %in% wt_colnames(dataset)){return(dataset[, name])}
   if(name %in% rownames(flist)){
     if(flist[name, 'father'] %in% names(dataset)) {father = dataset[, flist[name, 'father']]} else {father = getFeatureValue.multiplicative(flist, flist[name, 'father'], dataset)}
     if(flist[name, 'mother'] %in% names(dataset)) {mother = dataset[, flist[name, 'mother']]} else {mother = getFeatureValue.multiplicative(flist, flist[name, 'mother'], dataset)}
@@ -94,7 +100,7 @@ evaluateFeatures.multiplicative = function(flist, X, y, top = 100, cor_fun = cor
 
   top  = min(top, length(ord) - 1)
 
-  flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = rbig::colnames(X))
+  flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = wt_colnames(X))
 
   # keep = which(flist$safety == high_level | (is.na(flist$father) & is.na(flist$mother)))
   keep = which(flist$safety == high_level)
@@ -102,7 +108,7 @@ evaluateFeatures.multiplicative = function(flist, X, y, top = 100, cor_fun = cor
 }
 
 evaluateFeatures.logical = function(flist, X, y, top = 100, cor_fun = cross_accuracy){
-  columns  = rbig::colnames(X)
+  columns  = wt_colnames(X)
   ns       = rownames(flist)
   top      = min(top, length(ns) - 1)
 
@@ -131,15 +137,17 @@ evaluateFeatures.logical = function(flist, X, y, top = 100, cor_fun = cross_accu
 
   high_level = max(flist$safety) + 1
   ord = flist$correlation %>% order(decreasing = T)
-  flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = rbig::colnames(X))
+  flist %<>% immune(ns[ord[sequence(top)]], level = high_level, columns = wt_colnames(X))
 
   keep = which(flist$safety == high_level)
   return(flist[keep, ])
 }
 
 # Optimal Genetic Binary Feature Combiner
+#' @rdname legacy_genetic
+#' @export
 genBinFeatBoost.fit = function(X, y, target = 0.9, epochs = 10, max_fails = 2, cycle_survivors = 500, cycle_births = 2000, final_survivors = 5, metric = cross_enthropy){
-  columns = rbig::colnames(X)
+  columns = wt_colnames(X)
   flist   = data.frame(name = columns, father = NA, mother = NA, action = NA, correlation = metric(X[, columns], y) %>% as.numeric %>% abs, safety = 0) %>% column2Rownames('name')
   flist   = flist[!is.na(flist$correlation),]
   # nf features are born by random parents:
@@ -230,13 +238,31 @@ GENETIC = setRefClass(
 
 ########## GENERIC GENETIC ##############
 
+#' @title Legacy genetic feature search
+#' @description
+#' Functions of the older genetic feature search in gentools.R, kept for existing code.
+#' @param flist Feature list.
+#' @param nf Number of features.
+#' @param types Feature types.
+#' @param prefix Name prefix.
+#' @param X Features.
+#' @param y Target.
+#' @param fnames,name Feature names.
+#' @param dataset Data.
+#' @param features Features.
+#' @param level Level.
+#' @param columns Columns.
+#' @param target,epochs,max_fails,cycle_survivors,cycle_births,final_survivors,metric Search settings.
+#' @rdname legacy_genetic
+#' @keywords internal
+#' @export
 createFeatures = function(flist, nf, types, prefix = 'FEAT', X, y){
   features = names(flist)
   lenflist = length(flist)
   for(i in sequence(nf)){
     fname   = prefix %>% paste(lenflist + i, sep = '_')
     parents = features %>% sample(5, replace = F)
-    feature_parents = parents %^% rbig::colnames(X)
+    feature_parents = parents %^% wt_colnames(X)
     trans_parents   = parents %-% feature_parents
     translist       = flist %>% list.extract(trans_parents) %>% list.pull('model', do_unlist = F)
 
@@ -262,6 +288,8 @@ createFeatures = function(flist, nf, types, prefix = 'FEAT', X, y){
   return(flist)
 }
 
+#' @rdname legacy_genetic
+#' @export
 getFeatureValue = function(flist, fnames, X){
   if(length(fnames) > 1){
     out = NULL
@@ -272,7 +300,7 @@ getFeatureValue = function(flist, fnames, X){
     return(out)
   }
 
-  if(fnames %in% rbig::colnames(X)){return(X[, fnames])}
+  if(fnames %in% wt_colnames(X)){return(X[, fnames])}
   if(fnames %in% names(flist)){
     res = try(flist[[fnames]]$model$predict(X), silent = T)
     if(inherits(res, 'try-error')) res = numeric(nrow(X)) %>% as.data.frame
@@ -289,7 +317,7 @@ getFeatureCorrelations = function(flist, X, y, metric = 'pearson_correlation'){
     keep %<>% c(is.na(item$correlation))
   }
   for(i in which(keep)){
-    flist[[i]]$correlation <- correlation(getFeatureValue(flist, ns[i], X), y, metric = metric) %>% max
+    flist[[i]]$correlation <- correlation(getFeatureValue(flist, ns[i], X), y, metrics = metric) %>% max
   }
   return(flist)
 }
@@ -303,7 +331,7 @@ reduceFeatures = function(flist, X, y, metric = 'pearson_correlation', top = 100
 
   top  = min(top, length(ord) - 1)
 
-  flist %<>% immuneFeatures(ns[ord[sequence(top)]], level = high_level, columns = rbig::colnames(X))
+  flist %<>% immuneFeatures(ns[ord[sequence(top)]], level = high_level, columns = wt_colnames(X))
 
   keep = which(flist %>% list.pull('safety') == high_level)
   return(flist %>% list.extract(ns[keep]))
@@ -344,7 +372,7 @@ default_greedy_templates = list(
   svm1 = list(class = 'CLS.SKLEARN.SVM', weight = 0.05, n_num = c(5:20)        , n_cat = c(0:10)))
 
 create_transformer = function(X, y, types = default_greedy_templates, name = NULL){
-  rbig::colnames(X) %>% sapply(function(i) X[,i] %>% class) -> features
+  wt_colnames(X) %>% sapply(function(i) X[,i] %>% class) -> features
   num_features = names(features)[features == 'numeric']
   cat_features = names(features)[features == 'integer']
 
@@ -526,8 +554,8 @@ read_exlist = function(path){
 }
 
 create_experts_from_dataset = function(dataset){
-  cls = rbig::colnames(dataset) %>% sapply(function(i) dataset[,i] %>% class) %>% unname
-  list(exlog = data.frame(exname = rbig::colnames(dataset), father = as.character(NA), mother = as.character(NA), action = as.character(NA), class = cls, correlation = as.numeric(NA), safety = 0, stringsAsFactors = F) %>%
+  cls = wt_colnames(dataset) %>% sapply(function(i) dataset[,i] %>% class) %>% unname
+  list(exlog = data.frame(exname = wt_colnames(dataset), father = as.character(NA), mother = as.character(NA), action = as.character(NA), class = cls, correlation = as.numeric(NA), safety = 0, stringsAsFactors = F) %>%
     column2Rownames('exname'), exlist = list())
 }
 
@@ -758,7 +786,7 @@ get_expert_value = function(exlist, exnames, dataset){
     return(out)
   }
 
-  if(exnames %in% rbig::colnames(dataset)){return(dataset[, exnames])}
+  if(exnames %in% wt_colnames(dataset)){return(dataset[, exnames])}
   if(exnames %in% names(exlist)){
     return(exlist[[exnames]]$predict(dataset))
   } else {
@@ -774,7 +802,7 @@ get_expert_correlations = function(experts, X, y, metric = 'gini'){
   for(i in which(tbc)){
     val = try(get_expert_value(experts$exlist, exnames[i], X), silent = T)
     if(!inherits(val, 'try-error')){
-      experts$exlog[i, 'correlation'] <- correlation(val, y, metric = metric) %>% max
+      experts$exlog[i, 'correlation'] <- correlation(val, y, metrics = metric) %>% max
     }
   }
   return(experts)
@@ -793,7 +821,7 @@ reduce_experts = function(experts, X, y, metric = 'gini', top = 10){
   experts$exlog$mother_score = experts$exlog[experts$exlog$mother, 'correlation']
   experts$exlog$parent_score = ifelse(experts$exlog$father_score > experts$exlog$mother_score, experts$exlog$father_score, experts$exlog$mother_score)
   experts$exlog$parent_score[is.na(experts$exlog$parent_score)] <- -Inf
-  experts$exlog = experts$exlog[experts$exlog$correlation > experts$exlog$parent_score, rbig::colnames(experts$exlog) %-% c('father_score', 'mother_score', 'parent_score')] %>%
+  experts$exlog = experts$exlog[experts$exlog$correlation > experts$exlog$parent_score, wt_colnames(experts$exlog) %-% c('father_score', 'mother_score', 'parent_score')] %>%
     consistent_exlog
 
   exnames    = rownames(experts$exlog)
@@ -822,7 +850,7 @@ immune_experts = function(experts, exnames, level){
 save_experts = function(experts, path = getwd()){
   experts$exlog %>% write.csv(path %>% paste('exlog.csv', sep = '/'), row.names = F)
   for(fn in names(experts$exlist) %-% list.files(path)){
-    save_model(experts$exlist[[fn]], path)
+    model_save(experts$exlist[[fn]], path)
   }
 }
 
@@ -907,13 +935,12 @@ evaluate_funlist = function(funlist, X, y, metric = logloss_sum){
 # }
 
 
-evaluate_models.multicore = function(funlist, X, y, metric = logloss_sum, n_jobs = 8, ...){
+# Legacy genetic search: evaluates a list of function objects in parallel
+evaluate_funlist.multicore = function(funlist, X, y, metric = logloss_sum, n_jobs = 8, ...){
 
 
-  library(doParallel)
-  cl = makeCluster(n_jobs)
-  registerDoParallel(cl)
-  warnif(getDoParWorkers() < n_jobs, 'Parallel run is not working. It may take too long!')
+  cl = rutils::setup_multicore(n_jobs = n_jobs)
+  warnif(foreach::getDoParWorkers() < n_jobs, 'Parallel run is not working. It may take too long!')
 
   boostlist = funlist %>% lapply(function(ff) {out = inherits(ff, 'FUNCTION'); if(out) out = length(ff$list.parameters()) > 0; out}) %>% unlist %>% which %>% names
   bflist    = foreach(fn = boostlist, .combine = c, .packages = c('magrittr', 'dplyr'), .errorhandling = 'stop') %dopar% {
@@ -1036,8 +1063,8 @@ train_funlist = function(flist = NULL, champions = list(), X_train, y_train, X_t
                          loss_function = loss_sse_gb, function_set = default_function_set){
   best_train = Inf
   best_test  = Inf
-  features   = rbig::colnames(X_train)
-  assert(features %<% rbig::colnames(X_test), 'columns of X_train must be subset of X_test!')
+  features   = wt_colnames(X_train)
+  assert(features %<% wt_colnames(X_test), 'columns of X_train must be subset of X_test!')
 
   for(jj in sequence(depth)){
     # Build loss functions:
@@ -1079,7 +1106,7 @@ train_funlist = function(flist = NULL, champions = list(), X_train, y_train, X_t
     while(!enough | (!success & chance)){
       grow_funlist(flist, features = features, n_births = n_births, function_set = function_set) -> flist
       # boost_funlist(flist, X = X_train, y = y_train, metric = loss_train, silent = silent)
-      flist = evaluate_models.multicore(flist, X = X_train, y = y_train, metric = loss_train)
+      flist = evaluate_funlist.multicore(flist, X = X_train, y = y_train, metric = loss_train)
       flist %<>% clean_funlist(X = X_train, y = y_train, metric = loss_train)
       evaluate_funlist(flist, X = X_train, y = y_train, metric = loss_train) -> err_train
       reset_funlist(flist)
@@ -1168,6 +1195,15 @@ add_model_to_modlog = function(modlog = data.frame(), model = NULL, performance)
 }
 
 # Column headers must not be duplicated. Function does not check this and will return error.
+#' @title Score each column against the target
+#' @description
+#' Correlation metrics of each column with \code{y}, plus summary statistics when \code{extra_info = TRUE}.
+#' @param X \code{data.frame}.
+#' @param y Target.
+#' @param metrics Metrics of \code{\link{correlation}}.
+#' @param extra_info \code{logical} add counts, quantiles, mean, sd and most frequent value.
+#' @param ... Passed to \code{\link{correlation}}.
+#' @return \code{data.frame} with one row per column.
 #' @export
 evaluate_features = function(X, y, metrics = 'gini', extra_info = T, ...){
   nrwx = nrow(X)
@@ -1182,7 +1218,7 @@ evaluate_features = function(X, y, metrics = 'gini', extra_info = T, ...){
     features = unlist(pf) %>% as.data.frame
     colnames(features) <- metrics[1]
   }
-  rownames(features) <- rbig::colnames(X)
+  rownames(features) <- wt_colnames(X)
   
   if(extra_info){
     for(cn in rownames(features)){
@@ -1206,13 +1242,18 @@ evaluate_features = function(X, y, metrics = 'gini', extra_info = T, ...){
       features[cn, 'mfv_freq'] = sum(X[[cn]] == mfv)
       features[cn, 'mfv_rate'] = features[cn, 'mfv_freq']/nrwx
     }
+    features$type = ifelse(features$fclass == 'numeric', 'numeric', ifelse(features$fclass == 'integer', 'ordinal', 'nominal'))
   }
-  features$type = ifelse(features$fclass == 'numeric', 'numeric', ifelse(features$fclass == 'integer', 'ordinal', 'nominal'))
 
   return(features)
 }
 
-gb_supporting_classifiers = c('CLS.XGBOOST', 'CLS.KERAS.DNN')
+#' Classifiers that support gradient transformers
+#'
+#' Names of the classifier classes that can have gradient transformers, i.e. boost a base model (see the gradient boosting vignette).
+#' @format \code{character} vector.
+#' @export
+gb_supporting_classifiers = c('CLS.XGBOOST', 'CLS.KERAS.DNN', 'CLS.STATS.LR')
 ##
 add_classifier = function(input = list(fetlog = NULL, modlog = data.frame(), modlist = list()),
                           templates = default_templates,
@@ -1232,7 +1273,7 @@ add_classifier = function(input = list(fetlog = NULL, modlog = data.frame(), mod
   }
 
   # Building a base model:
-  base = build_from_template(template_name = pick(classifiers), features = features, templates = templates)
+  base = build_model_from_template(template_name = pick(classifiers), features = features, templates = templates)
 
   # Should I boost it with transformers?
   if(nrow(modlog) > 0){
@@ -1269,13 +1310,13 @@ add_classifier = function(input = list(fetlog = NULL, modlog = data.frame(), mod
     modperf = c()
     yp = base$predict(X_valid)[,1]
     for(mtrc in metrics){
-      modperf[mtrc] <- try(correlation(yp, y_valid, metric = mtrc), silent = T)
+      modperf[mtrc] <- try(correlation(yp, y_valid, metrics = mtrc), silent = T)
     }
 
     modlog %<>% add_model_to_modlog(base, performance = modperf)
     features %<>% add_model_to_fetlog(base, performance = modperf)
     if(!is.null(path)){
-      save_model(base, path = path)
+      model_save(base, path = path)
     }
   } else cat('\n', 'Model fitting failed: ', res)
 

@@ -6,6 +6,13 @@
 \usage{
 scorer(df, prediction_col, actual_col)
 }
+\arguments{
+\item{df}{\code{data.frame, tibble, data.table} or \code{matrix}: Input table containing at least two columns with binary data}
+
+\item{prediction_col}{\code{character} header of the column containing predicted binary classes}
+
+\item{actual_col}{\code{character} header of the column containing actual binary classes}
+}
 \value{
 \code{list} containing various scores. Returned scores are:
 tp (True Positive), tn (True Negative), fp (False Positive), fn (False Negative),
@@ -27,13 +34,3 @@ lift
 \description{
 Computes various predictive performance scores between two binary columns of a table
 }
-\section{Fields}{
-
-\describe{
-\item{\code{df}}{\code{data.frame, tibble, data.table} or \code{matrix}: Input table containing at least two columns with binary data}
-
-\item{\code{prediction_col}}{\code{character} header of the column containing predicted binary classes}
-
-\item{\code{actual_col}}{\code{character} header of the column containing actual binary classes}
-}}
-

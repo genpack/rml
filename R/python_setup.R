@@ -1,0 +1,34 @@
+#' Setting up Python for rml
+#'
+#' @name python_setup
+#' @description
+#' Classes with \code{SKLEARN}, \code{CATEGORY_ENCODERS}, \code{PYLMNN} or \code{KERAS} in their name run Python
+#' code through the reticulate package. They need a Python that has the module installed and that reticulate can load.
+#'
+#' The most common error is \code{ModuleNotFoundError: No module named 'sklearn'} although sklearn is installed.
+#' It means reticulate uses a different Python from the one the module was installed into. Check with
+#' \code{reticulate::py_config()}.
+#'
+#' Fixes, simplest first:
+#' \enumerate{
+#'   \item Let reticulate install the modules into the Python it manages. Restart R and, before creating any Python-based
+#'     model, run \code{reticulate::py_require(c("scikit-learn", "category_encoders", "joblib"))}. Put the line in
+#'     \code{~/.Rprofile} to run it in every session.
+#'   \item Use your own Python: set \code{RETICULATE_PYTHON=/path/to/python} in \code{~/.Renviron} and restart R, or call
+#'     \code{reticulate::use_python("/path/to/python", required = TRUE)} before the first Python-based model.
+#'   \item Pass \code{python_address = "/path/to/python"} to the first Python-based model of the session.
+#' }
+#'
+#' Reticulate binds to one Python per R session, the first time Python is used, so restart R after changing the choice.
+#' The Python must have the same architecture as R: an x86-64 build of R (\code{R.version$arch} is \code{"x86_64"})
+#' cannot load an ARM64 Python, and an ARM64 R cannot load an x86-64 Python.
+#'
+#' \code{vignette("rml-troubleshooting")} covers these steps in detail, with other common problems.
+#' @examples
+#' \dontrun{
+#' reticulate::py_require(c("scikit-learn", "category_encoders", "joblib"))
+#' reticulate::py_module_available("sklearn")   # TRUE
+#' reticulate::py_config()                      # which Python is used
+#' lr = CLS.SKLEARN.LR(name = 'lr')
+#' }
+NULL

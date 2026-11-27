@@ -6,19 +6,16 @@
 \usage{
 moment(v, m = c(1, 2), na.rm = T)
 }
+\arguments{
+\item{v}{\code{numeric} input vector for which moments are to be computed}
+
+\item{m}{\code{integer} desired moment orders}
+
+\item{na.rm}{\code{logical} should missing values be removed?}
+}
 \value{
 \code{numeric} output vector containing moment values
 }
 \description{
 Returns desired moments of a given numeric vector
 }
-\section{Fields}{
-
-\describe{
-\item{\code{v}}{\code{numeric} input vector for which moments are to be computed}
-
-\item{\code{m}}{\code{integer} desired moment orders}
-
-\item{\code{na.rm}}{\code{logical} should missing values be removed?}
-}}
-

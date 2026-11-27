@@ -2,11 +2,30 @@
 % Please edit documentation in R/mltools.R
 \name{fit_models}
 \alias{fit_models}
-\title{Trains a given list of model objects and returns a trained list of models}
+\alias{predict_models}
+\title{Fit or predict a list of models}
 \usage{
-fit_models(models, X, y, num_cores = 1, verbose = 1,
-  remove_failed_models = T)
+fit_models(models, X, y, num_cores = 1, verbose = 1, remove_failed_models = T)
+
+predict_models(models, X, num_cores = 1, verbose = 1)
+}
+\arguments{
+\item{models}{\code{list} of model objects.}
+
+\item{X}{Features.}
+
+\item{y}{Target.}
+
+\item{num_cores}{Number of cores (1 runs sequentially).}
+
+\item{verbose}{Verbosity level.}
+
+\item{remove_failed_models}{\code{logical} drop models that fail to fit instead of stopping.}
+}
+\value{
+\code{fit_models}: list of fitted models. \code{predict_models}: \code{data.frame}.
 }
 \description{
-Trains a given list of model objects and returns a trained list of models
+\code{fit_models} trains each model of a list, optionally in parallel; \code{predict_models} binds their predictions column-wise.
+Used by \code{transform_x()} to fit and run transformers.
 }

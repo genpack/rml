@@ -1,0 +1,159 @@
+---
+title: "1. Getting started with rml"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{1. Getting started with rml}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+has_xgboost = requireNamespace("xgboost", quietly = TRUE)
+```
+
+rml builds machine learning models as R Reference Class objects. Every model, whether a classifier, a
+regressor, an encoder or a scaler, inherits from the abstract class `MODEL`, so they all share the same
+interface:
+
+| Method | What it does |
+| --- | --- |
+| `model$fit(X, y)` | Trains the model (and all its transformers) on a data.frame `X` and a target vector `y`. |
+| `model$predict(X)` | Returns a data.frame with the model output. |
+| `model$performance(X, y, metrics)` | Scores predictions against `y` (classifiers and regressors). |
+| `model$performance.cv(X, y)` | Repeated train/test cross-validation. |
+| `model$reset()` | Forgets the training so the model can be fitted again. |
+| `model$deep_copy()` | Copies the model with all its transformers. |
+
+Class names follow the pattern `TYPE.PACKAGE.ALGORITHM`, for example `CLS.XGBOOST` (classifier, xgboost
+package) or `MAP.RML.ZFS` (mapper written in rml, z-factor scaling). The types are `CLS` (binary
+classifiers), `REG` (regressors), `ENC` (encoders), `MAP` (one-to-one mappers), `BIN` (binners), `FET`
+(feature generators), `FNT` (function transformers) and `ENS` (ensemblers).
+
+```{r, message = FALSE}
+library(rml)
+```
+
+## A small dataset
+
+All vignettes use simulated data so they run anywhere.
+
+```{r data}
+set.seed(42)
+n = 2000
+X = data.frame(age = runif(n, 18, 80), income = rlnorm(n, 10, 0.5),
+               score = rnorm(n), tenure = rpois(n, 5))
+logit = -4 + 0.05*X$age + 0.8*X$score + 0.1*X$tenure
+y = as.numeric(runif(n) < 1/(1 + exp(-logit)))
+
+train = sample(n, 1500)
+X_train = X[train, ]; y_train = y[train]
+X_test  = X[-train, ]; y_test  = y[-train]
+```
+
+## Training a classifier
+
+Arguments given to the constructor go into the model's `config` list. rml reads the settings it knows
+(see the *Model and argument reference* vignette); everything else is passed to the underlying algorithm.
+
+```{r lr}
+lr = CLS.STATS.LR(name = 'lr')
+lr$fit(X_train, y_train)
+head(lr$predict(X_test))
+```
+
+The output column is named `<model name>_<return type>`. Set `name_in_output = FALSE` or
+`return_type_in_output = FALSE` to drop either part.
+
+```{r xgb, eval = has_xgboost}
+xgb = CLS.XGBOOST(name = 'xgb', nrounds = 100, max_depth = 3, eta = 0.1)
+xgb$fit(X_train, y_train)
+head(xgb$predict(X_test))
+```
+
+Any argument that rml does not reserve for itself (here `max_depth` and `eta`) is passed to
+`xgboost::xgb.train` as a booster parameter.
+
+## Output type and threshold
+
+Binary classifiers return probabilities by default. Use `return = 'logit'` for log-odds and
+`return = 'class'` for 0/1 labels. The class threshold is `threshold` (default 0.5), or can be chosen
+during training with `threshold_determination`:
+
+```{r threshold}
+lr_class = CLS.STATS.LR(name = 'lrc', return = 'class', threshold_determination = 'maximum_f1')
+lr_class$fit(X_train, y_train)
+lr_class$config$threshold
+table(predicted = lr_class$predict(X_test)[[1]], actual = y_test)
+```
+
+## Measuring performance
+
+`performance()` compares the model output with the labels using `correlation()`, which supports many
+metrics: `gini`, `aurc`, `log_loss`, `pearson`, `f1`, `precision`, `recall`, `accuracy`, `lift`, and
+more (see `?correlation`).
+
+```{r perf}
+lr$performance(X_test, y_test, metrics = c('gini', 'log_loss', 'lift'))
+```
+
+Cross-validation draws `cv.ntrain` training samples of `cv.train_ratio` of the rows, and for each of them
+`cv.ntest` test samples of `cv.test_ratio` of the remaining rows. The model itself is not changed: a deep
+copy is trained.
+
+```{r cv}
+cv_model = CLS.STATS.LR(name = 'lrcv', cv.ntrain = 2, cv.ntest = 3, cv.train_ratio = 0.7, cv.test_ratio = 0.5)
+scores = cv_model$performance.cv(X, y, metrics = 'gini')
+unlist(scores)
+```
+
+## Feature information
+
+After fitting, `objects$features` lists the features the model used, with their class and importance
+(when the algorithm provides one).
+
+```{r features}
+lr$objects$features
+```
+
+Use `features.include` or `features.exclude` to choose the input columns:
+
+```{r include}
+lr2 = CLS.STATS.LR(name = 'lr2', features.include = c('age', 'score'))
+lr2$fit(X_train, y_train)
+lr2$objects$features$fname
+```
+
+## Regression
+
+Regressors work the same way. Their default metric is the mean absolute error.
+
+```{r regression}
+y_reg = 2*X$score + 0.01*X$income^0.5 + rnorm(n)
+reg = REG.STATS.LNR(name = 'lm')
+reg$fit(X_train, y_reg[train])
+reg$performance(X_test, y_reg[-train])
+```
+
+## Saving and loading
+
+`model_save()` writes the model and the native files of Python-based models to a folder named after the
+model; `model_load()` reads it back.
+
+```{r save}
+folder = tempfile()
+model_save(lr, folder)
+lr_loaded = model_load('lr', folder)
+all.equal(lr$predict(X_test), lr_loaded$predict(X_test))
+```
+
+## Where to go next
+
+* *2. Pipelines with transformers*: feed model outputs into other models and build networks.
+* *3. Boosting with gradient transformers*: boost one algorithm with another.
+* *4. Model and argument reference*: every class and every config argument.
+* *5. Transformers*: encoders, mappers, binners, clustering, feature generators and function transformers, with an example of each.
+* *6. Ensembles, boosters, model search and tools*: ensemblers, cross-validation, comparing models, boosters, templates and helper functions.
+* *7. Troubleshooting*: setting up Python for the scikit-learn and other Python-based classes, and common errors.
+
+Every class and function also has a help page, for example `?CLS.XGBOOST`, `?ENC.RML.TE` or `?correlation`.

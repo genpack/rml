@@ -1,0 +1,376 @@
+---
+title: "8. Showcase: comparing R and scikit-learn models, interactive charts and model networks"
+output:
+  rmarkdown::html_vignette:
+    fig_width: 7.5
+    fig_height: 4.5
+vignette: >
+  %\VignetteIndexEntry{8. Showcase: comparing R and scikit-learn models, interactive charts and model networks}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", message = FALSE, warning = FALSE)
+has   = function(p) requireNamespace(p, quietly = TRUE)
+has_xgboost = has("xgboost")
+has_sklearn = has("reticulate") && reticulate::py_available(initialize = TRUE) &&
+              reticulate::py_module_available("sklearn")
+has_pyxgb   = has_sklearn && reticulate::py_module_available("xgboost")
+has_dt      = has("DT")
+has_plotly  = has("plotly") && has("crosstalk") && has("reshape2")
+has_vis     = has("visNetwork")
+has_dgr     = has("DiagrammeR")
+has_igraph  = has("igraph")
+has_keras   = has("keras") && has("tensorflow")
+knitr::opts_chunk$set(eval = has_xgboost)
+```
+
+This vignette puts rml to work on one problem from start to finish. It explores the data with
+interactive charts, trains a dozen R and scikit-learn classifiers and compares them, and then builds a
+deep network of models (encoders feeding classifiers, feeding an ensemble, feeding a final model)
+and draws it.
+
+Interactive charts use htmlwidgets: **DT** tables, **plotly** charts linked with **crosstalk** filters,
+and **DiagrammeR** network graphs laid out by Graphviz. When a
+package is missing, the vignette shows a static chart instead. The scikit-learn models need Python;
+see `vignette("rml-troubleshooting")` to set it up.
+
+## The data: a synthetic credit portfolio
+
+```{r data}
+library(rml)
+options(rml.verbose = 0)   # no progress messages from any model
+set.seed(2026)
+n = 6000
+X = data.frame(
+  age          = round(runif(n, 18, 75)),
+  income       = round(rlnorm(n, 10.8, 0.5)),
+  debt_ratio   = rbeta(n, 2, 5),
+  credit_lines = rpois(n, 4),
+  late_30d     = rpois(n, 0.3),
+  utilisation  = pmin(rbeta(n, 2, 3) * 1.2, 1),
+  tenure_years = round(rexp(n, 1/6), 1),
+  region       = sample(c('metro', 'regional', 'rural'), n, replace = TRUE, prob = c(.6, .3, .1)),
+  product      = sample(c('card', 'personal', 'auto', 'home'), n, replace = TRUE),
+  stringsAsFactors = FALSE)
+logit = -2.2 - 0.02*(X$age - 45) - 0.9*(log(X$income) - 10.8) + 2.5*X$debt_ratio +
+        0.8*X$late_30d + 2*(X$utilisation > 0.8) - 0.05*X$tenure_years +
+        c(metro = 0, regional = 0.3, rural = 0.6)[X$region] +
+        c(card = 0.5, personal = 0.3, auto = 0, home = -0.6)[X$product] +
+        0.6*X$late_30d*(X$utilisation > 0.6)
+y = as.numeric(runif(n) < plogis(logit))
+train = sample(n, 4000)
+Xtr = X[train, ];  ytr = y[train]
+Xte = X[-train, ]; yte = y[-train]
+mean(y)
+```
+
+The target `y` is 1 for customers who default. It depends on every column, in places non-linearly
+(the utilisation threshold, and the interaction between late payments and utilisation).
+
+## Exploring the features
+
+`evaluate_features()` scores each column against the target and adds summary statistics. With DT it
+becomes a sortable, searchable table:
+
+```{r eval-features}
+num = c('age', 'income', 'debt_ratio', 'credit_lines', 'late_30d', 'utilisation', 'tenure_years')
+ef  = evaluate_features(X[num], y, metrics = c('gini', 'pearson'))
+ef  = cbind(feature = rownames(ef), ef[c('gini', 'pearson', 'n_unique', 'n_missing', 'n_outliers', 'median', 'mean', 'sd')])
+if(has_dt){
+  DT::datatable(ef, rownames = FALSE, options = list(dom = 't', pageLength = 10)) %>%
+    DT::formatRound(c('gini', 'pearson', 'median', 'mean', 'sd'), 3)
+} else knitr::kable(ef, digits = 3, row.names = FALSE)
+```
+
+`binary_class_bar()` (from rml's mlvis module) shows how many defaulters and non-defaulters fall below
+a threshold of a feature. Pick a feature from the list and move the slider:
+
+```{r class-bar, eval = has_xgboost && has_plotly}
+binary_class_bar(X[c('debt_ratio', 'utilisation', 'age')], y, ncuts = 50,
+                 C0_tag = 'repaid', C1_tag = 'default')
+```
+
+`plot_bindensity()` overlays the distribution of a feature for each class (black: repaid, red:
+default):
+
+```{r densities, fig.height = 3.2}
+op = par(mfrow = c(1, 3), mar = c(4, 3, 2, 1))
+for(col in c('debt_ratio', 'utilisation', 'income')){
+  plot_bindensity(X[[col]], y, main = col, labels = c('repaid', 'default'))
+}
+par(op)
+```
+
+## A dozen models, R and scikit-learn
+
+Every model has the same interface, so a list of very different algorithms can be trained and scored
+in one loop. Models that need scaled inputs get a `MAP.RML.ZFS` transformer, and the categorical
+columns are target-encoded with `ENC.RML.TE` for models that only read numbers.
+
+scikit-learn's regularisation argument `C` is passed inside `config = list(C = ...)`: written
+directly, R matches `C =` to the `Class` argument of `new()` and the model cannot be created.
+
+```{r zoo}
+features = function(scale = FALSE) list(
+  ENC.RML.TE(name = 'te', features.include = c('region', 'product')),
+  if(scale) MAP.RML.ZFS(name = 'z', features.include = num) else MAP.RML.IDT(name = 'raw', features.include = num))
+
+zoo = list(
+  CLS.STATS.LR(name = 'stats_logistic', transformers = features()),
+  CLS.XGBOOST(name = 'xgboost', nrounds = 200, max_depth = 3, eta = 0.05, transformers = features()),
+  CLS.XGBOOST(name = 'xgboost_deep', nrounds = 300, max_depth = 6, eta = 0.03, subsample = 0.8, transformers = features()),
+  CLS.E1071.NB(name = 'naive_bayes', transformers = features()))
+
+if(has_sklearn){
+  zoo = c(zoo, list(
+    CLS.SKLEARN.LR(name = 'sk_logistic', transformers = features(scale = TRUE)),
+    CLS.SKLEARN.LR(name = 'sk_logistic_C0.01', config = list(C = 0.01), transformers = features(scale = TRUE)),
+    CLS.SKLEARN.KNN(name = 'sk_knn', n_neighbors = 75, weights = 'distance', transformers = features(scale = TRUE)),
+    CLS.SKLEARN.DT(name = 'sk_tree', max_depth = 5, min_samples_leaf = 50, transformers = features()),
+    CLS.SKLEARN.SVM(name = 'sk_svm', config = list(C = 0.5), transformers = features(scale = TRUE))))
+}
+if(has_pyxgb){
+  zoo = c(zoo, list(CLS.SKLEARN.XGB(name = 'sk_xgboost', n_estimators = 200, max_depth = 3, learning_rate = 0.05,
+                                    transformers = features())))
+}
+
+# an ensemble of the two best-known algorithms, and xgboost boosted by a logistic regression
+zoo$average = ENS.RML.AGGR(name = 'average', transformers = list(
+  CLS.STATS.LR(name = 'avg_lr', transformers = features()),
+  CLS.XGBOOST(name = 'avg_xgb', nrounds = 200, max_depth = 3, eta = 0.05, transformers = features())))
+zoo$boosted = CLS.STATS.LR(name = 'xgb_boosted_by_lr', transformers = features(),
+  gradient_transformers = list(CLS.XGBOOST(name = 'gt_xgb', nrounds = 100, max_depth = 3, eta = 0.05,
+                                           transformers = features())))
+
+for(m in zoo) m$fit(Xtr, ytr)
+```
+
+Each model is scored on the 2,000 rows held out from training:
+
+```{r scores}
+scores = do.call(rbind, lapply(zoo, function(m){
+  p = m$predict(Xte)[[1]]
+  data.frame(model = m$name, class = class(m)[1], package = m$package,
+             gini = correlation(p, yte, metrics = 'gini')[[1]],
+             log_loss = log_loss(p, yte),
+             lift_top10 = mean(yte[p >= quantile(p, 0.9)])/mean(yte),
+             fit_seconds = m$objects$fitting_duration, stringsAsFactors = FALSE)
+}))
+scores = scores[order(-scores$gini), ]
+if(has_dt){
+  DT::datatable(scores, rownames = FALSE, options = list(dom = 't', pageLength = 20)) %>%
+    DT::formatRound(c('gini', 'log_loss', 'lift_top10', 'fit_seconds'), 3) %>%
+    DT::formatStyle('gini', background = DT::styleColorBar(range(scores$gini), '#9ecae1'),
+                    backgroundSize = '95% 70%', backgroundRepeat = 'no-repeat', backgroundPosition = 'center')
+} else knitr::kable(scores, digits = 3, row.names = FALSE)
+```
+
+The fitting time comes from `objects$fitting_duration`, which every model records (in seconds, including its transformers).
+
+### ROC curves
+
+```{r roc-data}
+roc = function(p, y){
+  o = order(p, decreasing = TRUE); y = y[o]; p = p[o]
+  data.frame(threshold = c(1, p), fpr = c(0, cumsum(1 - y)/sum(1 - y)), tpr = c(0, cumsum(y)/sum(y)))
+}
+best = head(scores$model, 6)
+pal  = grDevices::hcl.colors(length(best), 'Dark 3')
+rocs = lapply(best, function(b) roc(zoo[[which(sapply(zoo, function(m) m$name) == b)]]$predict(Xte)[[1]], yte))
+names(rocs) = best
+```
+
+With plotly, hover over a curve to read the threshold and the rates at that point; click a model in
+the legend to hide it:
+
+```{r roc, eval = has_xgboost && has_plotly}
+fig = plotly::plot_ly()
+for(i in seq_along(best)){
+  r = rocs[[i]]
+  r = r[unique(round(seq(1, nrow(r), length.out = min(nrow(r), 300)))), ]
+  fig = plotly::add_lines(fig, data = r, x = ~fpr, y = ~tpr, name = sprintf('%s (gini %.3f)', best[i], scores$gini[i]),
+    line = list(color = pal[i], width = 2), hoverinfo = 'text',
+    text = sprintf('<b>%s</b><br>threshold: %.3f<br>false positive rate: %.3f<br>true positive rate: %.3f',
+                   best[i], r$threshold, r$fpr, r$tpr))
+}
+fig %>% plotly::add_lines(x = c(0, 1), y = c(0, 1), line = list(color = 'grey', dash = 'dot'),
+                          showlegend = FALSE, hoverinfo = 'skip') %>%
+  plotly::layout(title = 'ROC curves of the six best models', xaxis = list(title = 'False positive rate'),
+                 yaxis = list(title = 'True positive rate'), hoverlabel = list(align = 'left'),
+                 legend = list(x = 0.55, y = 0.1))
+```
+
+```{r roc-static, eval = has_xgboost && !has_plotly, fig.height = 5}
+plot(c(0, 1), c(0, 1), type = 'l', lty = 3, col = 'grey60', xlab = 'False positive rate',
+     ylab = 'True positive rate', main = 'ROC curves of the six best models')
+for(i in seq_along(best)) lines(rocs[[i]]$fpr, rocs[[i]]$tpr, col = pal[i], lwd = 2)
+legend('bottomright', legend = sprintf('%s (gini %.3f)', best, scores$gini[1:length(best)]),
+       col = pal, lwd = 2, bty = 'n', cex = 0.8)
+```
+
+### Gini against fitting time
+
+Hover over a point to see the model, its class, Gini, log loss, lift and fitting time:
+
+```{r gini-time, eval = has_xgboost && has_plotly}
+scores$hover = sprintf(paste0('<b>%s</b><br>class: %s<br>package: %s<br>gini: %.3f<br>',
+                              'log loss: %.3f<br>lift (top 10%%): %.2f<br>fitting time: %.2f s'),
+                       scores$model, scores$class, scores$package, scores$gini, scores$log_loss,
+                       scores$lift_top10, scores$fit_seconds)
+plotly::plot_ly(scores, x = ~fit_seconds, y = ~gini, color = ~package, text = ~hover,
+                hoverinfo = 'text', type = 'scatter', mode = 'markers',
+                marker = list(size = 12, line = list(color = 'white', width = 1))) %>%
+  plotly::layout(title = 'Gini against fitting time',
+                 xaxis = list(title = 'fitting time (s, log scale)', type = 'log'),
+                 yaxis = list(title = 'gini'), hoverlabel = list(align = 'left'))
+```
+
+```{r gini-time-static, eval = has_xgboost && !has_plotly, fig.height = 4}
+plot(scores$fit_seconds, scores$gini, log = 'x', pch = 19, col = pal[as.integer(factor(scores$package))],
+     xlab = 'fitting time (s, log scale)', ylab = 'gini', main = 'Gini against fitting time')
+text(scores$fit_seconds, scores$gini, scores$model, pos = 3, cex = 0.7)
+```
+
+### Choosing a threshold interactively
+
+Classifiers pick their threshold with `threshold_determination`. To explore the trade-off yourself,
+tabulate precision, recall and the share of customers flagged at each threshold of the best model. The
+sliders above the columns filter the rows, for example to thresholds with recall above 0.6:
+
+```{r threshold, eval = has_xgboost && has_dt}
+best_model = zoo[[which(sapply(zoo, function(m) m$name) == scores$model[1])]]
+p = best_model$predict(Xte)[[1]]
+grid = do.call(rbind, lapply(seq(0.05, 0.6, by = 0.01), function(t){
+  s = unlist(correlation(p, yte, metrics = c('precision', 'recall', 'f1'), threshold = t))
+  data.frame(threshold = t, precision = s[['precision']], recall = s[['recall']], f1 = s[['f1']],
+             flagged = mean(p > t))
+}))
+DT::datatable(grid, rownames = FALSE, filter = 'top', options = list(dom = 'tp', pageLength = 8)) %>%
+  DT::formatRound(c('precision', 'recall', 'f1', 'flagged'), 3) %>%
+  DT::formatStyle('f1', background = DT::styleColorBar(c(0, 1), '#a1d99b'), backgroundSize = '95% 70%',
+                  backgroundRepeat = 'no-repeat', backgroundPosition = 'center')
+```
+
+## A deep network of models
+
+rml models are building blocks: any model can feed another (a transformer) or be boosted by another
+(as its gradient transformer). The network below has six levels:
+
+* `xgb_core`: an xgboost model whose features are target-encoded categories, the raw numeric columns,
+  and the output of a small logistic regression `lr_seed`;
+* `lr_on_xgb`: a logistic regression that uses `xgb_core`'s output as a feature, next to the scaled
+  debt and utilisation columns;
+* `ensemble`: the average of `lr_on_xgb` and a k-means based model `cluster_model`;
+* `final`: the top model. Its transformers are the ensemble, a clustering of customers and an
+  interaction generator, and it boosts a shallow xgboost (its gradient transformer).
+
+The final model is a deep neural network when keras is installed, and a logistic regression otherwise.
+
+```{r network-build}
+lr_seed  = CLS.STATS.LR(name = 'lr_seed', features.include = c('debt_ratio', 'late_30d', 'utilisation'))
+xgb_core = CLS.XGBOOST(name = 'xgb_core', nrounds = 150, max_depth = 3, eta = 0.05, transformers = list(
+  ENC.RML.TE(name = 'te_core', features.include = c('region', 'product')),
+  MAP.RML.IDT(name = 'raw_core', features.include = num),
+  lr_seed))
+lr_on_xgb = CLS.STATS.LR(name = 'lr_on_xgb', transformers = list(
+  xgb_core, MAP.RML.ZFS(name = 'z_risk', features.include = c('debt_ratio', 'utilisation'))))
+clusters  = BIN.KMEANS.KMC(name = 'clusters', num_clusters = 6, transformers = list(
+  MAP.RML.ZFS(name = 'z_all', features.include = num)))
+cluster_model = CLS.STATS.LR(name = 'cluster_model', transformers = list(
+  ENC.RML.TE(name = 'cluster_rate', transformers = list(clusters)),
+  MAP.RML.IDT(name = 'raw_cm', features.include = c('income', 'age'))))
+ensemble  = ENS.RML.AGGR(name = 'ensemble', transformers = list(lr_on_xgb, cluster_model))
+base_xgb  = CLS.XGBOOST(name = 'base_xgb', nrounds = 60, max_depth = 2, eta = 0.1,
+                        features.include = c('late_30d', 'utilisation'))
+top_inputs = list(ensemble,
+  FET.RML.D2MUL(name = 'interactions', features.include = c('late_30d', 'utilisation', 'debt_ratio')),
+  MAP.RML.ZFS(name = 'z_top', features.include = num))
+
+final = if(has_keras){
+  CLS.KERAS.DNN(name = 'final', num_layers = 2, first_layer_nodes = 32, epochs = 20,
+                transformers = top_inputs, gradient_transformers = list(base_xgb))
+} else {
+  CLS.STATS.LR(name = 'final', transformers = top_inputs, gradient_transformers = list(base_xgb))
+}
+final$fit(Xtr, ytr)
+c(final = final$performance(Xte, yte, metrics = 'gini'),
+  best_single_model = scores$gini[1])
+```
+
+Fitting `final` fitted every model of the network (`r length(final$info.network()$nodes$id) - 2` of them),
+each on the outputs of the models below it. A deeper network is not automatically a better one: every
+level here is trained on the same rows, so the upper models learn from outputs that fit the training
+data better than they will fit new data. Fitting the lower models on separate data, or comparing
+networks with `performance.cv()`, shows whether the extra levels pay off.
+
+### Drawing the network
+
+`plot.network()` draws the network. Solid grey links show a transformer feeding its parent; the dashed
+orange link goes from a base model (a gradient transformer) to the model that boosts it. By default
+the chart uses DiagrammeR, whose Graphviz layout places each model in a column after its inputs and
+keeps links from crossing where it can. Hover over a model for its class, description and number of
+outputs.
+
+```{r network, eval = has_xgboost && (has_dgr || has_vis || has_igraph), fig.width = 10, fig.height = 8, out.width = '100%'}
+final$plot.network()
+```
+
+Two other plotters are available. `plot.network('visNetwork')` gives a chart whose nodes can be
+dragged and zoomed, and `plot.network('igraph')` a static chart. If the chosen package is not
+installed, `plot.network()` uses the next one in the order DiagrammeR, visNetwork, igraph.
+
+The nodes and links behind the chart are available with `info.network()`, for example to draw the
+network with another tool:
+
+```{r network-table}
+net = final$info.network()
+head(net$links, 8)
+table(net$nodes$type)
+```
+
+## An interactive model explorer with Shiny
+
+The pieces above combine into a small Shiny app: pick models, see their scores, ROC curves and the
+network of the selected model. Run it from an R session after the code above (it is not run when the
+vignette is built):
+
+```{r shiny, eval = FALSE}
+library(shiny)
+ui = fluidPage(
+  titlePanel('rml model explorer'),
+  sidebarLayout(
+    sidebarPanel(
+      checkboxGroupInput('models', 'Models', choices = sapply(zoo, function(m) m$name),
+                         selected = head(scores$model, 4)),
+      selectInput('network', 'Show network of', choices = c('final', sapply(zoo, function(m) m$name)))),
+    mainPanel(
+      tabsetPanel(
+        tabPanel('Scores', DT::DTOutput('scores')),
+        tabPanel('ROC', plotOutput('roc', height = 450)),
+        tabPanel('Network', DiagrammeR::grVizOutput('network', height = 500))))))
+
+server = function(input, output){
+  pick = function(name) if(name == 'final') final else zoo[[which(sapply(zoo, function(m) m$name) == name)]]
+  output$scores = DT::renderDT(DT::datatable(scores[scores$model %in% input$models, ], rownames = FALSE) %>%
+                                 DT::formatRound(c('gini', 'log_loss', 'lift_top10', 'fit_seconds'), 3))
+  output$roc = renderPlot({
+    plot(c(0, 1), c(0, 1), type = 'l', lty = 3, xlab = 'FPR', ylab = 'TPR')
+    cols = grDevices::hcl.colors(length(input$models), 'Dark 3')
+    for(i in seq_along(input$models)){
+      r = roc(pick(input$models[i])$predict(Xte)[[1]], yte); lines(r$fpr, r$tpr, col = cols[i], lwd = 2)
+    }
+    legend('bottomright', input$models, col = cols, lwd = 2, bty = 'n')
+  })
+  output$network = DiagrammeR::renderGrViz(pick(input$network)$plot.network('DiagrammeR'))
+}
+shinyApp(ui, server)
+```
+
+## Where to go next
+
+* `vignette("rml-pipelines")` and `vignette("rml-transformers")` explain the building blocks used here.
+* `vignette("rml-gradient-boosting")` explains boosting one model with another.
+* `vignette("rml-ensembles-and-tools")` covers ensembles, model search and cross-validation.
+* `vignette("rml-troubleshooting")` helps set up Python for the scikit-learn models.

@@ -1,3 +1,19 @@
+#' @title Row normaliser (scikit-learn)
+#' @name MAP.SKLEARN.NRM-class
+#' @aliases MAP.SKLEARN.NRM
+#' @description
+#' Wraps \code{sklearn.preprocessing.Normalizer}. Its arguments can be passed.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
+#'
+#' Inherits from \code{\link{TRM.SKLEARN-class}}.
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = MAP.SKLEARN.NRM()
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export MAP.SKLEARN.NRM
 MAP.SKLEARN.NRM = setRefClass(
   'MAP.SKLEARN.NRM',
@@ -13,10 +29,26 @@ MAP.SKLEARN.NRM = setRefClass(
 ))
 
 
+#' @title Standard scaler (scikit-learn)
+#' @name MAP.SKLEARN.ZFS-class
+#' @aliases MAP.SKLEARN.ZFS
+#' @description
+#' Wraps \code{sklearn.preprocessing.StandardScaler}. Its arguments can be passed.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
+#'
+#' Inherits from \code{\link{TRM.SKLEARN-class}}.
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = MAP.SKLEARN.ZFS()
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export MAP.SKLEARN.ZFS
 MAP.SKLEARN.ZFS = setRefClass(
   'MAP.SKLEARN.ZFS',
-  contains = 'MODEL',
+  contains = 'TRM.SKLEARN',
   methods = list(
     initialize = function(...){
       callSuper(model.module = 'preprocessing', model.class = 'StandardScaler', ...)
@@ -27,6 +59,22 @@ MAP.SKLEARN.ZFS = setRefClass(
     }
 ))
 
+#' @title Min-max scaler (scikit-learn)
+#' @name MAP.SKLEARN.MMS-class
+#' @aliases MAP.SKLEARN.MMS
+#' @description
+#' Wraps \code{sklearn.preprocessing.MinMaxScaler}. Its arguments can be passed.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
+#'
+#' Inherits from \code{\link{TRM.SKLEARN-class}}.
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = MAP.SKLEARN.MMS()
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
 #' @export MAP.SKLEARN.MMS
 MAP.SKLEARN.MMS = setRefClass(
   'MAP.SKLEARN.MMS',
@@ -41,6 +89,26 @@ MAP.SKLEARN.MMS = setRefClass(
 ))
 
 
+#' @title Principal component analysis (stats::prcomp)
+#' @name MAP.STATS.PCA-class
+#' @aliases MAP.STATS.PCA
+#' @description
+#' Projects the numeric columns on their first principal components.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{num_components}}{Number of components returned. Default 5.}
+#'   \item{\code{center}}{Center columns. Default TRUE.}
+#'   \item{\code{scale}}{Scale columns to unit variance. Default TRUE.}
+#' }
+#' @examples
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = MAP.STATS.PCA(num_components = 2)
+#' m$fit(X, y)
+#' head(m$predict(X))
 #' @export MAP.STATS.PCA
 MAP.STATS.PCA = setRefClass('MAP.STATS.PCA', contains = 'MODEL', methods = list(
   initialize = function(...){
@@ -76,6 +144,30 @@ MAP.STATS.PCA = setRefClass('MAP.STATS.PCA', contains = 'MODEL', methods = list(
 ))
 
 # previously PYLMNN
+#' @title Large margin nearest neighbour projection (pylmnn)
+#' @name MAP.PYLMNN.LMNN-class
+#' @aliases MAP.PYLMNN.LMNN
+#' @description
+#' Learns a linear projection with the Python package pylmnn.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @section Configuration:
+#' Arguments specific to this class (see \code{\link{MODEL-class}} for arguments shared by all models):
+#' \describe{
+#'   \item{\code{num_components}}{Output dimension. Default 5.}
+#'   \item{\code{num_neighbors}}{Neighbours. Default 10.}
+#'   \item{\code{epochs}}{Maximum iterations. Default 100.}
+#' }
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = MAP.PYLMNN.LMNN(num_components = 2)
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
+#' @export MAP.PYLMNN.LMNN
 MAP.PYLMNN.LMNN = setRefClass('MAP.PYLMNN.LMNN', contains = "MODEL", methods = list(
   initialize = function(...){
     callSuper(...)
@@ -105,6 +197,20 @@ MAP.PYLMNN.LMNN = setRefClass('MAP.PYLMNN.LMNN', contains = "MODEL", methods = l
 
 
 # previously: IDENTITY
+#' @title Identity mapper
+#' @name MAP.RML.IDT-class
+#' @aliases MAP.RML.IDT
+#' @description
+#' Returns its input columns unchanged. Use it as a transformer to give the parent model the raw columns alongside the
+#' outputs of other transformers; combine with \code{features.include} to pass only some columns.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @examples
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = MAP.RML.IDT(features.include = 'a')
+#' m$fit(X, y)
+#' head(m$predict(X))
 #' @export MAP.RML.IDT
 MAP.RML.IDT = setRefClass('MAP.RML.IDT' , contains = "MODEL",
   methods = list(
@@ -129,6 +235,19 @@ MAP.RML.IDT = setRefClass('MAP.RML.IDT' , contains = "MODEL",
 
 
 # previously NORMALIZER
+#' @title Min-max scaler
+#' @name MAP.RML.MMS-class
+#' @aliases MAP.RML.MMS
+#' @description
+#' Maps each numeric column to \code{(x - min)/(max - min)} with the training minimum and maximum. Missing and undefined values become 0.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @examples
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = MAP.RML.MMS()
+#' m$fit(X, y)
+#' head(m$predict(X))
 #' @export MAP.RML.MMS
 MAP.RML.MMS = setRefClass('MAP.RML.MMS', contains = 'MODEL',
                           methods = list(
@@ -145,17 +264,30 @@ MAP.RML.MMS = setRefClass('MAP.RML.MMS', contains = 'MODEL',
                             model.fit = function(X, y = NULL){
                               objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
                               X = X[objects$features$fname] %>% as.matrix
-                              X %>% apply(2, function(v) min(v, na.rm = T)) ->> objects$features$min
-                              X %>% apply(2, function(v) max(v, na.rm = T)) ->> objects$features$max
+                              objects$features$min <<- unname(apply(X, 2, min, na.rm = T))
+                              objects$features$max <<- unname(apply(X, 2, max, na.rm = T))
                             },
                             
                             model.predict = function(X){
-                              feat  = objects$features %>% column2Rownames('fname')
-                              objects$features$fname %>% sapply(function(i) (X[[i]] -  feat[i,'min'])/(feat[i,'max'] - feat[i,'min'])) %>% na2zero %>% as.data.frame
+                              f = objects$features
+                              scale_columns(X, f$fname, f$min, f$max - f$min)
                             }
                           ))
 
 # previously SCALER
+#' @title Z-factor (standard) scaler
+#' @name MAP.RML.ZFS-class
+#' @aliases MAP.RML.ZFS
+#' @description
+#' Maps each numeric column to \code{(x - mean)/sd} with the training mean and standard deviation. Missing and undefined values become 0.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @examples
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = MAP.RML.ZFS()
+#' m$fit(X, y)
+#' head(m$predict(X))
 #' @export MAP.RML.ZFS
 MAP.RML.ZFS = setRefClass('MAP.RML.ZFS', contains = "MODEL", methods = list(
   initialize = function(...){
@@ -172,16 +304,33 @@ MAP.RML.ZFS = setRefClass('MAP.RML.ZFS', contains = "MODEL", methods = list(
   model.fit = function(X, y = NULL){
     objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
     X = X[objects$features$fname] %>% as.matrix
-    X %>% apply(2, function(v) mean(v, na.rm = T)) ->> objects$features$mean
-    X %>% apply(2, function(v)   sd(v, na.rm = T)) ->> objects$features$stdv
+    objects$features$mean <<- unname(colMeans(X, na.rm = T))
+    objects$features$stdv <<- unname(apply(X, 2, sd, na.rm = T))
   },
   
   model.predict = function(X){
-    feat  = objects$features %>% column2Rownames('fname')
-    objects$features$fname %>% sapply(function(i) (X[,i] -  feat[i,'mean'])/feat[i,'stdv']) %>% na2zero %>% as.data.frame
+    f = objects$features
+    scale_columns(X, f$fname, f$mean, f$stdv)
   }
 ))
 
+#' @title Quantile transformer (scikit-learn)
+#' @name MAP.SKLEARN.QT-class
+#' @aliases MAP.SKLEARN.QT
+#' @description
+#' Wraps \code{sklearn.preprocessing.QuantileTransformer}. Its arguments can be passed.
+#' Requires Python with the module named below, reachable through reticulate. Set \code{python_address} to choose the Python executable; see \code{\link{python_setup}} and \code{vignette("rml-troubleshooting")} if the module is not found.
+#'
+#' Inherits from \code{\link{MODEL-class}}.
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(300), b = rnorm(300))
+#' y = as.numeric(X$a - X$b + rnorm(300) > 0)
+#' m = MAP.SKLEARN.QT(n_quantiles = 100L)
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
+#' @export MAP.SKLEARN.QT
 MAP.SKLEARN.QT = setRefClass(
   'MAP.SKLEARN.QT',
   contains = 'MODEL',
@@ -198,17 +347,19 @@ MAP.SKLEARN.QT = setRefClass(
     
     model.fit = function(X, y){
       if(!fitted){
-        objects$features <<- objects$features %>% filter(fname %in% c('numeric', 'integer'))
+        objects$features <<- objects$features %>% filter(fclass %in% c('numeric', 'integer'))
         X = X[objects$features$fname]
         
         module = reticulate::import('sklearn.preprocessing')
-        objects$model <<- do.call(module$QuantileTransformer, config %>% list.remove(reserved_words))
+        objects$model <<- do.call(module$QuantileTransformer, python_args(config, reserved_words))
         objects$model$fit(X %>% data.matrix, y)
       }
     },
     
     model.predict = function(X){
-      objects$model$transform(X %>% data.matrix) %>% as.data.frame()
+      out = objects$model$transform(X[objects$features$fname] %>% data.matrix) %>% as.data.frame()
+      colnames(out) <- objects$features$fname
+      out
     }
   ))
 
