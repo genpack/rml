@@ -21,8 +21,9 @@ if(utils::packageVersion('rml') < '2.2.0'){
 has = function(p) requireNamespace(p, quietly = TRUE)
 has_xgboost = has("xgboost")
 has_yaml    = has("yaml")
-has_sklearn = has("reticulate") && reticulate::py_available(initialize = TRUE) &&
-              reticulate::py_module_available("sklearn") && reticulate::py_module_available("category_encoders")
+has_python  = has("reticulate") && reticulate::py_available(initialize = TRUE)
+has_sklearn = has_python && reticulate::py_module_available("sklearn")
+has_catenc  = has_python && reticulate::py_module_available("category_encoders")
 has_plotly  = has("plotly")
 has_dt      = has("DT")
 knitr::opts_chunk$set(eval = has_xgboost && has_yaml)
@@ -221,19 +222,31 @@ basename(files)
 ```
 
 Each config is built with `model_from_config()`, fitted on the training rows and scored on the test
-rows. Configs of scikit-learn models are skipped when Python with scikit-learn is not available.
+rows. A config that needs a Python module which is not available (scikit-learn, or category_encoders
+for `ENC.CATEGORY_ENCODERS` classes) is skipped, and so is a network that fails to fit; `skipped` says
+why.
 
 ```{r fit-all}
-needs_python = function(f) any(grepl('SKLEARN|CATEGORY_ENCODERS', readLines(f)))
-gallery = list()
+missing_modules = function(f){
+  txt = readLines(f)
+  c(if(any(grepl('SKLEARN', txt)) && !has_sklearn) 'scikit-learn',
+    if(any(grepl('CATEGORY_ENCODERS', txt)) && !has_catenc) 'category_encoders')
+}
+gallery = list(); skipped = character()
 for(f in files){
-  if(needs_python(f) && !has_sklearn) next
-  m = model_from_config(f)
-  m$fit(Xtr, ytr)
-  gallery[[m$name]] = list(file = f, model = m, score = m$predict(Xte)[[1]],
-                           train_score = m$predict(Xtr)[[1]])
+  name = sub('^[0-9]+_', '', sub('\\.yml$', '', basename(f)))
+  miss = missing_modules(f)
+  if(length(miss) > 0){skipped[name] = paste('needs Python module', paste(miss, collapse = ' and ')); next}
+  r = try({
+    m = model_from_config(f)
+    m$fit(Xtr, ytr)
+    list(file = f, model = m, score = m$predict(Xte)[[1]], train_score = m$predict(Xtr)[[1]])
+  }, silent = TRUE)
+  if(inherits(r, 'try-error')){skipped[name] = trimws(as.character(r)); next}
+  gallery[[name]] = r
 }
 names(gallery)
+skipped
 ```
 
 ```{r helpers, include = FALSE}
@@ -242,12 +255,13 @@ roc = function(p, y){
   data.frame(threshold = c(1, p), fpr = c(0, cumsum(1 - y)/sum(1 - y)), tpr = c(0, cumsum(y)/sum(y)))
 }
 fmt  = function(x) sprintf('%.3f', x)
+ran  = function(...) all(c(...) %in% names(gallery))
 g_of = function(name) if(is.null(gallery[[name]])) NA else gini(gallery[[name]]$score, yte)
 # Prints a gallery card: the config, the network and the scores
 card = function(name){
   if(is.null(gallery[[name]])){
-    cat('\n*This network needs Python with scikit-learn and category_encoders, which is not available where',
-        'this vignette was built.*\n\n')
+    cat(sprintf('\n*This network did not run where this vignette was built: %s. See `vignette("rml-troubleshooting")`.*\n\n',
+                if(is.na(skipped[name])) 'unknown reason' else skipped[name]))
     return(invisible())
   }
   g = gallery[[name]]
@@ -456,8 +470,7 @@ legend('bottomright', sprintf('%s (gini %.3f)', board$network, board$gini), col 
 The networks range from a test Gini of `r fmt(min(board$gini))` to `r fmt(max(board$gini))`, while the
 best possible is `r fmt(oracle)`. The differences come from the architecture, not from tuning:
 
-1. **Give each model the inputs its algorithm needs.** k nearest neighbours went from
-   `r fmt(g_of('knn_raw'))` to `r fmt(g_of('knn_scaled'))` with one scaling transformer and a feature
+1. **Give each model the inputs its algorithm needs.** `r if(ran('knn_raw', 'knn_scaled')) sprintf('k nearest neighbours went from %s to %s', fmt(g_of('knn_raw')), fmt(g_of('knn_scaled'))) else 'k nearest neighbours (which did not run here) roughly doubles its Gini'` with one scaling transformer and a feature
    list. Distance-based models (k nearest neighbours, k-means, support vector machines) and penalised
    regressions need scaled inputs; trees do not.
 2. **A linear model is as good as its features.** The baseline logistic regression reached
@@ -480,7 +493,7 @@ best possible is `r fmt(oracle)`. The differences come from the architecture, no
 6. **Blend models that make different mistakes.** The average of xgboost and the scorecard
    (`r fmt(g_of('blend'))`) is as good as the boosted network and needs no new training. It works best
    when the blended models are of different kinds.
-7. **Deeper is not automatically better.** The three-level network (`r fmt(g_of('three_level_boost'))`)
+7. **Deeper is not automatically better.** The three-level network `r if(ran('three_level_boost')) sprintf('(%s)', fmt(g_of('three_level_boost'))) else '(which did not run here)'`
    has more levels than `xgb_boosts_scorecard` but scores lower: its base model sees fewer engineered
    features and its booster sees a sample of rows. Each level should add information the levels below
    lack.

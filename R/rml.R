@@ -95,6 +95,9 @@
 # 2.2.1 (27 November 2026)  - Vignette 'rml-config-gallery' stops with a clear message when knitted with an installed rml older
 #                             than 2.2.0, instead of 'could not find function model_from_config'.
 #
+# 2.2.2 (27 November 2026)  - Vignette 'rml-config-gallery': a network is skipped only for the Python modules it needs, the reason
+#                             is shown in its card, and the lessons no longer print NA for networks that did not run.
+#
 # Versioning: x.y.z - increase z for a minor change or bug fix, y for a major change, x when features or packages are added.
 
 # Description for Roxygen
