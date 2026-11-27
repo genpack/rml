@@ -1,0 +1,7 @@
+# A logistic regression on the raw numeric columns: the benchmark every other network
+# must beat.
+model:
+  class: CLS.STATS.LR
+  name: baseline_lr
+features: [age, income, tenure, num_accounts, utilisation, debt_ratio, late_30d,
+           noise_1, noise_2, noise_3]

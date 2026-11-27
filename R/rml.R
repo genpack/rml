@@ -84,6 +84,23 @@
 #                             visNetwork, then igraph, when a package is missing. New argument legend. DiagrammeR added to
 #                             Suggests. Showcase vignette and its Shiny app use the DiagrammeR chart.
 #
+# 2.2.0 (27 November 2026)  - New: model_from_config() and method MODEL$from_config() build a model network from a yaml or json
+#                             file, yaml or json text, or a list: transformers and gradient transformers nest, features can be
+#                             listed or read from files with dplyr operations, hyper-parameters can sit in their own block.
+#                             New: CLS.RPART.DT (rpart decision tree) completed and exported. ENC.RML.TE gains 'smoothing'.
+#                             plot_bindensity() gains remove_outliers. plot.network: fixed colours per model type; the igraph
+#                             chart routes links around boxes. New vignette 'rml-config-gallery': eleven networks as configs
+#                             (inst/extdata/gallery) with their networks, score densities, Gini and ROC curves.
+#
+# 2.2.1 (27 November 2026)  - Vignette 'rml-config-gallery' stops with a clear message when knitted with an installed rml older
+#                             than 2.2.0, instead of 'could not find function model_from_config'.
+#
+# 2.2.2 (27 November 2026)  - Vignette 'rml-config-gallery': a network is skipped only for the Python modules it needs, the reason
+#                             is shown in its card, and the lessons no longer print NA for networks that did not run.
+#
+# 2.2.3 (27 November 2026)  - Vignette 'rml-config-gallery': new section listing the R packages and Python modules it needs, with
+#                             install commands and a check of what is available.
+#
 # Versioning: x.y.z - increase z for a minor change or bug fix, y for a major change, x when features or packages are added.
 
 # Description for Roxygen

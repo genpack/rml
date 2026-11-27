@@ -62,6 +62,7 @@ features used, with class and importance), \code{fitting_time} (when fitting fin
   \item{\code{deep_copy(name_suffix = NULL)}}{Copy of the model, its transformers and gradient transformers.}
   \item{\code{info.features()}, \code{info.model()}, \code{info.transformers()}, \code{info.edge_list()}}{Information about the features and the network of models.}
   \item{\code{info.network()}}{\code{list(nodes, links)} of the model network: transformers feed their parent, gradient transformers are boosted by it.}
+  \item{\code{from_config(config, root = NULL)}}{Sets the model's parameters, transformers and gradient transformers from a yaml or json file, yaml or json text, or a list, and returns the model. See \code{\link{model_from_config}} for the format.}
   \item{\code{plot.network(plotter, legend)}}{Draws the network: \code{'DiagrammeR'} (default; Graphviz layout, boxes fitted to labels, hover a node for details), \code{'visNetwork'} (interactive, through rvis if installed, otherwise visNetwork) or \code{'igraph'} (static). Falls back to the next installed package.}
   \item{\code{model.save(path)}, \code{model.load(path)}}{Save or load native model files; use \code{\link{model_save}} and \code{\link{model_load}}.}
   \item{\code{supports_gradient_transformers()}}{TRUE if training uses the output of gradient transformers.}

@@ -1,0 +1,14 @@
+# Naive Bayes on raw numeric columns and target-encoded categories. It treats every
+# column as independent given the class, so it misses the debt by utilisation
+# interaction.
+model:
+  class: CLS.E1071.NB
+  name: naive_bayes
+  transformers:
+  - class: MAP.RML.IDT
+    name: numerics
+    features: [age, income, tenure, num_accounts, utilisation, debt_ratio, late_30d]
+  - class: ENC.RML.TE
+    name: category_rates
+    smoothing: 20
+    features: [region, postcode, employment, product]

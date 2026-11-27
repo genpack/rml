@@ -73,7 +73,7 @@ binary_class_pie = function(X, y, ncuts = 1000, C0_tag = 'C0', C1_tag = 'C1', ro
 #' This function plots density of vector \code{x} for elements for which \code{y} is 0 in black and
 #' another density plot for elements for which \code{y} is 1 in red.
 #'
-#' Outliers are removed first. Both densities share one y axis, so neither curve is cut off.
+#' Outliers are removed first, unless \code{remove_outliers = FALSE}. Both densities share one y axis, so neither curve is cut off.
 #'
 #' @param x \code{numeric} vector.
 #' @param y binary vector of the same length.
@@ -81,10 +81,12 @@ binary_class_pie = function(X, y, ncuts = 1000, C0_tag = 'C0', C1_tag = 'C1', ro
 #' @param xlab \code{character} x axis label.
 #' @param labels \code{character} names of class 0 and class 1, shown in the legend.
 #' @param legend \code{logical} add a legend? Default \code{TRUE}.
+#' @param remove_outliers \code{logical} drop outliers of \code{x} first? Default \code{TRUE}. Use \code{FALSE} for
+#'   model scores, whose extreme values matter.
 #' @param ... further arguments passed to \code{plot()}.
 #' @export
-plot_bindensity = function(x, y, main = '', xlab = '', labels = c('0', '1'), legend = TRUE, ...){
-  rmv = which(x %>% outlier(recursive = T))
+plot_bindensity = function(x, y, main = '', xlab = '', labels = c('0', '1'), legend = TRUE, remove_outliers = TRUE, ...){
+  rmv = if(remove_outliers) which(x %>% outlier(recursive = T)) else integer()
   if(length(rmv) > 0){
     x = x[- rmv]
     y = y[- rmv]

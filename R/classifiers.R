@@ -925,25 +925,57 @@ CLS.E1071.NB = setRefClass('CLS.E1071.NB', contains = 'CLASSIFIER', methods = li
 
   ))
 
-# Not complete:
-CLS.RPART.DT = setRefClass('CLS.RPART.DT', contains = 'MODEL', methods = list(
+#' @title Decision tree classifier (rpart)
+#' @name CLS.RPART.DT-class
+#' @aliases CLS.RPART.DT
+#' @description
+#' Wraps \code{rpart::rpart} (CART) and predicts the share of class 1 in each leaf.
+#'
+#' Inherits from \code{\link{CLASSIFIER-class}}.
+#' @section Configuration:
+#' \describe{
+#'   \item{\code{max_depth}}{Maximum depth of the tree. Default 6.}
+#'   \item{\code{min_leaf}}{Minimum number of rows in a leaf. Default 30.}
+#'   \item{\code{cp}}{Complexity parameter: a split must improve the fit by this share. Default 0.001.}
+#' }
+#' Other parameters of \code{rpart::rpart.control} can be given by name.
+#' @examples
+#' \dontrun{
+#' X = data.frame(a = rnorm(500), b = rnorm(500))
+#' y = as.numeric(X$a * X$b + rnorm(500, sd = 0.3) > 0)
+#' m = CLS.RPART.DT(max_depth = 4)
+#' m$fit(X, y)
+#' head(m$predict(X))
+#' }
+#' @export CLS.RPART.DT
+CLS.RPART.DT = setRefClass('CLS.RPART.DT', contains = 'CLASSIFIER', methods = list(
     initialize = function(...){
       callSuper(...)
       description <<- 'Decision Tree'
       package     <<- 'rpart'
       package_language <<- 'R'
       packages_required <<- c(packages_required, 'rpart')
-      
+      config$max_depth <<- verify(config$max_depth, c('numeric', 'integer'), lengths = 1, default = 6)
+      config$min_leaf  <<- verify(config$min_leaf, c('numeric', 'integer'), lengths = 1, default = 30)
+      config$cp        <<- verify(config$cp, c('numeric', 'integer'), lengths = 1, default = 0.001)
       if(is.empty(name)){name <<- 'RPRTDT' %>% paste0(sample(10000:99999, 1))}
-      library(rpart)
     },
 
     model.fit = function(X, y){
-      # naiveBayes(Y ~ ., data = cbind(X, Y = y)) ->> objects$model
+      assert(requireNamespace('rpart', quietly = TRUE), "Package 'rpart' not found!")
+      X = X[objects$features$fname]
+      ctrl_args = config[names(config) %^% setdiff(names(formals(rpart::rpart.control)), '...')]
+      ctrl_args$maxdepth  = config$max_depth
+      ctrl_args$minbucket = config$min_leaf
+      ctrl_args$cp        = config$cp
+      ctrl = do.call(rpart::rpart.control, ctrl_args)
+      objects$model <<- rpart::rpart(.y ~ ., data = cbind(X, .y = factor(y, levels = c(0, 1))), method = 'class', control = ctrl)
     },
 
+    # probability of class 1
     model.predict = function(X){
-      stats::predict(objects$model, X) %>% as.data.frame
+      p = stats::predict(objects$model, X[objects$features$fname], type = 'prob')
+      data.frame(prob = p[, '1'])
     }
   ))
 

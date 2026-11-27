@@ -12,6 +12,7 @@ plot_bindensity(
   xlab = "",
   labels = c("0", "1"),
   legend = TRUE,
+  remove_outliers = TRUE,
   ...
 )
 }
@@ -28,8 +29,11 @@ plot_bindensity(
 
 \item{legend}{\code{logical} add a legend? Default \code{TRUE}.}
 
+\item{remove_outliers}{\code{logical} drop outliers of \code{x} first? Default \code{TRUE}. Use \code{FALSE} for
+model scores, whose extreme values matter.}
+
 \item{...}{further arguments passed to \code{plot()}.}
 }
 \description{
-Outliers are removed first. Both densities share one y axis, so neither curve is cut off.
+Outliers are removed first, unless \code{remove_outliers = FALSE}. Both densities share one y axis, so neither curve is cut off.
 }

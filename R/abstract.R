@@ -48,6 +48,7 @@ library(magrittr)
 #'   \item{\code{deep_copy(name_suffix = NULL)}}{Copy of the model, its transformers and gradient transformers.}
 #'   \item{\code{info.features()}, \code{info.model()}, \code{info.transformers()}, \code{info.edge_list()}}{Information about the features and the network of models.}
 #'   \item{\code{info.network()}}{\code{list(nodes, links)} of the model network: transformers feed their parent, gradient transformers are boosted by it.}
+#'   \item{\code{from_config(config, root = NULL)}}{Sets the model's parameters, transformers and gradient transformers from a yaml or json file, yaml or json text, or a list, and returns the model. See \code{\link{model_from_config}} for the format.}
 #'   \item{\code{plot.network(plotter, legend)}}{Draws the network: \code{'DiagrammeR'} (default; Graphviz layout, boxes fitted to labels, hover a node for details), \code{'visNetwork'} (interactive, through rvis if installed, otherwise visNetwork) or \code{'igraph'} (static). Falls back to the next installed package.}
 #'   \item{\code{model.save(path)}, \code{model.load(path)}}{Save or load native model files; use \code{\link{model_save}} and \code{\link{model_load}}.}
 #'   \item{\code{supports_gradient_transformers()}}{TRUE if training uses the output of gradient transformers.}
@@ -802,6 +803,26 @@ MODEL = setRefClass('MODEL',
       list(nodes = nodes, links = links)
     },
 
+    # Sets this model's parameters, transformers and gradient transformers from a yaml or json config (see ?model_from_config).
+    from_config = function(config, root = NULL){
+      cfg = read_model_config(config, root) %>% extract_model_config
+      own = class(.self)[1]
+      if(!is.null(cfg$class)){
+        cls = resolve_model_class(cfg$class)
+        assert(cls == own, sprintf("The config is for class %s, not %s. Use model_from_config() to create a model of the config's class.", cls, own))
+      }
+      cfg$class = own
+      if(is.null(cfg$name) && length(name) > 0) cfg$name = name
+      m = build_model_from_config(cfg, root = attr(cfg, 'root'))
+      name                  <<- m$name
+      config                <<- m$config
+      transformers          <<- m$transformers
+      gradient_transformers <<- m$gradient_transformers
+      objects               <<- m$objects
+      fitted                <<- FALSE
+      invisible(.self)
+    },
+
     # Draws the network of models.
     # plotter = 'DiagrammeR': Graphviz layout through DiagrammeR::grViz() (htmlwidget, hover a node for details).
     # plotter = 'visNetwork': interactive htmlwidget (drag and zoom), through package rvis if installed, otherwise package visNetwork.
@@ -854,6 +875,11 @@ MODEL = setRefClass('MODEL',
       for(v in igraph::V(g)$name[sorted]){
         for(w in igraph::neighbors(g, v, mode = 'out')$name){depth[w] <- max(depth[w], depth[v] + 1)}
       }
+      # then move each model that has inputs other than INPUT as far right as it can go: next to the model it feeds
+      for(v in rev(igraph::V(g)$name[sorted])){
+        ins = igraph::neighbors(g, v, mode = 'in')$name; outs = igraph::neighbors(g, v, mode = 'out')$name
+        if(length(outs) > 0 && length(ins) > 0 && !all(ins == 'INPUT')){depth[v] <- min(depth[outs]) - 1}
+      }
       lay = igraph::layout_with_sugiyama(g, layers = depth + 1)$layout[seq_len(igraph::vcount(g)), , drop = FALSE]
       xs  = unname(depth); ys = lay[, 1]
       # one row unit per node in each column, keeping Sugiyama's order, centred vertically
@@ -862,7 +888,7 @@ MODEL = setRefClass('MODEL',
       cex  = if(is.null(args$cex)) 0.85 else args$cex
       labels = igraph::V(g)$label
       # draw with base graphics so every box is sized to fit its own label; legends go in the bottom margin
-      op = graphics::par(mar = c(ifelse(legend, 4, 0.5), 0.5, ifelse(is.null(args$main), 0.5, 2.5), 0.5))
+      op = graphics::par(mar = c(ifelse(legend, 5, 0.5), 0.5, ifelse(is.null(args$main), 0.5, 2.5), 0.5))
       on.exit(graphics::par(op), add = TRUE)
       graphics::plot.new()
       graphics::plot.window(xlim = c(-0.3, max(xs) + 0.3), ylim = c(min(ys) - 0.55, max(ys) + 0.55))
@@ -876,18 +902,46 @@ MODEL = setRefClass('MODEL',
       shrink = min(1, 0.93/max(m$w), 0.9/max(m$h))
       if(shrink < 1){cex = cex*shrink; m = measure(cex)}
       src = match(net$links$source, igraph::V(g)$name); trg = match(net$links$target, igraph::V(g)$name)
-      graphics::arrows(x0 = xs[src] + m$w[src]/2, y0 = ys[src], x1 = xs[trg] - m$w[trg]/2, y1 = ys[trg],
-                       length = 0.08, col = net$links$color, lwd = 1.3,
-                       lty = ifelse(net$links$relation == 'boosted by', 2, 1))
+      # A link that skips columns would pass behind the boxes in between: it is routed through the gap between boxes
+      # nearest to its straight line in each column it crosses.
+      for(e in seq_along(src)){
+        x0 = xs[src[e]] + m$w[src[e]]/2; y0 = ys[src[e]]; x1 = xs[trg[e]] - m$w[trg[e]]/2; y1 = ys[trg[e]]
+        px = x0; py = y0
+        for(col in intersect(seq(xs[src[e]] + 1, length.out = max(0, xs[trg[e]] - xs[src[e]] - 1)), xs)){
+          yl  = y0 + (y1 - y0)*(col - x0)/(x1 - x0)
+          inc = which(xs == col)
+          lo  = ys[inc] - m$h[inc]/2 - 0.05; hi = ys[inc] + m$h[inc]/2 + 0.05
+          if(any(yl > lo & yl < hi)){
+            o = order(ys[inc]); lo = lo[o]; hi = hi[o]
+            gaps = c(min(lo) - 0.25, (hi[-length(hi)] + lo[-1])/2, max(hi) + 0.25)
+            yl = gaps[which.min(abs(gaps - yl))]
+          }
+          px = c(px, col); py = c(py, yl)
+        }
+        px = c(px, x1); py = c(py, y1)
+        lty = ifelse(net$links$relation[e] == 'boosted by', 2, 1)
+        if(length(px) > 2){
+          sp = graphics::xspline(px, py, shape = c(0, rep(0.5, length(px) - 2), 0), open = TRUE, draw = FALSE)
+          k  = length(sp$x)
+          graphics::lines(sp$x[-k], sp$y[-k], col = net$links$color[e], lwd = 1.3, lty = lty)
+          graphics::arrows(sp$x[k - 1], sp$y[k - 1], sp$x[k], sp$y[k], length = 0.08, col = net$links$color[e], lwd = 1.3, lty = lty)
+        } else {
+          graphics::arrows(x0, y0, x1, y1, length = 0.08, col = net$links$color[e], lwd = 1.3, lty = lty)
+        }
+      }
       graphics::rect(xs - m$w/2, ys - m$h/2, xs + m$w/2, ys + m$h/2,
                      col = pal[match(igraph::V(g)$type, types)], border = 'grey30')
       graphics::text(xs, ys, labels, cex = cex)
       if(!legend) return(invisible(net))
       lcex = 0.8
       xmid = graphics::grconvertX(0.5, 'nfc')
-      graphics::legend(xmid, graphics::grconvertY(0, 'nfc'), xjust = 0.5, yjust = 0, legend = types, fill = pal, text.width = graphics::strwidth(types, cex = 0.8),
-                       bty = 'n', cex = lcex, horiz = TRUE, xpd = NA)
-      graphics::legend(xmid, graphics::grconvertY(0.045, 'nfc'), xjust = 0.5, yjust = 0,
+      # one row of types if it fits the width, otherwise two
+      one_row = sum(graphics::strwidth(types, cex = lcex)) + length(types)*3*graphics::strwidth('M', cex = lcex) <
+                diff(graphics::grconvertX(c(0.02, 0.98), 'nfc'))
+      leg = graphics::legend(xmid, graphics::grconvertY(0, 'nfc'), xjust = 0.5, yjust = 0, legend = types, fill = pal,
+                       text.width = if(one_row) graphics::strwidth(types, cex = lcex) else NULL,
+                       ncol = if(one_row) length(types) else ceiling(length(types)/2), bty = 'n', cex = lcex, xpd = NA)
+      graphics::legend(xmid, leg$rect$top, xjust = 0.5, yjust = 0,
                        legend = c('feeds (transformer)', 'boosted by (gradient transformer)'),
                        col = link_colors[c('feeds', 'boosted by')], lty = c(1, 2), lwd = 1.3, bty = 'n', cex = lcex,
                        horiz = TRUE, xpd = NA)

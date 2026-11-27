@@ -1,0 +1,571 @@
+---
+title: "9. Model networks from config files: a gallery"
+output:
+  rmarkdown::html_vignette:
+    fig_width: 7.5
+    fig_height: 3.6
+vignette: >
+  %\VignetteIndexEntry{9. Model networks from config files: a gallery}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", message = FALSE, warning = FALSE)
+# model_from_config() is new in rml 2.2.0: knitting this file directly uses the installed rml, which may be older
+if(utils::packageVersion('rml') < '2.2.0'){
+  stop(sprintf(paste0("This vignette needs rml 2.2.0 or later, but R loads rml %s from '%s'. ",
+                      "Install rml 2.2.0 or later and restart R before rendering it."),
+               utils::packageVersion('rml'), dirname(system.file(package = 'rml'))), call. = FALSE)
+}
+has = function(p) requireNamespace(p, quietly = TRUE)
+has_xgboost = has("xgboost")
+has_yaml    = has("yaml")
+has_python  = has("reticulate") && reticulate::py_available(initialize = TRUE)
+has_sklearn = has_python && reticulate::py_module_available("sklearn")
+has_catenc  = has_python && reticulate::py_module_available("category_encoders")
+has_plotly  = has("plotly")
+has_dt      = has("DT")
+knitr::opts_chunk$set(eval = has_xgboost && has_yaml)
+```
+
+An rml model is a network: transformers feed their outputs to the models above them, and gradient
+transformers are base models that the models above them boost. Writing such a network in R code is
+flexible, but a config file is easier to read, compare, keep under version control and change without
+touching code. This vignette shows
+
+* how to write a model config in yaml or json and build the model with `model_from_config()`;
+* a gallery of eleven networks for one credit risk problem, from a plain logistic regression to three
+  levels of boosting, each with its config, its network and its performance;
+* what the gallery teaches about choosing a network architecture.
+
+## Packages needed
+
+To run every chunk of this vignette you need these R packages, besides rml 2.2.0 or later and the
+packages it depends on (rutils, dplyr, magrittr):
+
+| R package | Used for | Needed? |
+| --- | --- | --- |
+| rmarkdown, knitr | rendering the vignette | yes |
+| yaml | reading the yaml configs | yes |
+| jsonlite | the json config example | yes |
+| xgboost | `CLS.XGBOOST` (networks `xgboost`, `xgb_boosts_scorecard`, `blend`, `three_level_boost`) | yes |
+| rpart | `CLS.RPART.DT` (network `decision_tree`) | yes |
+| e1071 | `CLS.E1071.NB` (network `naive_bayes`) | yes |
+| reticulate | running the scikit-learn models from R | for networks `knn_raw`, `knn_scaled`, `three_level_boost` |
+| DT | the interactive leaderboard table (a plain table otherwise) | optional |
+| plotly | the interactive ROC chart (a static chart otherwise) | optional |
+| DiagrammeR, DiagrammeRsvg, rsvg | redrawing the network images with Graphviz (`data-raw/gallery_figures.R`); not used by the vignette | optional |
+
+Three networks also need Python, reached through reticulate, with these modules:
+
+| Python module | Used for | Networks |
+| --- | --- | --- |
+| scikit-learn | `CLS.SKLEARN.KNN`, `CLS.SKLEARN.LR`, `MAP.SKLEARN.MMS`, `ENC.SKLEARN.OHE` | `knn_raw`, `knn_scaled`, `three_level_boost` |
+| category_encoders | `ENC.CATEGORY_ENCODERS.JSTN` | `three_level_boost` |
+| joblib | saving scikit-learn models | (installed with scikit-learn) |
+
+Without Python the vignette still runs: those three networks are skipped and their cards say why.
+To install everything:
+
+```{r install, eval = FALSE}
+install.packages(c('rmarkdown', 'knitr', 'yaml', 'jsonlite', 'xgboost', 'rpart', 'e1071', 'reticulate',
+                   'DT', 'plotly'))
+remotes::install_github('genpack/rutils')
+remotes::install_github('genpack/rml')
+# Python modules, in the Python that reticulate uses (see vignette('rml-troubleshooting')):
+reticulate::py_require(c('scikit-learn', 'category_encoders', 'joblib'))
+```
+
+This chunk shows what is available on the computer that built this copy of the vignette:
+
+```{r requirements, eval = TRUE}
+r_pkgs = c('rml', 'yaml', 'jsonlite', 'xgboost', 'rpart', 'e1071', 'reticulate', 'DT', 'plotly')
+py_mods = c('sklearn', 'category_encoders')
+data.frame(
+  requirement = c(paste('R package', r_pkgs), paste('Python module', py_mods)),
+  available   = c(sapply(r_pkgs, has),
+                  if(has_python) sapply(py_mods, reticulate::py_module_available) else rep(FALSE, length(py_mods))),
+  row.names = NULL)
+```
+
+```{r library}
+library(rml)
+options(rml.verbose = 0)
+```
+
+## Model configs
+
+A config describes one model with its `class`, its `name` and its parameters, and lists its
+`transformers` and `gradient_transformers`, which are model configs themselves:
+
+```{r config-text}
+cfg = "
+model:
+  class: CLS.XGBOOST
+  name: xgb_on_encodings
+  hyper_parameters:
+    nrounds: 100
+    max_depth: 3
+  transformers:
+  - class: ENC.RML.TE
+    name: category_rates
+    features: [region, employment]
+  - class: MAP.RML.IDT
+    name: numerics
+features: [age, income, utilisation, region, employment]
+"
+model = model_from_config(cfg)
+model$transformers[[1]]$config$features.include
+```
+
+The rules:
+
+* **The master model** is the block under `model`, or the whole config when there is no `model` key.
+* **`features`** lists the columns a model takes from its input. At the root (or in the master model)
+  they are picked from the training data and passed to the transformers. In a transformer they narrow
+  down that transformer's input. Without `features`, a model applies its own feature selection; an
+  encoder, for example, takes the categorical columns only.
+* **Hyper-parameters** can sit next to `class` or in a `hyper_parameters` block (also `parameters` or
+  `config`). The block is merged into the model's parameters, so the two forms are equivalent; a
+  parameter given in both places is an error.
+* **Names** are optional. A model without one is called after its class, for example `xgboost_1`.
+  Different models of one network should have different names, as the names label output columns and
+  network charts.
+* **A gradient transformer** is the base model that the model boosts. It can also be the name of a
+  column holding offsets.
+* **Any other key** is a parameter of the model, as in the model's help page: `nrounds`, `fe.enabled`,
+  `smp.num_rows`, `column_filters`, and so on.
+
+`model_from_config()` reads a yaml or json file, yaml or json text, or an R list. The same model in json:
+
+```{r config-json}
+json = '{"model": {"class": "CLS.XGBOOST", "name": "xgb_on_encodings",
+                   "hyper_parameters": {"nrounds": 100, "max_depth": 3},
+                   "transformers": [{"class": "ENC.RML.TE", "name": "category_rates", "features": ["region", "employment"]},
+                                    {"class": "MAP.RML.IDT", "name": "numerics"}]},
+         "features": ["age", "income", "utilisation", "region", "employment"]}'
+model_from_config(json)$config$nrounds
+```
+
+Every model also has the method `from_config()`, which sets an existing model from a config of its
+class:
+
+```{r from-config}
+lr = CLS.STATS.LR(name = 'my_lr')
+lr$from_config(list(transformers = list(list(class = 'MAP.RML.ZFS', name = 'z'))))
+lr$transformers[[1]]$name
+```
+
+### Features from a file
+
+A feature list can come from a file, for example the output of a feature selection run. An element
+of `features` with `file_path` reads the file (csv, tsv, rds, txt, yaml or json; a relative path is
+relative to the config file) and applies `operations`: dplyr verbs with their arguments written as R
+code. This picks the features of the best subset of one test date:
+
+```yaml
+features:
+  - age
+  - income
+  - file_path: 'feature_selection/subsets.csv'
+    operations:
+    - fun: filter
+      arguments: "test_date == '2019-03-01'"
+    - fun: filter
+      arguments: "gini == max(gini)"
+    - fun: pull
+      arguments: fname
+```
+
+```{r features-file}
+dir = tempfile(); dir.create(file.path(dir, 'feature_selection'), recursive = TRUE)
+write.csv(data.frame(test_date = c('2019-03-01', '2019-03-01', '2019-04-01'), gini = c(0.41, 0.45, 0.5),
+                     fname = c('tenure', 'late_30d', 'debt_ratio')),
+          file.path(dir, 'feature_selection', 'subsets.csv'), row.names = FALSE)
+writeLines(c("model:", "  class: CLS.STATS.LR", "features:", "  - age", "  - income",
+             "  - file_path: 'feature_selection/subsets.csv'", "    operations:",
+             "    - fun: filter", "      arguments: \"test_date == '2019-03-01'\"",
+             "    - fun: filter", "      arguments: \"gini == max(gini)\"",
+             "    - fun: pull", "      arguments: fname"), file.path(dir, 'model.yml'))
+model_from_config(file.path(dir, 'model.yml'))$config$features.include
+```
+
+The arguments are R code that runs when the model is built, so only build models from configs you
+trust.
+
+## The data: a synthetic credit portfolio
+
+To show what each architecture can and cannot learn, the data below has risk drivers of several
+shapes, each one suited to a particular transformer:
+
+| Risk driver | Shape | Captured by |
+| --- | --- | --- |
+| age | U-shaped: young and old customers are riskier | a polynomial of the scaled age (`FNT.RML.POLY`), or trees |
+| income | falls with the log of income | a log transform (`FNT.RML.LOG`), or trees |
+| utilisation | a jump above 0.8 | a cut point (`BIN.RML.OBB`), or trees |
+| debt ratio and utilisation | their product | a product feature (`FET.RML.D2MUL`), or trees |
+| postcode, employment, product | category effects; 120 postcodes | target encoding (`ENC.RML.TE`) |
+| hidden customer segments | extra risk of a segment | clusters of the customer profile (`BIN.KMEANS.KMC`), partly |
+| many accounts and a late payment; self-employed with a small income | interactions of two conditions | trees (`CLS.XGBOOST`) |
+| `noise_1` to `noise_3` | no effect | nothing; they should be ignored |
+
+```{r data}
+make_credit_data = function(n = 20000, seed = 2026){
+  set.seed(seed)
+  # four hidden customer segments shape the profile columns and carry their own risk
+  segment  = sample(1:4, n, replace = TRUE, prob = c(0.35, 0.3, 0.2, 0.15))
+  seg_age  = c(28, 46, 66, 40)[segment];  seg_inc = c(10.6, 11.3, 10.9, 10.4)[segment]
+  seg_ten  = c(15, 100, 220, 50)[segment]; seg_acc = c(2, 4, 3, 8)[segment]
+  age          = pmin(pmax(round(rnorm(n, seg_age, 6)), 18), 85)
+  income       = round(exp(rnorm(n, seg_inc, 0.45)))
+  tenure       = pmax(0, round(rnorm(n, seg_ten, 20)))
+  num_accounts = rpois(n, seg_acc)
+  utilisation  = round(pmin(rbeta(n, 2, 3) * 1.3, 1.2), 3)
+  debt_ratio   = round(rgamma(n, shape = 2, rate = 5), 3)
+  late_30d     = rpois(n, 0.35)
+  region       = sample(paste0('R', 1:8), n, replace = TRUE)
+  postcode     = paste0(region, '_', sprintf('%03d', sample(1:15, n, replace = TRUE)))
+  employment   = sample(c('salaried', 'self_employed', 'contractor', 'unemployed', 'retired'), n, replace = TRUE,
+                        prob = c(0.55, 0.15, 0.15, 0.07, 0.08))
+  product      = sample(c('card', 'personal_loan', 'overdraft', 'auto_loan'), n, replace = TRUE)
+  pc_levels = sort(unique(postcode)); pc_eff = stats::setNames(rnorm(length(pc_levels), 0, 0.7), pc_levels)
+  emp_eff   = c(salaried = 0, self_employed = 0.4, contractor = 0.3, unemployed = 1.2, retired = 0.1)
+  prod_eff  = c(card = 0.2, personal_loan = 0, overdraft = 0.5, auto_loan = -0.4)
+  logit = -4.3 +
+    0.9 * ((age - 45)/15)^2 +                                # U-shaped age effect
+    -0.9 * (log(income) - 10.8) +                            # risk falls with log income
+    1.6 * (utilisation > 0.8) +                              # jump in risk above 0.8
+    5 * debt_ratio * utilisation +                           # product of two columns
+    0.6 * pmin(late_30d, 3) - 0.004 * tenure +
+    pc_eff[postcode] + emp_eff[employment] + prod_eff[product] +
+    c(0, -0.7, -0.4, 1.6)[segment] +                         # risk of the hidden segment
+    1.8 * (num_accounts >= 6 & late_30d >= 1) +               # two conditions together
+    1.6 * (employment == 'self_employed' & income < 40000)
+  y = as.numeric(runif(n) < 1/(1 + exp(-logit)))
+  X = data.frame(age, income, tenure, num_accounts, utilisation, debt_ratio, late_30d,
+                 noise_1 = rnorm(n), noise_2 = runif(n), noise_3 = rnorm(n, 100, 30),
+                 region, postcode, employment, product, stringsAsFactors = FALSE)
+  list(X = X, y = y, logit = unname(logit))
+}
+d = make_credit_data()
+set.seed(7); train = sample(nrow(d$X), 12000)
+Xtr = d$X[train, ]; ytr = d$y[train]; Xte = d$X[-train, ]; yte = d$y[-train]
+cat('rows:', nrow(d$X), ' default rate:', round(mean(d$y), 3), '\n')
+```
+
+Because the data is simulated, the true probability of default of every customer is known. Ranking the
+test customers by it gives the best Gini any model could reach on this test set:
+
+```{r oracle}
+gini  = function(p, y) 2*rml:::auc_binary(p, y) - 1
+(oracle = gini(d$logit[-train], yte))
+```
+
+## Building and scoring the gallery
+
+The gallery's configs come with rml:
+
+```{r configs}
+files = list.files(system.file('extdata', 'gallery', package = 'rml'), full.names = TRUE)
+basename(files)
+```
+
+Each config is built with `model_from_config()`, fitted on the training rows and scored on the test
+rows. A config that needs a Python module which is not available (scikit-learn, or category_encoders
+for `ENC.CATEGORY_ENCODERS` classes) is skipped, and so is a network that fails to fit; `skipped` says
+why.
+
+```{r fit-all}
+missing_modules = function(f){
+  txt = readLines(f)
+  c(if(any(grepl('SKLEARN', txt)) && !has_sklearn) 'scikit-learn',
+    if(any(grepl('CATEGORY_ENCODERS', txt)) && !has_catenc) 'category_encoders')
+}
+gallery = list(); skipped = character()
+for(f in files){
+  name = sub('^[0-9]+_', '', sub('\\.yml$', '', basename(f)))
+  miss = missing_modules(f)
+  if(length(miss) > 0){skipped[name] = paste('needs Python module', paste(miss, collapse = ' and ')); next}
+  r = try({
+    m = model_from_config(f)
+    m$fit(Xtr, ytr)
+    list(file = f, model = m, score = m$predict(Xte)[[1]], train_score = m$predict(Xtr)[[1]])
+  }, silent = TRUE)
+  if(inherits(r, 'try-error')){skipped[name] = trimws(as.character(r)); next}
+  gallery[[name]] = r
+}
+names(gallery)
+skipped
+```
+
+```{r helpers, include = FALSE}
+roc = function(p, y){
+  o = order(p, decreasing = TRUE); y = y[o]; p = p[o]
+  data.frame(threshold = c(1, p), fpr = c(0, cumsum(1 - y)/sum(1 - y)), tpr = c(0, cumsum(y)/sum(y)))
+}
+fmt  = function(x) sprintf('%.3f', x)
+ran  = function(...) all(c(...) %in% names(gallery))
+g_of = function(name) if(is.null(gallery[[name]])) NA else gini(gallery[[name]]$score, yte)
+# Prints a gallery card: the config, the network and the scores
+card = function(name){
+  if(is.null(gallery[[name]])){
+    cat(sprintf('\n*This network did not run where this vignette was built: %s. See `vignette("rml-troubleshooting")`.*\n\n',
+                if(is.na(skipped[name])) 'unknown reason' else skipped[name]))
+    return(invisible())
+  }
+  g = gallery[[name]]
+  cat('\n```yaml\n', paste(readLines(g$file), collapse = '\n'), '\n```\n\n', sep = '')
+  img = file.path('figures', 'gallery', sub('\\.[a-z]+$', '.png', basename(g$file)))
+  if(file.exists(img)) cat(sprintf('![Network of %s](%s){width=100%%}\n\n', name, img))
+  op = par(mfrow = c(1, 2), mar = c(4, 4, 2.5, 1))
+  plot_bindensity(g$score, yte, main = sprintf('Scores of %s', name), xlab = 'predicted probability of default',
+                  labels = c('repaid', 'default'), remove_outliers = FALSE)
+  base = roc(gallery$baseline_lr$score, yte); r = roc(g$score, yte)
+  plot(base$fpr, base$tpr, type = 'l', col = 'grey60', lty = 2, xlab = 'False positive rate', ylab = 'True positive rate',
+       main = sprintf('ROC: gini %s (baseline %s)', fmt(gini(g$score, yte)), fmt(g_of('baseline_lr'))), cex.main = 0.95)
+  lines(r$fpr, r$tpr, col = '#d95f02', lwd = 2)
+  abline(0, 1, lty = 3, col = 'grey80')
+  par(op)
+  cat('\n\n')
+}
+```
+
+In each card below, the left chart shows the distribution of the predicted probabilities of customers
+who repaid (black) and who defaulted (red): the less the two curves overlap, the better the model
+separates them. The right chart shows the network's ROC curve (orange) against the baseline's
+(dashed grey).
+
+## The gallery
+
+### 1. `baseline_lr`: logistic regression on raw columns
+
+The benchmark. A logistic regression can only draw a straight line through the raw columns: it sees
+that more utilisation means more risk, but not the U shape of age, the jump in utilisation or any
+category.
+
+```{r card-baseline, results = 'asis', echo = FALSE}
+card('baseline_lr')
+```
+
+### 2. `knn_raw`: nearest neighbours without scaling
+
+k nearest neighbours scores a customer by the default rate of the 100 most similar customers. On raw
+columns "similar" is measured mostly by income and `noise_3`, whose values are thousands of times
+larger than utilisation's, so the neighbours share an income but not a risk.
+
+```{r card-knn-raw, results = 'asis', echo = FALSE}
+card('knn_raw')
+```
+
+### 3. `knn_scaled`: the same model after scaling
+
+One transformer changes everything: `MAP.RML.ZFS` standardises the informative columns, so each counts
+equally in the distance, and listing only those columns drops the noise.
+
+```{r card-knn-scaled, results = 'asis', echo = FALSE}
+card('knn_scaled')
+```
+
+### 4. `naive_bayes`: naive Bayes on numbers and encoded categories
+
+Naive Bayes models each column on its own within each class, so it handles curved effects and the
+target-encoded categories, but it cannot see that debt and utilisation matter together. Treating
+related columns as independent also distorts its probabilities: it ranks customers better than the
+baseline, but its log loss in the leaderboard is worse.
+
+```{r card-nb, results = 'asis', echo = FALSE}
+card('naive_bayes')
+```
+
+### 5. `decision_tree`: one tree
+
+A tree finds thresholds and interactions by itself, but a single tree of depth 6 gives at most 64
+distinct scores and splits the data into ever smaller groups. It ranks worse than the baseline here.
+
+```{r card-tree, results = 'asis', echo = FALSE}
+card('decision_tree')
+```
+
+### 6. `scorecard`: a logistic regression on engineered features
+
+Still a logistic regression, but its transformers give each risk driver the shape it really has: a
+quadratic of the scaled age, the log of income, the cut point of utilisation found by `BIN.RML.OBB`,
+the product of debt and utilisation, and target-encoded categories (`smoothing` pulls the rate of a
+postcode with few customers towards the overall rate). This is what a credit analyst would build, and
+the coefficients are still easy to explain.
+
+```{r card-scorecard, results = 'asis', echo = FALSE}
+card('scorecard')
+```
+
+### 7. `segmented_scorecard`: adding customer segments
+
+The scorecard plus a three-level branch: the profile columns are standardised (`MAP.RML.ZFS`),
+clustered into four groups by k-means (`BIN.KMEANS.KMC`) and each cluster is replaced by its default
+rate (`ENC.RML.TE`).
+
+```{r card-segmented, results = 'asis', echo = FALSE}
+card('segmented_scorecard')
+```
+
+### 8. `xgboost`: gradient boosted trees
+
+Hundreds of small trees, each correcting the previous ones. Trees need no scaling, ignore the noise
+columns and find curves, cut points and interactions themselves, so xgboost reaches the scorecard's
+level with no feature engineering. Note its training Gini in the leaderboard below: it learns the
+training rows much better than new ones.
+
+```{r card-xgb, results = 'asis', echo = FALSE}
+card('xgboost')
+```
+
+### 9. `xgb_boosts_scorecard`: xgboost boosting the scorecard
+
+The scorecard is the base model, a gradient transformer of xgboost: xgboost starts from the
+scorecard's prediction (its logit) and its trees only learn what the scorecard missed, such as the two
+interactions of conditions. The base model carries the engineered knowledge, so the booster can be
+small: 120 shallow trees.
+
+```{r card-boost, results = 'asis', echo = FALSE}
+card('xgb_boosts_scorecard')
+```
+
+### 10. `blend`: averaging xgboost and the scorecard
+
+`ENS.RML.AGGR` averages the probabilities of its transformers. A linear model and a tree model make
+different mistakes, so their average is often better than both.
+
+```{r card-blend, results = 'asis', echo = FALSE}
+card('blend')
+```
+
+### 11. `three_level_boost`: three levels of boosting
+
+A network in the style of a production config: a lasso logistic regression from scikit-learn (on
+min-max scaled numbers and James-Stein encoded postcodes) is the base model, xgboost trained on a sample
+of 4000 rows boosts it, and a logistic regression on one-hot encoded small categories makes the last
+correction. The top model is `CLS.STATS.LR` because a model needs an offset to boost a base model, and
+scikit-learn's logistic regression has none.
+
+```{r card-three, results = 'asis', echo = FALSE}
+card('three_level_boost')
+```
+
+## Leaderboard
+
+```{r leaderboard}
+board = do.call(rbind, lapply(names(gallery), function(n){
+  g = gallery[[n]]
+  data.frame(network = n, models = nrow(g$model$info.network()$nodes) - 2,
+             gini = gini(g$score, yte), train_gini = gini(g$train_score, ytr),
+             log_loss = rml:::log_loss(pmin(pmax(g$score, 1e-6), 1 - 1e-6), yte),
+             fit_seconds = g$model$objects$fitting_duration)
+}))
+board$overfit = board$train_gini - board$gini
+board = board[order(-board$gini), ]
+if(has_dt){
+  DT::datatable(board, rownames = FALSE, options = list(dom = 't', pageLength = 20)) %>%
+    DT::formatRound(c('gini', 'train_gini', 'log_loss', 'overfit', 'fit_seconds'), 3) %>%
+    DT::formatStyle('gini', background = DT::styleColorBar(c(0, oracle), '#fdae6b'), backgroundSize = '95% 70%',
+                    backgroundRepeat = 'no-repeat', backgroundPosition = 'center')
+} else knitr::kable(board, digits = 3, row.names = FALSE)
+```
+
+`models` counts the models of the network, transformers included. `overfit` is the training Gini minus
+the test Gini.
+
+```{r gini-bars, fig.height = 4.2}
+op = par(mar = c(4, 11, 1, 1))
+b = rev(seq_len(nrow(board)))
+barplot(board$gini[b], names.arg = board$network[b], horiz = TRUE, las = 1, xlim = c(0, 0.9),
+        col = ifelse(board$network[b] == 'baseline_lr', 'grey70', '#fdae6b'), border = NA, xlab = 'test gini')
+abline(v = oracle, lty = 2, col = '#d95f02'); text(oracle, 0.4, 'best possible', pos = 2, cex = 0.8, col = '#d95f02')
+par(op)
+```
+
+### All ROC curves
+
+```{r roc-all, eval = has_xgboost && has_yaml && has_plotly}
+pal = grDevices::hcl.colors(nrow(board), 'Dark 3')
+fig = plotly::plot_ly()
+for(i in seq_len(nrow(board))){
+  n = board$network[i]; r = roc(gallery[[n]]$score, yte)
+  r = r[unique(round(seq(1, nrow(r), length.out = min(nrow(r), 300)))), ]
+  fig = plotly::add_lines(fig, data = r, x = ~fpr, y = ~tpr, name = sprintf('%s (gini %.3f)', n, board$gini[i]),
+    line = list(color = pal[i], width = 2), hoverinfo = 'text',
+    text = sprintf('<b>%s</b><br>threshold: %.3f<br>false positive rate: %.3f<br>true positive rate: %.3f',
+                   n, r$threshold, r$fpr, r$tpr))
+}
+fig %>% plotly::add_lines(x = c(0, 1), y = c(0, 1), line = list(color = 'grey', dash = 'dot'),
+                          showlegend = FALSE, hoverinfo = 'skip') %>%
+  plotly::layout(xaxis = list(title = 'False positive rate'), yaxis = list(title = 'True positive rate'),
+                 hoverlabel = list(align = 'left'), legend = list(x = 0.5, y = 0.05))
+```
+
+Hover over a curve to read the threshold and both rates at that point, and click a network in the
+legend to hide it.
+
+```{r roc-all-static, eval = has_xgboost && has_yaml && !has_plotly, fig.height = 5.5}
+pal = grDevices::hcl.colors(nrow(board), 'Dark 3')
+plot(c(0, 1), c(0, 1), type = 'l', lty = 3, col = 'grey70', xlab = 'False positive rate', ylab = 'True positive rate')
+for(i in seq_len(nrow(board))){
+  r = roc(gallery[[board$network[i]]]$score, yte); lines(r$fpr, r$tpr, col = pal[i], lwd = 2)
+}
+legend('bottomright', sprintf('%s (gini %.3f)', board$network, board$gini), col = pal, lwd = 2, bty = 'n', cex = 0.75)
+```
+
+## What the gallery teaches
+
+The networks range from a test Gini of `r fmt(min(board$gini))` to `r fmt(max(board$gini))`, while the
+best possible is `r fmt(oracle)`. The differences come from the architecture, not from tuning:
+
+1. **Give each model the inputs its algorithm needs.** `r if(ran('knn_raw', 'knn_scaled')) sprintf('k nearest neighbours went from %s to %s', fmt(g_of('knn_raw')), fmt(g_of('knn_scaled'))) else 'k nearest neighbours (which did not run here) roughly doubles its Gini'` with one scaling transformer and a feature
+   list. Distance-based models (k nearest neighbours, k-means, support vector machines) and penalised
+   regressions need scaled inputs; trees do not.
+2. **A linear model is as good as its features.** The baseline logistic regression reached
+   `r fmt(g_of('baseline_lr'))`; the scorecard, the same algorithm with transformers shaped like the
+   risk drivers, reached `r fmt(g_of('scorecard'))`. Look at how each column relates to the target
+   (`plot_bindensity()`, `binary_class_bar()`) and pick the transformer that matches the shape: a log for
+   skewed amounts, a polynomial for curves, a cut point for jumps, products for interactions, and
+   target encoding for categories with many values.
+3. **Trees learn shapes by themselves, but they overfit.** xgboost reached `r fmt(g_of('xgboost'))`
+   without any feature engineering, on a par with the engineered scorecard, but its training Gini is
+   `r fmt(board$overfit[board$network == 'xgboost'])` above its test Gini. A single tree (`r fmt(g_of('decision_tree'))`) is too coarse; many boosted trees are
+   needed.
+4. **Not every transformer pays off.** The segments moved the scorecard from `r fmt(g_of('scorecard'))`
+   to `r fmt(g_of('segmented_scorecard'))`: age, income and tenure already describe the segments, so
+   their cluster adds little. Add one transformer at a time and keep it only if the test score improves.
+5. **Boost a strong base model with a small booster.** Boosting the scorecard
+   (`r fmt(g_of('xgb_boosts_scorecard'))`) beat both the scorecard and xgboost alone: the scorecard
+   carries the known structure and xgboost adds only the interactions it missed. Give the booster the
+   columns where the base model is blind (here the numbers and employment) and few, shallow trees.
+6. **Blend models that make different mistakes.** The average of xgboost and the scorecard
+   (`r fmt(g_of('blend'))`) is as good as the boosted network and needs no new training. It works best
+   when the blended models are of different kinds.
+7. **Deeper is not automatically better.** The three-level network `r if(ran('three_level_boost')) sprintf('(%s)', fmt(g_of('three_level_boost'))) else '(which did not run here)'`
+   has more levels than `xgb_boosts_scorecard` but scores lower: its base model sees fewer engineered
+   features and its booster sees a sample of rows. Each level should add information the levels below
+   lack.
+8. **Watch the gap between training and test.** Every network here is fitted on the same rows at every
+   level, so upper models learn from outputs that fit the training data better than they fit new data.
+   Compare networks on test data or with `performance.cv()`, never on training data.
+
+## From the gallery to your own configs
+
+Copy a gallery config as a starting point:
+
+```{r copy-config, eval = FALSE}
+file.copy(system.file('extdata', 'gallery', '09_xgb_boosts_scorecard.yml', package = 'rml'), 'my_model.yml')
+model = model_from_config('my_model.yml')
+model$fit(X, y)
+model$plot.network()
+```
+
+`plot.network()` draws the network of any model: with DiagrammeR installed it uses Graphviz, otherwise
+visNetwork or igraph. The network images of this vignette were drawn by `data-raw/gallery_figures.R` in
+rml's source, so building the vignette does not need DiagrammeR.
+
+When a config fails to build, the error names the problem: an unknown class comes with the closest
+class names (for example `ENC.CATEGORY_ENCODERS.JSTN` for a misspelled James-Stein encoder), a model
+that cannot boost a base model says so, and a parameter given twice names the parameter.
