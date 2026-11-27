@@ -1,0 +1,10 @@
+# k nearest neighbours on the raw numeric columns. Distances are dominated by the
+# columns with the largest ranges (income, noise_3), so the neighbours are chosen almost
+# at random.
+model:
+  class: CLS.SKLEARN.KNN
+  name: knn_raw
+  hyper_parameters:
+    n_neighbors: 100
+features: [age, income, tenure, num_accounts, utilisation, debt_ratio, late_30d,
+           noise_1, noise_2, noise_3]

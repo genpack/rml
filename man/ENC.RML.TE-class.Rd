@@ -12,6 +12,15 @@ data. Categories not seen in training get the median rate.
 Inherits from \code{\link{MODEL-class}}.
 }
 
+\section{Configuration}{
+
+\describe{
+  \item{\code{smoothing}}{Pulls the rate of small categories towards the overall rate: the encoded value is
+    \code{(sum of y + smoothing * overall rate) / (count + smoothing)}. Default 0 (the plain rate). Values around
+    10 to 50 reduce overfitting when many categories have few rows.}
+}
+}
+
 \examples{
 X = data.frame(a = rnorm(300), city = sample(c('A', 'B', 'C'), 300, replace = TRUE))
 y = as.numeric(X$a + (X$city == 'A') + rnorm(300) > 0)

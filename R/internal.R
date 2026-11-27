@@ -177,8 +177,16 @@ python_args = function(config, reserved_words = character()){
 }
 
 # Colours of node types in network charts, shared by all plotters of plot.network()
+# Each known type has a fixed colour, so a type looks the same in every chart.
+network_type_colors = c('Data' = '#F2A7B5', 'Prediction' = '#D6B4F0', 'Binary Classifier' = '#E8B06B', 'Classifier' = '#E8B06B',
+                        'Regressor' = '#E8C76B', 'Abstract Regressor' = '#E8C76B', 'Ensembler' = '#9FD18B', 'Encoder' = '#7FCDBB',
+                        'Mapper' = '#A6C8E8', 'Binner' = '#C2B280', 'Feature Generator' = '#B3B3E6', 'Function Transformer' = '#F0D98C',
+                        'Transformer' = '#CCCCCC', 'Taylor Booster' = '#E3A68F')
 network_palette = function(types){
-  stats::setNames(grDevices::hcl.colors(max(3, length(types)), 'Set 2')[seq_along(types)], types)
+  cols = network_type_colors[types]
+  other = which(is.na(cols))
+  if(length(other) > 0) cols[other] = grDevices::hcl.colors(max(3, length(other)), 'Pastel 1')[seq_along(other)]
+  stats::setNames(unname(cols), types)
 }
 
 # Graphviz DOT code of a model network (the output of MODEL$info.network()), drawn by DiagrammeR::grViz().

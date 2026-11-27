@@ -1,0 +1,20 @@
+# Gradient boosted trees on all columns, with target-encoded categories. Trees need no
+# scaling and find curves, cut points and interactions themselves.
+model:
+  class: CLS.XGBOOST
+  name: xgboost
+  hyper_parameters:
+    nrounds: 300
+    max_depth: 4
+    eta: 0.05
+    subsample: 0.8
+    colsample_bytree: 0.8
+  transformers:
+  - class: MAP.RML.IDT
+    name: numerics
+    features: [age, income, tenure, num_accounts, utilisation, debt_ratio, late_30d,
+               noise_1, noise_2, noise_3]
+  - class: ENC.RML.TE
+    name: category_rates
+    smoothing: 20
+    features: [region, postcode, employment, product]

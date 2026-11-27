@@ -1,0 +1,41 @@
+# Three levels of boosting, in the style of a production config. A lasso logistic
+# regression (scikit-learn) on scaled numbers and James-Stein encoded postcodes is the
+# base model; xgboost, trained on a sample of 4000 rows, boosts it; a logistic
+# regression on one-hot encoded small categories makes the final correction.
+model:
+  class: CLS.STATS.LR
+  name: three_level_boost
+  transformers:
+  - class: MAP.RML.MMS
+    name: min_max
+    pp.trim_outliers: yes
+    features: [age, tenure, utilisation, debt_ratio, late_30d]
+  - class: ENC.SKLEARN.OHE
+    name: one_hot
+    max_domain: 10
+    features: [region, employment, product]
+  gradient_transformers:
+  - class: CLS.XGBOOST
+    name: middle_xgboost
+    hyper_parameters:
+      nrounds: 150
+      max_depth: 3
+      eta: 0.05
+    smp.enabled: yes
+    smp.num_rows: 4000
+    transformers:
+    - class: MAP.RML.IDT
+      name: xgb_numerics
+      features: [age, income, tenure, num_accounts, utilisation, debt_ratio, late_30d]
+    gradient_transformers:
+    - class: CLS.SKLEARN.LR
+      name: base_lasso
+      penalty: l1
+      solver: liblinear
+      transformers:
+      - class: MAP.SKLEARN.MMS
+        name: base_min_max
+        features: [age, income, tenure, num_accounts, utilisation, debt_ratio, late_30d]
+      - class: ENC.CATEGORY_ENCODERS.JSTN
+        name: postcode_js
+        features: [postcode]

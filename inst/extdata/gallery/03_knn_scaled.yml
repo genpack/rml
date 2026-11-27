@@ -1,0 +1,11 @@
+# The same k nearest neighbours after standardising the informative columns and dropping
+# noise: now every column counts equally in the distance.
+model:
+  class: CLS.SKLEARN.KNN
+  name: knn_scaled
+  hyper_parameters:
+    n_neighbors: 100
+  transformers:
+  - class: MAP.RML.ZFS
+    name: z_scores
+    features: [age, income, tenure, num_accounts, utilisation, debt_ratio, late_30d]

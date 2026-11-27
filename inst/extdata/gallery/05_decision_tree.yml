@@ -1,0 +1,17 @@
+# A single decision tree. It finds thresholds and interactions by itself, but a tree of
+# depth 6 can only give 64 different scores.
+model:
+  class: CLS.RPART.DT
+  name: decision_tree
+  hyper_parameters:
+    max_depth: 6
+    min_leaf: 50
+  transformers:
+  - class: MAP.RML.IDT
+    name: numerics
+    features: [age, income, tenure, num_accounts, utilisation, debt_ratio, late_30d,
+               noise_1, noise_2, noise_3]
+  - class: ENC.RML.TE
+    name: category_rates
+    smoothing: 20
+    features: [region, postcode, employment, product]

@@ -1,0 +1,56 @@
+# The segmented scorecard is the base model (a gradient transformer) and xgboost boosts
+# it: xgboost starts from the scorecard's logit and only learns what the scorecard
+# missed, with few shallow trees. The booster gets the numeric columns and employment,
+# where the scorecard's blind spots are; the postcodes are left to the scorecard.
+model:
+  class: CLS.XGBOOST
+  name: xgb_boosts_scorecard
+  hyper_parameters:
+    nrounds: 120
+    max_depth: 3
+    eta: 0.05
+    subsample: 0.8
+  transformers:
+  - class: MAP.RML.IDT
+    name: numerics
+    features: [age, income, tenure, num_accounts, utilisation, debt_ratio, late_30d]
+  - class: ENC.RML.TE
+    name: employment_rate
+    features: [employment]
+  gradient_transformers:
+  - class: CLS.STATS.LR
+    name: base_scorecard
+    transformers:
+    - class: MAP.RML.ZFS
+      name: linear
+      features: [tenure, late_30d, num_accounts]
+    - class: FNT.RML.LOG
+      name: log_income
+      features: [income]
+    - class: FNT.RML.POLY
+      name: age_curve
+      n_terms: 2
+      transformers:
+      - class: MAP.RML.ZFS
+        name: z_age
+        features: [age]
+    - class: BIN.RML.OBB
+      name: utilisation_cut
+      features: [utilisation]
+    - class: FET.RML.D2MUL
+      name: debt_x_util
+      features: [debt_ratio, utilisation]
+    - class: ENC.RML.TE
+      name: base_category_rates
+      smoothing: 20
+      features: [region, postcode, employment, product]
+    - class: ENC.RML.TE
+      name: segment_rate
+      transformers:
+      - class: BIN.KMEANS.KMC
+        name: segments
+        num_clusters: 4
+        transformers:
+        - class: MAP.RML.ZFS
+          name: z_profile
+          features: [age, income, tenure, num_accounts]

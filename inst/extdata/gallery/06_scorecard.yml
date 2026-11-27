@@ -1,0 +1,31 @@
+# A logistic regression whose transformers turn each feature into the shape the risk
+# follows: a quadratic curve for age, a log for income, a cut point for utilisation, the
+# debt by utilisation product, and target-encoded categories. Still a transparent linear
+# model.
+model:
+  class: CLS.STATS.LR
+  name: scorecard
+  transformers:
+  - class: MAP.RML.ZFS
+    name: linear
+    features: [tenure, late_30d, num_accounts]
+  - class: FNT.RML.LOG
+    name: log_income
+    features: [income]
+  - class: FNT.RML.POLY
+    name: age_curve
+    n_terms: 2
+    transformers:
+    - class: MAP.RML.ZFS
+      name: z_age
+      features: [age]
+  - class: BIN.RML.OBB
+    name: utilisation_cut
+    features: [utilisation]
+  - class: FET.RML.D2MUL
+    name: debt_x_util
+    features: [debt_ratio, utilisation]
+  - class: ENC.RML.TE
+    name: category_rates
+    smoothing: 20
+    features: [region, postcode, employment, product]
