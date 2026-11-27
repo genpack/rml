@@ -39,6 +39,56 @@ touching code. This vignette shows
   levels of boosting, each with its config, its network and its performance;
 * what the gallery teaches about choosing a network architecture.
 
+## Packages needed
+
+To run every chunk of this vignette you need these R packages, besides rml 2.2.0 or later and the
+packages it depends on (rutils, dplyr, magrittr):
+
+| R package | Used for | Needed? |
+| --- | --- | --- |
+| rmarkdown, knitr | rendering the vignette | yes |
+| yaml | reading the yaml configs | yes |
+| jsonlite | the json config example | yes |
+| xgboost | `CLS.XGBOOST` (networks `xgboost`, `xgb_boosts_scorecard`, `blend`, `three_level_boost`) | yes |
+| rpart | `CLS.RPART.DT` (network `decision_tree`) | yes |
+| e1071 | `CLS.E1071.NB` (network `naive_bayes`) | yes |
+| reticulate | running the scikit-learn models from R | for networks `knn_raw`, `knn_scaled`, `three_level_boost` |
+| DT | the interactive leaderboard table (a plain table otherwise) | optional |
+| plotly | the interactive ROC chart (a static chart otherwise) | optional |
+| DiagrammeR, DiagrammeRsvg, rsvg | redrawing the network images with Graphviz (`data-raw/gallery_figures.R`); not used by the vignette | optional |
+
+Three networks also need Python, reached through reticulate, with these modules:
+
+| Python module | Used for | Networks |
+| --- | --- | --- |
+| scikit-learn | `CLS.SKLEARN.KNN`, `CLS.SKLEARN.LR`, `MAP.SKLEARN.MMS`, `ENC.SKLEARN.OHE` | `knn_raw`, `knn_scaled`, `three_level_boost` |
+| category_encoders | `ENC.CATEGORY_ENCODERS.JSTN` | `three_level_boost` |
+| joblib | saving scikit-learn models | (installed with scikit-learn) |
+
+Without Python the vignette still runs: those three networks are skipped and their cards say why.
+To install everything:
+
+```{r install, eval = FALSE}
+install.packages(c('rmarkdown', 'knitr', 'yaml', 'jsonlite', 'xgboost', 'rpart', 'e1071', 'reticulate',
+                   'DT', 'plotly'))
+remotes::install_github('genpack/rutils')
+remotes::install_github('genpack/rml')
+# Python modules, in the Python that reticulate uses (see vignette('rml-troubleshooting')):
+reticulate::py_require(c('scikit-learn', 'category_encoders', 'joblib'))
+```
+
+This chunk shows what is available on the computer that built this copy of the vignette:
+
+```{r requirements, eval = TRUE}
+r_pkgs = c('rml', 'yaml', 'jsonlite', 'xgboost', 'rpart', 'e1071', 'reticulate', 'DT', 'plotly')
+py_mods = c('sklearn', 'category_encoders')
+data.frame(
+  requirement = c(paste('R package', r_pkgs), paste('Python module', py_mods)),
+  available   = c(sapply(r_pkgs, has),
+                  if(has_python) sapply(py_mods, reticulate::py_module_available) else rep(FALSE, length(py_mods))),
+  row.names = NULL)
+```
+
 ```{r library}
 library(rml)
 options(rml.verbose = 0)

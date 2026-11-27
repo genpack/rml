@@ -98,6 +98,9 @@
 # 2.2.2 (27 November 2026)  - Vignette 'rml-config-gallery': a network is skipped only for the Python modules it needs, the reason
 #                             is shown in its card, and the lessons no longer print NA for networks that did not run.
 #
+# 2.2.3 (27 November 2026)  - Vignette 'rml-config-gallery': new section listing the R packages and Python modules it needs, with
+#                             install commands and a check of what is available.
+#
 # Versioning: x.y.z - increase z for a minor change or bug fix, y for a major change, x when features or packages are added.
 
 # Description for Roxygen
