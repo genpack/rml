@@ -92,6 +92,9 @@
 #                             chart routes links around boxes. New vignette 'rml-config-gallery': eleven networks as configs
 #                             (inst/extdata/gallery) with their networks, score densities, Gini and ROC curves.
 #
+# 2.2.1 (27 November 2026)  - Vignette 'rml-config-gallery' stops with a clear message when knitted with an installed rml older
+#                             than 2.2.0, instead of 'could not find function model_from_config'.
+#
 # Versioning: x.y.z - increase z for a minor change or bug fix, y for a major change, x when features or packages are added.
 
 # Description for Roxygen

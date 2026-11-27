@@ -12,6 +12,12 @@ vignette: >
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>", message = FALSE, warning = FALSE)
+# model_from_config() is new in rml 2.2.0: knitting this file directly uses the installed rml, which may be older
+if(utils::packageVersion('rml') < '2.2.0'){
+  stop(sprintf(paste0("This vignette needs rml 2.2.0 or later, but R loads rml %s from '%s'. ",
+                      "Install rml 2.2.0 or later and restart R before rendering it."),
+               utils::packageVersion('rml'), dirname(system.file(package = 'rml'))), call. = FALSE)
+}
 has = function(p) requireNamespace(p, quietly = TRUE)
 has_xgboost = has("xgboost")
 has_yaml    = has("yaml")
